@@ -268,8 +268,8 @@ static const Ps3DataItem kDisplayCh[] = {
   // system does not have. Replaced with the display settings that do work here.
   // No Adaptive Brightness row: this hardware has no ambient light sensor, so it could never do
   // anything. Brightness itself is nano's own backlight level (it drives the panel directly and
-  // only mirrors the value into Settings), so the row is bound to that rather than to
-  // Settings.System screen_brightness, which nano writes but never reads back.
+  // mirrors the value into Settings); its persist property is also restored before Settings is
+  // available, so the row is bound to that rather than directly to Settings.System.
   {"Brightness",22,"Sets the screen brightness.","128",1,nullptr,0},
   {"LiveDisplay",16,"Adjusts the colour of the screen: colour temperature, colour calibration, saturation and reading mode.",nullptr,0,PS3CH(kLiveDisplayCh)},
   {"Screen Calibration",16,"Calibrates the colour of each screen on its own: brightness, contrast, saturation, hue and white balance, on top of LiveDisplay. Applies everywhere, games included, and is kept across reboots.",nullptr,0,PS3CH(kScreenCalCh)},

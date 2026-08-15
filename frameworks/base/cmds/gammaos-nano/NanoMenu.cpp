@@ -926,32 +926,32 @@ status_t NanoMenu::readyToRun() {
         tlog("drastic fast-path skipped XMB+effects");
     }
 
-    // Initialize brightness. Priority:
-    // 1. Android settings (authoritative, but not available during early boot)
-    // 2. Persist property (available at /data mount, before settings provider)
-    // 3. Sysfs current value (last resort - may be bootloader default)
+    // Initialize brightness. The persist property is the last user-selected value and is
+    // available before the settings provider. Android settings remain a fallback for devices
+    // upgrading from a build that did not have the property yet.
     mMaxBrightness = readSysfsInt("/sys/class/backlight/panel0-backlight/max_brightness",
                      readSysfsInt("/sys/class/leds/lcd-backlight/max_brightness", 255));
-    int androidBrt = readAndroidBrightness();
-    bool trustedBrt = false;   // came from the authoritative Android Settings value
-    if (androidBrt > 0) {
-        mBrightness = androidBrt;
+    char saved[PROPERTY_VALUE_MAX] = {};
+    property_get("persist.gammaos.nano.brightness", saved, "");
+    int persistedBrightness = atoi(saved);
+    // RG52: persist пишут только регуляторы яркости (nano, drastic-nano, azahar-nano,
+    // Control Center) и BrightnessSynchronizer при каждой смене Settings, приглушение
+    // туда не попадает - значение такое же доверенное, как Settings.
+    bool trustedBrt = false;
+    if (persistedBrightness >= 1 && persistedBrightness <= 255) {
+        mBrightness = persistedBrightness;
         trustedBrt = true;
     } else {
-        char saved[PROPERTY_VALUE_MAX] = {};
-        property_get("persist.gammaos.nano.brightness", saved, "");
-        if (saved[0] != '\0') {
-            mBrightness = atoi(saved);
-        } else {
-            mBrightness = 128; // safe default (~50%)
-        }
+        int androidBrt = readAndroidBrightness();
+        trustedBrt = androidBrt > 0;
+        mBrightness = trustedBrt ? androidBrt : 128; // safe default (~50%)
     }
-    // Dead-panel floor: only for UNTRUSTED sources (a stale persist prop or the
-    // sysfs last-resort at cold boot, before the settings provider is up). Those
+    // Dead-panel floor: only for UNTRUSTED sources (the default at cold boot, before
+    // the settings provider is up, when no level was saved yet). Those
     // can be a leftover of dimming/turn-off and this hardware does not light at the
     // very bottom of the range, so restoring one looks like a broken device. But a
-    // level the user EXPLICITLY set via the brightness control is written to Android
-    // Settings and is authoritative -- honor it even if very dim, so a genuine low
+    // level the user EXPLICITLY set via the brightness control is kept in the persist
+    // property and Android Settings and is authoritative -- honor it even if very dim, so a genuine low
     // setting is NOT reverted to ~50% on nano relaunch or drastic entry (which reads
     // persist.gammaos.nano.brightness that applyBrightness keeps in sync).
     if (!trustedBrt && mBrightness < 24) mBrightness = 128;
@@ -961,7 +961,7 @@ status_t NanoMenu::readyToRun() {
     // enumerator scales per node max (the old fixed-path loop wrote one
     // device-wide sysfs value to every node).
     nanobl::nanoBacklightSet(mBrightness);
-    ALOGI("NanoMenu: early sysfs brightness (android %d) applied to %zu backlight nodes",
+    ALOGI("NanoMenu: early sysfs brightness %d applied to %zu backlight nodes",
           mBrightness, nanobl::nanoBacklightNodes().size());
 
     // Apply brightness async via HAL (expects sysfs-range value)
