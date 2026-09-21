@@ -1,0 +1,11 @@
+# RG52 Mini: one-shot userdata expansion on first boot. See rg52-resize.sh.
+service rg52_resize /system/bin/sh /system/bin/rg52-resize.sh
+    class main
+    user root
+    group root system
+    oneshot
+    disabled
+    seclabel u:r:shell:s0
+
+on post-fs-data
+    start rg52_resize

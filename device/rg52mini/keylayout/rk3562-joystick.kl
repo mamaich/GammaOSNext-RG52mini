@@ -1,0 +1,49 @@
+# rk3562-joystick key layout — RG52 Mini
+# Driver: rk3562-joystick.c (compatible = "play_joystick")
+#
+# 4 dedicated system buttons (GPIO, driver-hardcoded):
+#   GPIO[0] → START    → BUTTON_START
+#   GPIO[1] → SELECT   → BUTTON_SELECT
+#   GPIO[2] → HOME     → HOME
+#   GPIO[3] → BACK     → BACK
+#
+# D-pad (ADC buttons + analog stick emulation):
+#   ADC:  LEFT/RIGHT/DOWN  → DPAD_LEFT/RIGHT/DOWN
+#   Axis: UP               → DPAD_UP (analog stick emulation)
+
+key 304   BUTTON_A       # BTN_SOUTH  (Nintendo B → Android A)
+key 305   BUTTON_B       # BTN_EAST   (Nintendo A → Android B)
+key 307   BUTTON_X       # BTN_NORTH  (Nintendo Y → Android X)
+key 308   BUTTON_Y       # BTN_WEST   (Nintendo X → Android Y)
+
+key 314   BUTTON_SELECT  # BTN_SELECT
+key 315   BUTTON_START   # BTN_START
+key 316   HOME           # BTN_MODE  (SDL Guide → Android HOME)
+key 704   BACK           # BTN_TRIGGER_HAPPY1 (remapped from KEY_FN)
+
+key 544   DPAD_UP        # BTN_DPAD_UP (analog stick emulation)
+key 545   DPAD_DOWN      # BTN_DPAD_DOWN
+key 546   DPAD_LEFT      # BTN_DPAD_LEFT
+key 547   DPAD_RIGHT     # BTN_DPAD_RIGHT
+
+# Shoulders/triggers (emitted by driver via ADC/GPIO)
+key 310   BUTTON_L1      # KEY_RIGHTSHIFT → L1 (GPIO button)
+key 311   BUTTON_R1      # KEY_RIGHTCTRL → R1 (GPIO button)
+key 317   BUTTON_THUMBL      # KEY_PAGEUP → L2
+key 318   BUTTON_THUMBR      # KEY_PAGEDOWN → R2
+
+# Left analog stick (driver applies l_x_swap + l_y_swap + left-stick-invert)
+axis 0x00 X
+axis 0x01 Y
+
+# Right analog stick
+axis 0x03 Z
+axis 0x04 RZ
+
+# Analog triggers (driver maps to ABS_HAT2Y/HAT2X for joydev compatibility)
+axis 0x14 LTRIGGER      # ABS_HAT2Y (left trigger ZL)
+axis 0x15 RTRIGGER      # ABS_HAT2X (right trigger ZR)
+
+# D-pad hat axes (driver emits ABS_HAT0X/0Y) — V147
+axis 0x10 HAT_X
+axis 0x11 HAT_Y

@@ -1,0 +1,25 @@
+# RG52 Mini: logcat в последовательную консоль и в файл на /metadata.
+#
+# Перенесено из порта Android 13, где это лежало в разделе system. Ключевое
+# слово console привязывает вывод службы к /dev/console, а /dev/console — это
+# ttyFIQ0 (uart0, 1500000), потому что в extlinux.conf других console= нет.
+#
+# Отличие от оригинала: seclabel u:r:shell:s0 вместо u:r:su:s0 — домена su в
+# сборке без root не существует, и init отказался бы запускать службу.
+
+service rg52logcat_con /system/bin/logcat -b all -v threadtime
+    class main
+    user root
+    group root system log
+    seclabel u:r:shell:s0
+    console
+
+service rg52logcat_file /system/bin/logcat -b all -v threadtime -f /metadata/rg52_logcat.txt -r 4096 -n 2
+    class main
+    user root
+    group root system log
+    seclabel u:r:shell:s0
+
+on post-fs-data
+    start rg52logcat_con
+    start rg52logcat_file

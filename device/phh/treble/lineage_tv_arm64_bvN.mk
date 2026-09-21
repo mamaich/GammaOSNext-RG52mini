@@ -351,3 +351,8 @@ PRODUCT_ENABLE_UFFD_GC := false
 else
 PRODUCT_ENABLE_UFFD_GC := true
 endif
+
+# RG52 Mini: то, что в порте Android 13 лежало в разделе system и теряется
+# вместе с ним. Одна строка — чтобы её было легко переносить при обновлении
+# апстрима. Подробности в doc/rg52mini/.
+$(call inherit-product-if-exists, device/rg52mini/rg52mini.mk)
