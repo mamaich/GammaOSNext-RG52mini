@@ -39,6 +39,28 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-console.rc:system/etc/init/rg52-console.rc
 
+# microG: вход в Google-аккаунт и проверка покупок без сервисов Google.
+#
+# Почему это вообще работает. microG выдаёт себя за Google Play Services, и для
+# этого системе надо соглашаться подменять подпись пакета. В этом дереве такая
+# поддержка уже есть и сделана узко (ComputerEngine.generateFakeSignature):
+# подменяется только пакетам com.google.android.gms и com.android.vending,
+# только при точном совпадении подписи с зашитым ключом microG и только на одну
+# конкретную подпись Google. Правка фреймворка нам не понадобилась - проверено,
+# что скачанные apk подписаны ровно тем ключом.
+#
+# Ставим привилегированными: иначе microG теряет часть возможностей. Для этого
+# обязателен список разрешений в /system/etc/permissions, он собран из самих
+# apk, см. privapp-permissions-microg.xml.
+#
+# Самих apk в репозитории нет, они качаются microg/fetch.sh с фиксированными
+# версиями и контрольными суммами. GmsCore весит около 103 МБ - на столько же
+# вырастает образ.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/microg/com.google.android.gms-252432032.apk:system/priv-app/GmsCore/GmsCore.apk \
+    device/rg52mini/microg/com.android.vending-84022632.apk:system/priv-app/GmsCompanion/GmsCompanion.apk \
+    device/rg52mini/microg/privapp-permissions-microg.xml:system/etc/permissions/privapp-permissions-microg.xml
+
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.rg52.console=shell
 
