@@ -908,170 +908,19 @@
             android:summary="@string/gammaos_toolbox_gamepad_enable_summary"
             android:defaultValue="false" />
 
-        <SwitchPreference
-            android:key="persist.gammaos.gamepad.merge"
-            android:title="@string/gammaos_toolbox_gamepad_merge_title"
-            android:summary="@string/gammaos_toolbox_gamepad_merge_summary"
-            android:defaultValue="true" />
-
-        <SwitchPreference
-            android:key="persist.gammaos.gamepad.hide_source"
-            android:title="@string/gammaos_toolbox_gamepad_hide_source_title"
-            android:summary="@string/gammaos_toolbox_gamepad_hide_source_summary"
-            android:defaultValue="true" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.devices"
-            android:title="@string/gammaos_toolbox_gamepad_devices_title"
-            android:summary="@string/gammaos_toolbox_gamepad_devices_summary"
-            android:defaultValue="" />
-
-        <SwitchPreference
-            android:key="persist.gammaos.gamepad.abxy_swap"
-            android:title="@string/gammaos_toolbox_gamepad_abxy_swap_title"
-            android:summary="@string/gammaos_toolbox_gamepad_abxy_swap_summary"
-            android:defaultValue="false" />
-
-        <SwitchPreference
-            android:key="persist.gammaos.gamepad.invert_left"
-            android:title="@string/gammaos_toolbox_gamepad_invert_left_title"
-            android:summary="@string/gammaos_toolbox_gamepad_invert_left_summary"
-            android:defaultValue="false" />
-
-        <SwitchPreference
-            android:key="persist.gammaos.gamepad.invert_right"
-            android:title="@string/gammaos_toolbox_gamepad_invert_right_title"
-            android:summary="@string/gammaos_toolbox_gamepad_invert_right_summary"
-            android:defaultValue="false" />
-
-        <SwitchPreference
-            android:key="persist.gammaos.gamepad.analog_to_dpad"
-            android:title="@string/gammaos_toolbox_gamepad_analog_dpad_title"
-            android:summary="@string/gammaos_toolbox_gamepad_analog_dpad_summary"
-            android:defaultValue="false" />
-
-        <SwitchPreference
-            android:key="persist.gammaos.gamepad.dpad_to_analog"
-            android:title="@string/gammaos_toolbox_gamepad_dpad_analog_title"
-            android:summary="@string/gammaos_toolbox_gamepad_dpad_analog_summary"
-            android:defaultValue="false" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.dpad_threshold"
-            android:title="@string/gammaos_toolbox_gamepad_dpad_threshold_title"
-            android:summary="@string/gammaos_toolbox_gamepad_dpad_threshold_summary"
-            android:inputType="number"
-            android:defaultValue="50" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.global_sensitivity"
-            android:title="@string/gammaos_toolbox_gamepad_sensitivity_title"
-            android:summary="@string/gammaos_toolbox_gamepad_sensitivity_summary"
-            android:inputType="numberSigned"
-            android:defaultValue="0" />
-
-        <SwitchPreference
-            android:key="persist.gammaos.gamepad.pwm_enable"
-            android:title="@string/gammaos_toolbox_gamepad_pwm_enable_title"
-            android:summary="@string/gammaos_toolbox_gamepad_pwm_enable_summary"
-            android:defaultValue="true" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.pwm_intensity"
-            android:title="@string/gammaos_toolbox_gamepad_pwm_intensity_title"
-            android:summary="@string/gammaos_toolbox_gamepad_pwm_intensity_summary"
-            android:inputType="number"
-            android:defaultValue="255" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.device_name"
-            android:title="@string/gammaos_toolbox_gamepad_device_name_title"
-            android:summary="@string/gammaos_toolbox_gamepad_device_name_summary"
-            android:defaultValue="Xbox Wireless Controller" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.remap_btn"
-            android:title="@string/gammaos_toolbox_gamepad_remap_btn_title"
-            android:summary="@string/gammaos_toolbox_gamepad_remap_btn_summary"
-            android:defaultValue="" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.remap_axis"
-            android:title="@string/gammaos_toolbox_gamepad_remap_axis_title"
-            android:summary="@string/gammaos_toolbox_gamepad_remap_axis_summary"
-            android:defaultValue="" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.combo_map"
-            android:title="@string/gammaos_toolbox_gamepad_combo_map_title"
-            android:summary="@string/gammaos_toolbox_gamepad_combo_map_summary"
-            android:defaultValue="" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.axis_btn"
-            android:title="@string/gammaos_toolbox_gamepad_axis_btn_title"
-            android:summary="@string/gammaos_toolbox_gamepad_axis_btn_summary"
-            android:defaultValue="" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.ff_vibrate_device"
-            android:title="@string/gammaos_toolbox_gamepad_ff_device_title"
-            android:summary="@string/gammaos_toolbox_gamepad_ff_device_summary"
-            android:defaultValue="" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.blacklist_pass"
-            android:title="@string/gammaos_toolbox_gamepad_blacklist_pass_title"
-            android:summary="@string/gammaos_toolbox_gamepad_blacklist_pass_summary"
-            android:defaultValue="" />
-
-        <SwitchPreference
-            android:key="persist.gammaos.screenmap.enabled"
-            android:title="@string/gammaos_toolbox_gamepad_screenmap_title"
-            android:summary="@string/gammaos_toolbox_gamepad_screenmap_summary"
-            android:defaultValue="false" />
-
+        <!-- RG52 Mini: остальные настройки геймпада убраны из интерфейса.
+             Всё, что они меняли, на этом устройстве задано в
+             device/rg52mini/rg52mini.mk и подобрано под его железо:
+             переставленные триггеры, раскладка режима мыши, аккорд на стиках,
+             кривая скорости курсора. Часть из них к тому же ничего не делала:
+             ползунок "ускорение" перестал применяться, когда кнопку-модификатор
+             убрали, а remap_axis до починки в GamepadManager не работал вовсе.
+             Менять их вслепую отсюда - верный способ сломать управление, а
+             вернуть можно только пересборкой, поэтому оставлен один
+             выключатель. Сами свойства никуда не делись и правятся через
+             setprop, см. doc/rg52mini/02-план.md. -->
     </PreferenceCategory>
 
-    <!-- ==================== Mouse Mode ==================== -->
-    <PreferenceCategory
-        android:key="category_mouse"
-        android:title="@string/gammaos_toolbox_category_mouse">
-
-        <Preference
-            android:key="category_mouse_description"
-            android:selectable="false"
-            android:summary="@string/gammaos_toolbox_category_mouse_description" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.mouse_stick_speed"
-            android:title="@string/gammaos_toolbox_mouse_stick_speed_title"
-            android:summary="@string/gammaos_toolbox_mouse_stick_speed_summary"
-            android:inputType="number"
-            android:defaultValue="12" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.mouse_dpad_speed"
-            android:title="@string/gammaos_toolbox_mouse_dpad_speed_title"
-            android:summary="@string/gammaos_toolbox_mouse_dpad_speed_summary"
-            android:inputType="number"
-            android:defaultValue="6" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.mouse_boost"
-            android:title="@string/gammaos_toolbox_mouse_boost_title"
-            android:summary="@string/gammaos_toolbox_mouse_boost_summary"
-            android:inputType="number"
-            android:defaultValue="20" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.mouse_scroll_speed"
-            android:title="@string/gammaos_toolbox_mouse_scroll_speed_title"
-            android:summary="@string/gammaos_toolbox_mouse_scroll_speed_summary"
-            android:inputType="number"
-            android:defaultValue="4" />
-
-    </PreferenceCategory>
 
     <!-- ==================== RGB LED ==================== -->
     <PreferenceCategory
