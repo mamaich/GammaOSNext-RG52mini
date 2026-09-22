@@ -39,17 +39,6 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-console.rc:system/etc/init/rg52-console.rc
 
-# Сторож пустого экрана в режиме nano: если приложение сломалось и рисует
-# чёрное, сам поднимает меню nano. Проверено на зависшем RetroArch. Цена -
-# один снимок экрана в тридцать секунд и только в режиме nano; выключается
-# свойством persist.rg52.nanowatch=0.
-PRODUCT_COPY_FILES += \
-    device/rg52mini/rg52-nanowatch.sh:system/bin/rg52-nanowatch.sh \
-    device/rg52mini/rg52-nanowatch.rc:system/etc/init/rg52-nanowatch.rc
-
-PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
-    persist.rg52.nanowatch=1
-
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.rg52.console=shell
 
