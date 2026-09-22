@@ -1,0 +1,39 @@
+# Интерактивная оболочка на отладочном порту (ttyFIQ0, 1500000 8n1).
+#
+# Служба console объявлена в init.rc, но выключена, а триггера
+# `on property:ro.debuggable=1 / start console`, которым её запускает AOSP, в
+# init.rc GammaOS нет - поэтому оболочки на порту не было.
+#
+# Консоль одна, и делить её не с кем: пока идёт загрузка, на неё пишет logcat
+# (rg52logcat_con) - это главный инструмент, когда система не доходит до adb.
+# После boot_completed adb уже есть, а вот интерактивная оболочка нужнее:
+# именно на таком случае, когда экран чёрный и adb отвалился, её и не хватало.
+# Поэтому переключаемся здесь, а не раньше.
+#
+# Выбор в свойстве persist.rg52.console: shell (по умолчанию) или logcat.
+
+on property:sys.boot_completed=1 && property:persist.rg52.console=shell
+    stop rg52logcat_con
+    start console
+
+on property:persist.rg52.console=shell
+    stop rg52logcat_con
+    start console
+
+on property:persist.rg52.console=logcat
+    stop console
+    start rg52logcat_con
+
+# Подстраховка от чёрного экрана в nano. Когда запущенное из nano приложение
+# завершается, ActivityManagerService поднимает оставшийся резидентным оверлей
+# обратно в роли домашнего экрана. Если приложение не вышло, а упало, этот
+# подъём может не отработать: в разобранном случае app_launched стал 0, а
+# show_overlay остался 0, и на экране не осталось ничего - только полоска
+# громкости и курсор поверх пустоты.
+#
+# Условие узкое: мы в режиме nano и оверлей уже работает, то есть именно он и
+# есть домашний экран. Прямой оболочки на DRM это не касается - с ней оверлей
+# не должен работать одновременно. Когда штатный подъём отрабатывает сам,
+# строка ниже просто повторяет уже выставленное значение.
+on property:sys.gammaos.nano.app_launched=0 && property:sys.gammaos.minimal_boot=1 && property:init.svc.gammaos-nano-overlay=running
+    setprop sys.gammaos.nano.show_overlay 1
