@@ -34,6 +34,14 @@ PRODUCT_PACKAGES += \
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52logcat.rc:system/etc/init/rg52logcat.rc
 
+# Интерактивная оболочка на отладочном порту после загрузки плюс подстраховка от
+# чёрного экрана в nano - подробности в самом rg52-console.rc.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-console.rc:system/etc/init/rg52-console.rc
+
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.rg52.console=shell
+
 # Гашение служб, которым на этом устройстве нечего делать (сейчас —
 # cameraserver: камер ноль). Почему не убрать из образа насовсем, написано
 # в самом rg52-trim.rc: PRODUCT_REMOVE_PACKAGES в этом дереве не объявлена и
