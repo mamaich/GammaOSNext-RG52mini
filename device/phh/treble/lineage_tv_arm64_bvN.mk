@@ -112,7 +112,6 @@ PRODUCT_COPY_FILES += \
     gammaos/utils/xz:system/bin/xz \
     gammaos/utils/dtc:system/bin/dtc \
     gammaos/utils/inotifywait:system/bin/inotifywait \
-    gammaos/utils/fenix-148.0b9.multi.android-arm64-v8a.apk:system/etc/fenix-148.0b9.multi.android-arm64-v8a.apk \
     gammaos/customization.sh:system/bin/customization.sh \
     gammaos/magisk/magisk.apk:system/etc/magisk.apk \
     gammaos/magisk/magisk.tar.gz:system/etc/magisk.tar.gz \

@@ -20,6 +20,10 @@ service rg52logcat_file /system/bin/logcat -b all -v threadtime -f /metadata/rg5
     group root system log
     seclabel u:r:shell:s0
 
-on post-fs-data
+# Намеренно post-fs, а не post-fs-data: именно в post-fs-data чаще всего и
+# застревает загрузка (там perform_apex_config, wait_for_prop apexd.status и
+# прочее), а лог нужен раньше, чем она туда дойдёт. logd к этому моменту уже
+# поднят: он стартует по триггеру fs.
+on post-fs
     start rg52logcat_con
     start rg52logcat_file

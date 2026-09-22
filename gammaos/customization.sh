@@ -57,6 +57,17 @@ if [ ! -d /data/setupcompleted ] && [ -z $(getprop persist.sys.device_provisione
     cmd overlay disable --user 0 com.android.internal.systemui.navbar.gestural
     cmd overlay enable  --user 0 com.android.internal.systemui.navbar.threebutton
 
+    # Устройства, где root даёт KernelSU, вшитый в ядро: загрузочный образ
+    # Magisk-ом не патчен, поэтому установленный Magisk там не работает и
+    # только вводит в заблуждение надписью "Magisk is not installed".
+    # Свойство выставляет device/<устройство>, см. device/rg52mini.
+    if [ "$(getprop ro.rg52.root)" = "kernelsu" ]; then
+        echo "Skipping Magisk: root is provided by KernelSU in the kernel."
+        if [ -f /system/etc/KernelSUNext.apk ]; then
+            echo "Installing KernelSU Next manager."
+            pm install /system/etc/KernelSUNext.apk
+        fi
+    else
     echo "Installing Magisk."
     pm install /system/etc/magisk.apk
     am force-stop com.topjohnwu.magisk
@@ -81,6 +92,7 @@ if [ ! -d /data/setupcompleted ] && [ -z $(getprop persist.sys.device_provisione
     am force-stop com.topjohnwu.magisk
     chown -R $launcheruser:$launchergroup /data/user_de/0/com.topjohnwu.magisk/
     am force-stop com.topjohnwu.magisk
+    fi
 
     # If the vendor’s own customization script exists, run it now
     if [ -f /vendor/etc/customization.sh ]; then

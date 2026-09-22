@@ -23,10 +23,38 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     sgdisk
 
+# Снимок VNDK 33 здесь намеренно НЕ перечислен: апексы com.android.vndk.v28...v34
+# и так попадают в /system_ext/apex через PRODUCT_EXTRA_VNDK_VERSIONS. Проверять
+# его наличие обязательно (см. scripts/check-sysimg.sh): без v33 не слинкуется ни
+# один vendor-HAL — раздел vendor от Android 13 не носит своих копий
+# libhidlbase/libutils/libcutils/libc++/libbase/libhardware.
+
 # logcat в последовательную консоль и в файл на /metadata — главный инструмент
 # отладки, пока система не поднимется до adb.
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52logcat.rc:system/etc/init/rg52logcat.rc
+
+# Root здесь даёт KernelSU-Next, вшитый в ядро (ядро само ищет /data/adb/ksud,
+# а драйвер «коронует» менеджера по подписи — проверено на устройстве:
+# «Crowning manager: com.rifsxd.ksunext»). Magisk на этом устройстве не работает
+# вовсе: загрузочный образ им не патчен, и установленный Magisk лишь пишет
+# «Magisk is not installed». Свойство читает gammaos/customization.sh: оно
+# пропускает установку Magisk и ставит вместо неё менеджер KernelSU.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/KernelSUNext.apk:system/etc/KernelSUNext.apk
+
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    ro.rg52.root=kernelsu
+
+# Экранная клавиатура. Штатная leanback-клавиатура Android TV рассчитана на
+# пульт и на этом устройстве неудобна; LeanKey ходится по D-pad заметно лучше.
+# Кладётся системным приложением, а rg52-ime.sh удерживает её как метод ввода
+# по умолчанию: система возвращает свою уже после загрузки, когда поднимется
+# служба ввода, поэтому одной записи не хватает.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/LeanKeyKeyboard.apk:system/app/LeanKeyKeyboard/LeanKeyKeyboard.apk \
+    device/rg52mini/rg52-ime.sh:system/bin/rg52-ime.sh \
+    device/rg52mini/rg52-ime.rc:system/etc/init/rg52-ime.rc
 
 # Панель физически портретная (720x1280), используется в альбомной ориентации.
 # В Android 13 это стояло в /system/build.prop; vendor этого свойства не задаёт

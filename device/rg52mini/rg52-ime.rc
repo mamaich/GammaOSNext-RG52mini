@@ -1,0 +1,14 @@
+# RG52 Mini: удержать LeanKey как метод ввода по умолчанию. См. rg52-ime.sh —
+# система сбрасывает выбор на свою leanback-клавиатуру уже после загрузки,
+# поэтому скрипт держит своё значение минуту.
+
+service rg52_ime /system/bin/sh /system/bin/rg52-ime.sh
+    class late_start
+    user root
+    group root shell
+    oneshot
+    disabled
+    seclabel u:r:shell:s0
+
+on property:sys.boot_completed=1
+    start rg52_ime
