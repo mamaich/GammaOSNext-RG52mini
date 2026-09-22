@@ -155,6 +155,17 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 #   ro.sf.lcd_density   — в vendor лежит 186, рабочее значение 213
 #   ro.config.low_ram   — ATV-база GammaOS ставит true через vendor-свойства;
 #                         у устройства 2 ГБ ОЗУ, режим Android Go тут вреден
+# Оверлей ресурсов платформы. Пока в нём одна правка - выключение zram
+# writeback, которое нам включает RRO из vendor от DOOGEE. Подробности и способ
+# проверки - в самом файле overlay/frameworks/base/core/res/res/values/config.xml.
+#
+# Оверлеи продукта перекрывают оверлеи vendor: порядок разделов в OverlayConfig
+# - system, system_ext, vendor, odm, oem, product, и чем позже, тем выше
+# приоритет. Из-за PRODUCT_ENFORCE_RRO_TARGETS := * оверлей станет отдельным
+# RRO-пакетом (framework-res__lineage_tv_arm64_bvN__auto_generated_rro_product.apk
+# в /system/product/overlay), а не вкомпилируется в framework-res.
+PRODUCT_PACKAGE_OVERLAYS += device/rg52mini/overlay
+
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.sf.lcd_density=213 \
     ro.config.low_ram=false \
