@@ -51,6 +51,31 @@ PRODUCT_COPY_FILES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.gammaos.gamepad.enable=1
 
+# Кнопки HOME и BACK корпуса. Драйвер play_joystick отдаёт их как коды
+# геймпада: BTN_MODE (316) для HOME и BTN_TRIGGER_HAPPY1 (704) для BACK.
+#
+# Раскладку Android подбирает по VID/PID устройства, а не по имени файла, и
+# для 045e:0b13 подходящего Vendor_045e_Product_0b13.kl в системе нет — оба
+# устройства, и физическое, и виртуальное, получают Generic.kl. А в ней 316
+# значит BUTTON_MODE (то есть не HOME), кода 704 нет вовсе — поэтому BACK не
+# работал совсем. Наш device/rg52mini/keylayout/rk3562-joystick.kl сюда не
+# подходит: по этому имени Android раскладку не ищет.
+#
+# Своего .kl тут мало: gammapad читает ту же раскладку для физического
+# устройства и переводит коды ещё до uinput, но виртуальный геймпад объявляет
+# исходные коды, поэтому «key 704 BACK» превратился бы в KEY_BACK, которого у
+# виртуального устройства нет, и событие потерялось бы в ядре.
+#
+# Переназначение самим gammapad такой проблемы не создаёт: цели remap_btn он
+# добавляет в набор кнопок виртуального устройства (GamepadManager.cpp,
+# computeRequiredCodes). Отдаём сразу KEY_HOMEPAGE (172) и KEY_BACK (158) —
+# их Generic.kl уже знает как HOME и BACK.
+#
+# Заодно это чинит кнопку Guide на внешних Bluetooth-геймпадах: она тоже
+# BTN_MODE и тоже станет HOME.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.gammaos.gamepad.remap_btn=316:172,704:158
+
 # Root здесь даёт KernelSU-Next, вшитый в ядро (ядро само ищет /data/adb/ksud,
 # а драйвер «коронует» менеджера по подписи — проверено на устройстве:
 # «Crowning manager: com.rifsxd.ksunext»). Magisk на этом устройстве не работает
