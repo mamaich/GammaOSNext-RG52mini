@@ -43,9 +43,12 @@ axis 0x01 Y
 axis 0x03 Z
 axis 0x04 RZ
 
-# Analog triggers (driver maps to ABS_HAT2Y/HAT2X for joydev compatibility)
-axis 0x14 LTRIGGER      # ABS_HAT2Y (left trigger ZL)
-axis 0x15 RTRIGGER      # ABS_HAT2X (right trigger ZR)
+# Аналоговые триггеры. Проверено через getevent -p на самом устройстве: осей
+# HAT2 у него нет вовсе, триггеры сидят на ABS_GAS и ABS_BRAKE, обе 0..255.
+# Причём левый приходит на GAS, а в Android газ - это правый триггер, поэтому
+# в rg52mini.mk они меняются местами через remap_axis.
+axis 0x09 RTRIGGER      # ABS_GAS, физически это ЛЕВЫЙ триггер
+axis 0x0a LTRIGGER      # ABS_BRAKE, физически это ПРАВЫЙ триггер
 
 # D-pad hat axes (driver emits ABS_HAT0X/0Y) — V147
 axis 0x10 HAT_X
