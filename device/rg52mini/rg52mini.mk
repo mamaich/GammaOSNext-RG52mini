@@ -131,4 +131,44 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 #                         у устройства 2 ГБ ОЗУ, режим Android Go тут вреден
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.sf.lcd_density=213 \
-    ro.config.low_ram=false
+    ro.config.low_ram=false \
+    persist.gammaos.lazy32=0
+
+# Про persist.gammaos.lazy32=0 выше — из-за него не работал WebView.
+#
+# GammaOS экономит память «ленивым» 32-битным зиготом: atv_lowram_defaults.mk
+# ставит ro.zygote.disable_secondary=1, init не поднимает zygote_secondary при
+# загрузке, ZygoteProcess поднимает его при первом 32-битном форке, а AMS через
+# 15 секунд после выхода последнего 32-битного приложения его убивает
+# (ActivityManagerService.maybeScheduleSecondaryZygoteReap).
+#
+# WebView в этот расчёт не укладывается. PackageManager определяет apk WebView
+# как armeabi-v7a (arm64 у него вторым), поэтому дочерний зигот WebView —
+# 32-битный и форкается из zygote_secondary. Жнец его не видит: он считает
+# только 32-битные процессы приложений (countLive32BitProcsLOSP), а дочерний
+# зигот приложением не является. Через 15 секунд после загрузки родителя
+# убивают, а осиротевший webview_zygote остаётся с дескрипторами, открытыми в
+# уже отсоединённом пространстве монтирования: readlink отдаёт /null вместо
+# /dev/null и /javalib/core-oj.jar вместо /apex/com.android.art/javalib/...
+#
+# При первом же форке рендерера зигот сверяет таблицу дескрипторов и падает:
+#
+#   Abort message: JNI FatalError called: (zygote) Not allowlisted (7): /null
+#   FileDescriptorInfo::CreateFromFd -> FileDescriptorTable::RestatInternal
+#
+# Дальше хуже: system_server держит ссылку на мёртвый зигот и заново его не
+# создаёт (WebViewZygote.getProcess возвращает ненулевой sZygote, не проверяя,
+# жив ли тот), поэтому до перезагрузки каждая попытка кончается
+# «Error connecting to zygote». Снаружи это чёрная страница без единой ошибки:
+# в браузере GammaOS, в окне авторизации Aurora Store — везде, где рисует
+# WebView. Firefox работает, потому что у него свой движок Gecko.
+#
+# Ставим 0 — zygote_secondary поднимается по требованию и больше не убивается.
+# Цена по dumpsys meminfo: около 62 МБ приватной памяти, и только после того,
+# как запустится первое 32-битное приложение. Проверено на устройстве: страница
+# открывается, рендерер живёт (com.android.webview:sandboxed_process0).
+#
+# Свойство пишем в product: у GammaOS оно задано в PRODUCT_SYSTEM_PROPERTIES,
+# то есть в /system/build.prop, а /product/etc/build.prop читается позже и
+# перекрывает его (порядок в PropertyLoadBootDefaults: system -> system_ext ->
+# vendor -> odm -> product).
