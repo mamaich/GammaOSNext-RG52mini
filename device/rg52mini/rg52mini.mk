@@ -125,6 +125,15 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.gammaos.gamepad.remap_axis=9:10,10:9
 
+# GammaToast из образа убран. Строка GammaToast удалена из PRODUCT_PACKAGES в
+# device/phh/treble/base.mk и lineage_tv_arm64_bvN.mk: отсюда его не выключить,
+# PRODUCT_REMOVE_PACKAGES в этом дереве не существует (не объявлена ни в
+# product.mk, ни в product_config.mk, ни в main.mk), так что все такие строки в
+# makefile-ах GammaOS - пустышки.
+#
+# На код ничего не завязано: во frameworks и в gammapad обращений к нему нет,
+# всплывающие сообщения идут через обычный Toast API.
+
 # Визуальное подтверждение переключения режима мыши: экран коротко моргает
 # инверсией. Всплывающая надпись gammapad в полноэкранной игре может быть не
 # видна, а в rgp2pad, откуда сюда переходят, моргание было.
