@@ -16,7 +16,7 @@ Android-части нет — автор по лицензии выложил т
 | Часть образа | Откуда |
 |---|---|
 | `system` | **эта сборка** — GammaOS Core, Android 14 |
-| `vendor` | из рабочего образа SyachOS: Wi-Fi/Bluetooth AIC8800D80, `rgp2pad`, HAL-ы Rockchip |
+| `vendor` | из рабочего образа SyachOS: Wi-Fi/Bluetooth AIC8800D80, `rgp2pad`, HAL-ы Rockchip. Сам SyachOS его тоже не собирал — раздел взят со стокового планшета DOOGEE U10 на том же RK3562 и подпилен, [подробности](01-разбор.md) |
 | ядро, DTB | [mamaich/kernel_rk3562_rg52mini](https://github.com/mamaich/kernel_rk3562_rg52mini) — Linux 5.10.226 |
 | загрузчик | [mamaich/u-boot-rk3562-rg52mini](https://github.com/mamaich/u-boot-rk3562-rg52mini) |
 
