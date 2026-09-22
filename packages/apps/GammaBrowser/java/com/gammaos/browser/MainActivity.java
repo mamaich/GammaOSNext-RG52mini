@@ -1065,7 +1065,9 @@ public class MainActivity extends Activity {
                     finishNanoOsk();
                 } else if (("cancel:" + id).equals(done)) {
                     android.os.SystemProperties.set("sys.gammaos.nano.osk_done", "");
-                    if (!mAddressOsk) mWeb.evaluateJavascript("if(window.__gbF)window.__gbF.blur();", null);
+                    if (!mAddressOsk && mWeb != null) {
+                        mWeb.evaluateJavascript("if(window.__gbF)window.__gbF.blur();", null);
+                    }
                     finishNanoOsk();
                 } else if (android.os.SystemClock.uptimeMillis() - start > 180000L) {
                     finishNanoOsk();   // safety timeout (3 min)
@@ -1093,6 +1095,15 @@ public class MainActivity extends Activity {
     private void applyOskText(String val, boolean submit) {
         if (!mNanoOskActive && !submit) return;   // stale live tick after finish
         if (val == null) val = "";
+        // Активность могла быть уничтожена, пока пользователь набирал текст в
+        // экранной клавиатуре nano: она рисуется оверлеем поверх приложения, и
+        // на малой памяти система успевает свернуть и убить активность под ней.
+        // onDestroy() уничтожает WebView и обнуляет mWeb, а наблюдатель за
+        // свойствами продолжал тикать и падал тут с NullPointerException,
+        // унося процесс браузера. Снаружи это выглядело как чёрный экран после
+        // нажатия «Готово»: приложение мертво, а оболочка nano поверх него
+        // остаётся спрятанной.
+        if (mWeb == null) return;
         if (mAddressOsk) {
             if (!val.equals(mLastApplied)) {
                 mAddress.setText(val);
@@ -1299,6 +1310,10 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         writeStore();
         stopCursorLoop();
+        // Наблюдатель сессии экранной клавиатуры nano тикает по Handler и
+        // проверяет этот признак первым делом, так что сброс здесь глушит его
+        // без возни с removeCallbacks.
+        mNanoOskActive = false;
         if (mWeb != null) {
             try { mWeb.removeJavascriptInterface("Android"); } catch (Exception ignored) {}
             ViewGroup p = (ViewGroup) mWeb.getParent();
