@@ -172,6 +172,19 @@ public final class ZramWriteback extends JobService {
         boolean forceWb = SystemProperties.getBoolean(FORCE_WRITEBACK_PROP, false);
 
         JobScheduler js = (JobScheduler) context.getSystemService(Context.JOB_SCHEDULER_SERVICE);
+        if (js == null) {
+            // Минимальная загрузка GammaOS (режим nano) не поднимает
+            // JobSchedulerService, а StorageManagerService.handleSystemReady()
+            // зовёт нас безусловно, когда включён config_zramWriteback. Без этой
+            // проверки получается NullPointerException в потоке
+            // StorageManagerService, то есть падение system_server по кругу:
+            // загрузка не доходит до boot_completed, WifiService не
+            // регистрируется, ни одно приложение не запускается.
+            //
+            // На обычной загрузке планировщик на месте и поведение не меняется.
+            Slog.w(TAG, "JobScheduler unavailable, zram writeback not scheduled");
+            return;
+        }
 
         // Schedule a one time job to mark pages as idle. These pages will be written
         // back at later point if they remain untouched.
