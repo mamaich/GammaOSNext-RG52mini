@@ -37,6 +37,9 @@ public:
     // current stick/DPAD state.
     void tick();
 
+    // Скорость по одной оси: знак от направления, величина по степенной кривой.
+    float curveSpeed(int v) const;
+
     // Periodic check for combo timeout (called from main loop when no
     // input events arrive). Returns true if mode was toggled.
     bool checkComboTimeout();
@@ -121,8 +124,17 @@ private:
     // Configuration
     float mStickSpeed;       // pixels per tick at max stick deflection
     float mDpadSpeed;        // pixels per tick for DPAD
-    float mBoostMultiplier;  // speed multiplier when boost button held
+    float mBoostMultiplier;  // не используется: кнопка-модификатор замедляет, см. mSlowDiv
     float mScrollSpeed;      // scroll ticks per tick at max deflection
+
+    // Кривая скорости курсора, заимствована из rgp2pad. По каждой оси
+    // отдельно: нормируем отклонение после вычета мёртвой зоны и возводим в
+    // степень. Малое отклонение даёт очень медленный курсор для точного
+    // наведения, полное - быстрый бросок через экран.
+    float mCurveMax;         // пикселей в секунду на полном отклонении
+    float mCurvePow;         // показатель степени
+    float mCurveDead;        // мёртвая зона в единицах оси
+    float mSlowDiv;          // во столько раз медленнее, пока держат кнопку-модификатор
 
     // Configurable button mappings for mouse actions
     int mClickBtnCode;       // gamepad button for touch tap (default: BTN_A)
