@@ -1,0 +1,19 @@
+# Моргание экраном при переключении режима эмуляции мыши.
+#
+# gammapad выставляет sys.gammaos.gamepad.mouse_active при каждом переключении
+# (MouseMode::setActive), так что одного этого свойства хватает на оба
+# направления. Служба oneshot: повторный start во время её работы init
+# игнорирует, поэтому частые переключения ничего не ломают.
+
+on property:sys.gammaos.gamepad.mouse_active=1
+    start rg52_mouseflash
+
+on property:sys.gammaos.gamepad.mouse_active=0
+    start rg52_mouseflash
+
+service rg52_mouseflash /system/bin/rg52-mouseflash.sh
+    user shell
+    group shell
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
