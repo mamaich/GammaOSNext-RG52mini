@@ -62,6 +62,23 @@ PRODUCT_COPY_FILES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.surface_flinger.primary_display_orientation=ORIENTATION_90
 
+# Аппаратные кодеки Rockchip. Без этого свойства Codec2 идёт за буферами в
+# legacy ION, а он на этом ядре не отвечает:
+#
+#   E/ion         : ioctl c0184900 failed with code -1: No such device
+#   E/C2RKMpiEnc  : failed to fetch block for output, ret 0xe
+#   E/MediaCodec  : Codec reported err 0xe/14, while in state 6/STARTED
+#
+# Со свойством Codec2 берёт буферы из /dev/dma_heap, и кодирование работает
+# (проверено записью экрана через scrcpy). В порте Android 13 это свойство
+# тоже стояло — потерялось вместе с его разделом system.
+#
+# media_vol_steps: 25 шагов громкости вместо 15, на карманной консоли заметно
+# удобнее. Тоже было в Android 13.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    debug.c2.use_dmabufheaps=1 \
+    ro.config.media_vol_steps=25
+
 # Свойства, которые обязаны перебить vendor. Порядок загрузки в
 # system/core/init/property_service.cpp: чем специфичнее раздел, тем выше
 # приоритет, и product идёт после vendor. Ровно так это и было сделано в
