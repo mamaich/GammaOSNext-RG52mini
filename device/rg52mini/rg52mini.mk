@@ -42,12 +42,6 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-trim.rc:system/etc/init/rg52-trim.rc
 
-# Ресурсные правки поверх исходников. Сейчас там одно: SBC кодеком A2DP по
-# умолчанию вместо AAC — на игровой консоли задержка звука важнее качества
-# потока, а кодирование AAC этому процессору дорого обходится. Подробности —
-# в самом overlay/packages/modules/Bluetooth/.../config.xml.
-PRODUCT_PACKAGE_OVERLAYS += \
-    device/rg52mini/overlay
 
 # Штатный геймпад-демон GammaOS вместо vendor-овского rgp2pad. Умеет то же и
 # больше: режим мыши (SELECT+R1 удержать 2 с), отображение в тачскрин,

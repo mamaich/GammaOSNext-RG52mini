@@ -131,7 +131,16 @@
          should have priorities in the interval [1, 999999], and each priority
          value should be unique. -->
     <integer name="a2dp_source_codec_priority_sbc">1001</integer>
-    <integer name="a2dp_source_codec_priority_aac">2001</integer>
+    <!-- RG52 Mini: SBC кодеком A2DP по умолчанию вместо AAC. На игровой
+         консоли задержка звука важнее качества потока, а кодирование AAC
+         этому процессору дорого обходится. Приоритет AAC опущен ниже SBC
+         (1001), сам AAC остаётся доступным и выбирается вручную в
+         параметрах разработчика.
+         Правка здесь, а не оверлеем: ATV-база ставит
+         PRODUCT_ENFORCE_RRO_TARGETS := *, из-за чего оверлеи становятся
+         отдельными RRO-пакетами, а для mainline-модулей внутри APEX они
+         не генерируются вовсе. См. doc/rg52mini/02-план.md. -->
+    <integer name="a2dp_source_codec_priority_aac">500</integer>
     <integer name="a2dp_source_codec_priority_aptx">3001</integer>
     <integer name="a2dp_source_codec_priority_aptx_hd">4001</integer>
     <integer name="a2dp_source_codec_priority_ldac">5001</integer>

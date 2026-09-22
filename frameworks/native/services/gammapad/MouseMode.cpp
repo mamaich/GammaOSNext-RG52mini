@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 
 namespace gammapad {
@@ -24,6 +25,29 @@ static constexpr int TICK_INTERVAL_MS = 16;
 static constexpr int DEFAULT_COMBO_BTN1 = 0x13a; // BTN_SELECT
 static constexpr int DEFAULT_COMBO_BTN2 = 0x137; // BTN_TR
 static constexpr int DEFAULT_COMBO_HOLD_MS = 2000;
+
+// Короткое моргание экраном как подтверждение переключения режима мыши.
+//
+// Всплывающего сообщения мало: в полноэкранной игре или в эмуляторе его может
+// не быть видно вовсе, а переключение режима нужно подтверждать однозначно.
+// Инверсия цветов заметна при любом содержимом экрана. Так же было сделано в
+// rgp2pad, откуда пользователи сюда и переходят.
+//
+// Команда уходит в фон (&), чтобы не задерживать обработку ввода: sleep внутри
+// неё длится треть секунды. Выключается свойством
+// persist.gammaos.gamepad.mouse_flash=0.
+static void flashScreen() {
+    if (!android::base::GetBoolProperty("persist.gammaos.gamepad.mouse_flash", true)) {
+        return;
+    }
+    int rc = system(
+        "settings put secure accessibility_display_inversion_enabled 1"
+        " && sleep 0.3"
+        " && settings put secure accessibility_display_inversion_enabled 0 &");
+    if (rc != 0) {
+        LOG(WARNING) << "MouseMode: flashScreen failed, rc=" << rc;
+    }
+}
 
 // Default movement speeds (pixels per 16ms tick)
 static constexpr float DEFAULT_STICK_SPEED = 12.0f;  // ~750 px/s at max deflection
@@ -412,6 +436,8 @@ void MouseMode::setActive(bool active) {
 
     android::base::SetProperty("sys.gammaos.gamepad.mouse_active",
                                 mActive ? "1" : "0");
+
+    flashScreen();
 
     LOG(INFO) << "Mouse mode " << (mActive ? "ENABLED" : "DISABLED");
 }
