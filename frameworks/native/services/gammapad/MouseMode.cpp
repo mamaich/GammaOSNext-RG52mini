@@ -61,7 +61,7 @@ MouseMode::MouseMode()
       mDpadX(0),
       mDpadY(0),
       mSpeedBoost(false),
-      mDpadSynPending(false),
+      mPassSynPending(false),
       mRStickX(0),
       mRStickY(0),
       mAccumX(0.0f),
@@ -79,11 +79,11 @@ MouseMode::MouseMode()
       mStickSpeed(DEFAULT_STICK_SPEED),
       mDpadSpeed(DEFAULT_DPAD_SPEED),
       mBoostMultiplier(DEFAULT_BOOST_MULTIPLIER),
+      mScrollSpeed(DEFAULT_SCROLL_SPEED),
       mCurveMax(DEFAULT_CURVE_MAX),
       mCurvePow(DEFAULT_CURVE_POW),
       mCurveDead(DEFAULT_CURVE_DEAD),
       mSlowDiv(DEFAULT_SLOW_DIV),
-      mScrollSpeed(DEFAULT_SCROLL_SPEED),
       mClickBtnCode(BTN_A),
       mBackBtnCode(BTN_B),
       mRightClickBtnCode(BTN_Y),
@@ -366,7 +366,7 @@ void MouseMode::setActive(bool active) {
     mStickY = 0;
     mDpadX = 0;
     mDpadY = 0;
-    mDpadSynPending = false;
+    mPassSynPending = false;
     mSpeedBoost = false;
     mRStickX = 0;
     mRStickY = 0;
@@ -527,11 +527,6 @@ bool MouseMode::processEvent(const struct input_event& ev) {
         int code = ev.code;
         bool pressed = (ev.value != 0);
 
-        // Combo buttons already handled above
-        if (code == mComboBtn1Code || code == mComboBtn2Code) {
-            return true;
-        }
-
         if (code == mClickBtnCode) {
             // Touch simulation: tap/drag at actual cursor position
             if (mTouchscreen && mTouchscreen->isValid()) {
@@ -578,18 +573,32 @@ bool MouseMode::processEvent(const struct input_event& ev) {
             return true;
         }
 
-        // Крестовина при mouse_dpad_speed=0 не эмулирует мышь, а работает как
-        // обычная крестовина: не съедаем событие, пусть идёт на виртуальный
-        // геймпад. Драйвер отдаёт её и кнопками, и осями HAT, поэтому ловим оба
-        // вида. Признак ниже заставит пропустить и SYN.
-        if (mDpadSpeed <= 0.0f &&
-            code >= BTN_DPAD_UP && code <= BTN_DPAD_RIGHT) {
-            mDpadSynPending = true;
-            return false;
+        // Кнопки аккорда. Своё действие они, если назначены кнопками мыши,
+        // уже выполнили выше; сюда доходят только когда не назначены. Съедаем,
+        // чтобы удержание аккорда не улетало в приложение.
+        if (code == mComboBtn1Code || code == mComboBtn2Code) {
+            return true;
         }
 
-        // All other buttons consumed in mouse mode
-        return true;
+        // Крестовина при mouse_dpad_speed=0 не эмулирует мышь, а работает как
+        // обычная крестовина. Драйвер отдаёт её и кнопками, и осями HAT,
+        // поэтому ловим оба вида; при ненулевой скорости кнопки съедаем, курсор
+        // водят оси HAT.
+        if (code >= BTN_DPAD_UP && code <= BTN_DPAD_RIGHT) {
+            if (mDpadSpeed <= 0.0f) {
+                mPassSynPending = true;
+                return false;
+            }
+            return true;
+        }
+
+        // Все остальные кнопки проходят насквозь как обычные кнопки геймпада.
+        // Раньше режим мыши съедал вообще всё, и в нём нельзя было ни нажать A
+        // в игре, ни вернуться назад кнопкой корпуса. Сюда попадает всё, что не
+        // занято под действия мыши, - в том числе A, B, X, Y, если они не
+        // назначены кнопками мыши.
+        mPassSynPending = true;
+        return false;
     }
 
     if (ev.type == EV_ABS) {
@@ -609,7 +618,7 @@ bool MouseMode::processEvent(const struct input_event& ev) {
         // DPAD → cursor movement, либо насквозь при mouse_dpad_speed=0
         if (code == ABS_HAT0X || code == ABS_HAT0Y) {
             if (mDpadSpeed <= 0.0f) {
-                mDpadSynPending = true;
+                mPassSynPending = true;
                 return false;
             }
             if (code == ABS_HAT0X) mDpadX = value;
@@ -634,8 +643,8 @@ bool MouseMode::processEvent(const struct input_event& ev) {
 
     // Если в этом кадре крестовина ушла на виртуальный геймпад, её нужно
     // завершить: без SYN ядро не отдаст событие потребителю.
-    if (ev.type == EV_SYN && mDpadSynPending) {
-        mDpadSynPending = false;
+    if (ev.type == EV_SYN && mPassSynPending) {
+        mPassSynPending = false;
         return false;
     }
 
