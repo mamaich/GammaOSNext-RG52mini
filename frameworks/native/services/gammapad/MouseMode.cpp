@@ -50,6 +50,7 @@ MouseMode::MouseMode()
       mDpadX(0),
       mDpadY(0),
       mSpeedBoost(false),
+      mDpadSynPending(false),
       mRStickX(0),
       mRStickY(0),
       mAccumX(0.0f),
@@ -288,6 +289,7 @@ void MouseMode::loadConfig() {
     LOG(INFO) << "MouseMode config: combo=" << mComboBtn1Code << "+" << mComboBtn2Code
               << " hold=" << mComboHoldMs << "ms"
               << " stickSpeed=" << mStickSpeed << " dpadSpeed=" << mDpadSpeed
+              << (mDpadSpeed <= 0.0f ? " (dpad passthrough)" : "")
               << " boost=" << mBoostMultiplier << " scrollSpeed=" << mScrollSpeed
               << " click=" << mClickBtnCode << " back=" << mBackBtnCode
               << " rclick=" << mRightClickBtnCode << " boostBtn=" << mBoostBtnCode
@@ -334,6 +336,7 @@ void MouseMode::setActive(bool active) {
     mStickY = 0;
     mDpadX = 0;
     mDpadY = 0;
+    mDpadSynPending = false;
     mSpeedBoost = false;
     mRStickX = 0;
     mRStickY = 0;
@@ -545,6 +548,16 @@ bool MouseMode::processEvent(const struct input_event& ev) {
             return true;
         }
 
+        // Крестовина при mouse_dpad_speed=0 не эмулирует мышь, а работает как
+        // обычная крестовина: не съедаем событие, пусть идёт на виртуальный
+        // геймпад. Драйвер отдаёт её и кнопками, и осями HAT, поэтому ловим оба
+        // вида. Признак ниже заставит пропустить и SYN.
+        if (mDpadSpeed <= 0.0f &&
+            code >= BTN_DPAD_UP && code <= BTN_DPAD_RIGHT) {
+            mDpadSynPending = true;
+            return false;
+        }
+
         // All other buttons consumed in mouse mode
         return true;
     }
@@ -563,13 +576,14 @@ bool MouseMode::processEvent(const struct input_event& ev) {
             return true;
         }
 
-        // DPAD → cursor movement
-        if (code == ABS_HAT0X) {
-            mDpadX = value;
-            return true;
-        }
-        if (code == ABS_HAT0Y) {
-            mDpadY = value;
+        // DPAD → cursor movement, либо насквозь при mouse_dpad_speed=0
+        if (code == ABS_HAT0X || code == ABS_HAT0Y) {
+            if (mDpadSpeed <= 0.0f) {
+                mDpadSynPending = true;
+                return false;
+            }
+            if (code == ABS_HAT0X) mDpadX = value;
+            else mDpadY = value;
             return true;
         }
 
@@ -586,6 +600,13 @@ bool MouseMode::processEvent(const struct input_event& ev) {
 
         // Consume all other axes in mouse mode
         return true;
+    }
+
+    // Если в этом кадре крестовина ушла на виртуальный геймпад, её нужно
+    // завершить: без SYN ядро не отдаст событие потребителю.
+    if (ev.type == EV_SYN && mDpadSynPending) {
+        mDpadSynPending = false;
+        return false;
     }
 
     // Consume SYN and all other events in mouse mode
