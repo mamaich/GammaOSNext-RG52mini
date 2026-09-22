@@ -157,7 +157,6 @@ PRODUCT_COPY_FILES += \
     device/gammaos/default-permissions/gammaos_permissions.xml:system/etc/default-permissions/gammaos_permissions.xml
 
 PRODUCT_PACKAGES += \
-    GammaToast \
     GammaDisplayLoading \
     zstd
 
