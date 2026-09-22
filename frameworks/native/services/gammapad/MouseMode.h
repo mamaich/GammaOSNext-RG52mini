@@ -92,10 +92,10 @@ private:
     int mDpadX;      // -1, 0, 1
     int mDpadY;      // -1, 0, 1
     bool mSpeedBoost; // speed boost button held
-    // DPAD прошёл насквозь и ждёт SYN: в режиме мыши SYN тоже съедается, и без
-    // этого признака виртуальный геймпад никогда не получил бы завершение
-    // кадра, а значит и само событие крестовины.
-    bool mDpadSynPending;
+    // Что-то прошло насквозь и ждёт SYN: в режиме мыши SYN тоже съедается, и
+    // без этого признака виртуальный геймпад не получил бы завершение кадра, а
+    // значит и само событие - ни кнопки, ни крестовины.
+    bool mPassSynPending;
 
     // Right stick state for scroll wheel
     int mRStickX;    // right analog X: -32768..32767
