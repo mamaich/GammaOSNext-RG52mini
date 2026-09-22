@@ -1,0 +1,16 @@
+# Восстановление домашнего экрана после загрузки. Разбор - в самом скрипте,
+# device/rg52mini/rg52-home.sh.
+#
+# oneshot и по boot_completed: к этому моменту менеджер пакетов уже поднят, а
+# сторонние приложения включены (в безопасном режиме их нет, и скрипт сам
+# ничего не делает - ему не во что назначать).
+
+service rg52_home /system/bin/rg52-home.sh
+    user shell
+    group shell log
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+on property:sys.boot_completed=1
+    start rg52_home
