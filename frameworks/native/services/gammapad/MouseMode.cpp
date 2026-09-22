@@ -568,8 +568,17 @@ bool MouseMode::handleChordButton(int idx, bool pressed) {
         return true;
     }
 
-    mChordPending[idx] = false;   // половина аккорда: ни щелчка, ни пересылки
-    return true;
+    if (mChordPending[idx]) {
+        // Отпустили раньше, чем истекло окно аккорда, - это короткий щелчок.
+        // Выдаём его целиком здесь: иначе он бы потерялся, ведь отложенное
+        // действие ещё не выполнялось, а отменять его нечестно.
+        mChordPending[idx] = false;
+        chordAction(idx, true);
+        chordAction(idx, false);
+        return true;
+    }
+
+    return true;   // половина аккорда: ни щелчка, ни пересылки
 }
 
 bool MouseMode::checkExternalToggle() {
@@ -694,6 +703,12 @@ void MouseMode::tick() {
     // Drain the timerfd
     uint64_t expirations;
     if (read(mTimerFd, &expirations, sizeof(expirations)) < 0) return;
+
+    // Отложенные действия кнопок аккорда доводим здесь, на каждом такте.
+    // Опрос в GamepadManager для этого не годится: он приходит раз в секунду,
+    // а окно аккорда - 80 мс, и обычный щелчок успевал закончиться раньше, чем
+    // действие срабатывало.
+    checkChordTimers();
 
     float dx = 0.0f;
     float dy = 0.0f;
