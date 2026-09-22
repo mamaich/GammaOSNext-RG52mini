@@ -117,6 +117,19 @@ PRODUCT_COPY_FILES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.surface_flinger.primary_display_orientation=ORIENTATION_90
 
+# Оболочка GammaOS Nano (пункт «Boot nano» в меню выключателя) рисует напрямую
+# через DRM/KMS, мимо SurfaceFlinger. Поворот установки она берёт из свойства
+# выше и учитывает его правильно, но зеркальность сканирования панели строкой
+# ORIENTATION_* не выражается — под неё в nano есть отдельные поправки
+# (NanoMenuDrm.cpp, drmEarlySplash). Без этой строки экран в nano выходит
+# перевёрнутым и отражённым слева направо, то есть зеркальным по вертикали.
+#
+# Для RG Vita Pro в исходниках nano описан ровно такой же случай: «270 install
+# + drm_flip_v=1». Проверено на устройстве: с этой поправкой картинка верная.
+# Обычного Android не касается — там всё рисует SurfaceFlinger.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.gammaos.nano.drm_flip_v=1
+
 # Аппаратные кодеки Rockchip. Без этого свойства Codec2 идёт за буферами в
 # legacy ION, а он на этом ядре не отвечает:
 #
