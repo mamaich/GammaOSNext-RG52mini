@@ -51,6 +51,19 @@ PRODUCT_COPY_FILES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.gammaos.gamepad.enable=1
 
+# Визуальное подтверждение переключения режима мыши: экран коротко моргает
+# инверсией. Всплывающая надпись gammapad в полноэкранной игре может быть не
+# видна, а в rgp2pad, откуда сюда переходят, моргание было.
+#
+# Делаем службой init, а не правкой gammapad: вызов system("settings ...") из
+# демона не срабатывает - оболочка запускается, а настройка не меняется, и
+# причину не видно, потому что вывод уходит в /dev/null. Служба работает от
+# shell в домене u:r:shell:s0, где эта команда заведомо работает, и пишет в
+# лог, если что-то пошло не так. Подробности в самом скрипте.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-mouseflash.sh:system/bin/rg52-mouseflash.sh \
+    device/rg52mini/rg52-mouseflash.rc:system/etc/init/rg52-mouseflash.rc
+
 # Кнопки HOME и BACK корпуса. Драйвер play_joystick отдаёт их как коды
 # геймпада: BTN_MODE (316) для HOME и BTN_TRIGGER_HAPPY1 (704) для BACK.
 #
