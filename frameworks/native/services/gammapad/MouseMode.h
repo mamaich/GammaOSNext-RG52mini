@@ -42,7 +42,19 @@ public:
 
     // Periodic check for combo timeout (called from main loop when no
     // input events arrive). Returns true if mode was toggled.
-    bool checkComboTimeout();
+    // Довести отложенные действия кнопок аккорда. Зовётся из опроса
+    // GamepadManager, потому что окно аккорда истекает и без новых событий.
+    bool checkChordTimers();
+
+    // Одна кнопка аккорда: вся логика нажатия и отпускания. Возвращает true,
+    // если событие поглощено и в приложение уходить не должно.
+    bool handleChordButton(int idx, bool pressed);
+
+    // Действие кнопки мыши, назначенной на эту половину аккорда.
+    void chordAction(int idx, bool down);
+
+    // Действие, назначенное коду кнопки. true - если код занят под мышь.
+    bool performButtonAction(int code, bool pressed);
 
     // Check for external mouse mode toggle (e.g. QS tile setting
     // sys.gammaos.gamepad.mouse_active). Returns true if mode was toggled.
@@ -78,20 +90,24 @@ private:
     bool mActive;
 
     // Combo detection
-    bool mComboBtn1Held;
-    bool mComboBtn2Held;
-    std::chrono::steady_clock::time_point mComboBothHeldSince;
-    bool mComboBothHeld;
+    // Аккорд двух стиков, механика заимствована из rgp2pad: срабатывает по
+    // почти одновременному нажатию, а не по удержанию. Индекс 0 - первая
+    // кнопка аккорда, 1 - вторая.
+    bool mChordDown[2];                                  // кнопка сейчас нажата
+    std::chrono::steady_clock::time_point mChordTime[2]; // когда нажали
+    bool mChordFwd[2];      // нажатие переслано в приложение, отпускание тоже надо переслать
+    bool mChordActed[2];    // действие мыши выполнено, при отпускании его надо снять
+    bool mChordPending[2];  // ждём, не придёт ли вторая кнопка в окно аккорда
+    bool mChordUsed;        // этот аккорд уже переключил режим
     int mComboBtn1Code;
     int mComboBtn2Code;
-    int mComboHoldMs;
+    int mChordMs;           // окно аккорда, мс
 
     // Current input state for mouse movement (left stick)
     int mStickX;     // left analog X: -32768..32767
     int mStickY;     // left analog Y: -32768..32767
     int mDpadX;      // -1, 0, 1
     int mDpadY;      // -1, 0, 1
-    bool mSpeedBoost; // speed boost button held
     // Что-то прошло насквозь и ждёт SYN: в режиме мыши SYN тоже съедается, и
     // без этого признака виртуальный геймпад не получил бы завершение кадра, а
     // значит и само событие - ни кнопки, ни крестовины.
@@ -124,7 +140,7 @@ private:
     // Configuration
     float mStickSpeed;       // pixels per tick at max stick deflection
     float mDpadSpeed;        // pixels per tick for DPAD
-    float mBoostMultiplier;  // не используется: кнопка-модификатор замедляет, см. mSlowDiv
+    float mBoostMultiplier;  // не используется
     float mScrollSpeed;      // scroll ticks per tick at max deflection
 
     // Кривая скорости курсора, заимствована из rgp2pad. По каждой оси
@@ -134,13 +150,11 @@ private:
     float mCurveMax;         // пикселей в секунду на полном отклонении
     float mCurvePow;         // показатель степени
     float mCurveDead;        // мёртвая зона в единицах оси
-    float mSlowDiv;          // во столько раз медленнее, пока держат кнопку-модификатор
 
     // Configurable button mappings for mouse actions
     int mClickBtnCode;       // gamepad button for touch tap (default: BTN_A)
     int mBackBtnCode;        // gamepad button for KEY_BACK (default: BTN_B)
     int mRightClickBtnCode;  // gamepad button for right click (default: BTN_Y)
-    int mBoostBtnCode;       // gamepad button for speed boost (default: BTN_X)
 
     std::unique_ptr<VirtualMouse> mMouse;
     std::unique_ptr<VirtualTouchscreen> mTouchscreen;
