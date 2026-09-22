@@ -29,8 +29,11 @@ key 547   DPAD_RIGHT     # BTN_DPAD_RIGHT
 # Shoulders/triggers (emitted by driver via ADC/GPIO)
 key 310   BUTTON_L1      # KEY_RIGHTSHIFT → L1 (GPIO button)
 key 311   BUTTON_R1      # KEY_RIGHTCTRL → R1 (GPIO button)
-key 317   BUTTON_THUMBL      # KEY_PAGEUP → L2
-key 318   BUTTON_THUMBR      # KEY_PAGEDOWN → R2
+# Нажатия на стики. Проверено захватом getevent: это именно L3 и R3, а не
+# L2/R2 — те на этом корпусе аналоговые и цифровых кодов не имеют.
+# На них же назначено переключение режима мыши, см. rg52mini.mk.
+key 317   BUTTON_THUMBL      # BTN_THUMBL, нажатие на левый стик (L3)
+key 318   BUTTON_THUMBR      # BTN_THUMBR, нажатие на правый стик (R3)
 
 # Left analog stick (driver applies l_x_swap + l_y_swap + left-stick-invert)
 axis 0x00 X
