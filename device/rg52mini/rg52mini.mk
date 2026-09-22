@@ -39,6 +39,14 @@ PRODUCT_COPY_FILES += \
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-console.rc:system/etc/init/rg52-console.rc
 
+# Восстановление домашнего экрана, если он остался не назначен: без него
+# система показывает диалог выбора лаунчера, а он на этом устройстве
+# недосягаем - висит под меню выключателя и не принимает ни кнопки, ни курсор.
+# Так вышло после перезагрузки в безопасный режим. Подробности в самом скрипте.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-home.sh:system/bin/rg52-home.sh \
+    device/rg52mini/rg52-home.rc:system/etc/init/rg52-home.rc
+
 # microG: вход в Google-аккаунт и проверка покупок без сервисов Google.
 #
 # Почему это вообще работает. microG выдаёт себя за Google Play Services, и для
