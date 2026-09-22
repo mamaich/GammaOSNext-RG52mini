@@ -23,7 +23,10 @@ static constexpr int TICK_INTERVAL_MS = 16;
 // Default combo: Select (BTN_SELECT=0x13a) + R1 (BTN_TR=0x137)
 static constexpr int DEFAULT_COMBO_BTN1 = 0x13a; // BTN_SELECT
 static constexpr int DEFAULT_COMBO_BTN2 = 0x137; // BTN_TR
-static constexpr int DEFAULT_COMBO_HOLD_MS = 2000;
+// Окно аккорда: обе кнопки должны быть нажаты почти одновременно. Значение
+// взято из rgp2pad, где так же ловится L3+R3. Заодно это задержка, с которой
+// одиночное нажатие превращается в щелчок, - 80 мс незаметны.
+static constexpr int DEFAULT_CHORD_MS = 80;
 
 // Default movement speeds (pixels per 16ms tick)
 static constexpr float DEFAULT_STICK_SPEED = 12.0f;  // ~750 px/s at max deflection
@@ -42,7 +45,6 @@ static constexpr int MOUSE_DEADZONE = 4096;
 static constexpr float DEFAULT_CURVE_MAX = 750.0f;   // пикселей в секунду
 static constexpr float DEFAULT_CURVE_POW = 2.5f;
 static constexpr float DEFAULT_CURVE_DEAD = 250.0f;  // единицы оси
-static constexpr float DEFAULT_SLOW_DIV = 4.0f;
 static constexpr float AXIS_MAX = 32767.0f;
 
 // Deadzone for right stick scroll
@@ -50,17 +52,18 @@ static constexpr int SCROLL_DEADZONE = 6000;
 
 MouseMode::MouseMode()
     : mActive(false),
-      mComboBtn1Held(false),
-      mComboBtn2Held(false),
-      mComboBothHeld(false),
+      mChordDown{false, false},
+      mChordFwd{false, false},
+      mChordActed{false, false},
+      mChordPending{false, false},
+      mChordUsed(false),
       mComboBtn1Code(DEFAULT_COMBO_BTN1),
       mComboBtn2Code(DEFAULT_COMBO_BTN2),
-      mComboHoldMs(DEFAULT_COMBO_HOLD_MS),
+      mChordMs(DEFAULT_CHORD_MS),
       mStickX(0),
       mStickY(0),
       mDpadX(0),
       mDpadY(0),
-      mSpeedBoost(false),
       mPassSynPending(false),
       mRStickX(0),
       mRStickY(0),
@@ -83,11 +86,9 @@ MouseMode::MouseMode()
       mCurveMax(DEFAULT_CURVE_MAX),
       mCurvePow(DEFAULT_CURVE_POW),
       mCurveDead(DEFAULT_CURVE_DEAD),
-      mSlowDiv(DEFAULT_SLOW_DIV),
       mClickBtnCode(BTN_A),
       mBackBtnCode(BTN_B),
       mRightClickBtnCode(BTN_Y),
-      mBoostBtnCode(BTN_X),
       mTimerFd(-1) {
 }
 
@@ -277,8 +278,8 @@ void MouseMode::loadConfig() {
                                      DEFAULT_COMBO_BTN1);
     mComboBtn2Code = GetIntProperty("persist.gammaos.gamepad.mouse_combo2",
                                      DEFAULT_COMBO_BTN2);
-    mComboHoldMs = GetIntProperty("persist.gammaos.gamepad.mouse_hold_ms",
-                                   DEFAULT_COMBO_HOLD_MS);
+    mChordMs = GetIntProperty("persist.gammaos.gamepad.mouse_chord_ms",
+                               DEFAULT_CHORD_MS);
 
     mStickSpeed = static_cast<float>(
         GetIntProperty("persist.gammaos.gamepad.mouse_stick_speed", 12));
@@ -298,9 +299,6 @@ void MouseMode::loadConfig() {
         GetIntProperty("persist.gammaos.gamepad.mouse_speed_pow", 250)) / 100.0f;
     mCurveDead = static_cast<float>(
         GetIntProperty("persist.gammaos.gamepad.mouse_dead", 250));
-    mSlowDiv = static_cast<float>(
-        GetIntProperty("persist.gammaos.gamepad.mouse_slow_div", 400)) / 100.0f;
-    if (mSlowDiv < 0.01f) mSlowDiv = 1.0f;
 
     mClickBtnCode = GetIntProperty("persist.gammaos.gamepad.mouse_btn_click",
                                     BTN_A);
@@ -308,21 +306,19 @@ void MouseMode::loadConfig() {
                                    BTN_B);
     mRightClickBtnCode = GetIntProperty("persist.gammaos.gamepad.mouse_btn_rclick",
                                          BTN_Y);
-    mBoostBtnCode = GetIntProperty("persist.gammaos.gamepad.mouse_btn_boost",
-                                    BTN_X);
 
     detectScreenSize();
     detectTouchOrientation();
 
     LOG(INFO) << "MouseMode config: combo=" << mComboBtn1Code << "+" << mComboBtn2Code
-              << " hold=" << mComboHoldMs << "ms"
+              << " chord=" << mChordMs << "ms"
               << " stickSpeed=" << mStickSpeed << " dpadSpeed=" << mDpadSpeed
               << (mDpadSpeed <= 0.0f ? " (dpad passthrough)" : "")
               << " curveMax=" << mCurveMax << "px/s pow=" << mCurvePow
-              << " dead=" << mCurveDead << " slowDiv=" << mSlowDiv
+              << " dead=" << mCurveDead
               << " scrollSpeed=" << mScrollSpeed
               << " click=" << mClickBtnCode << " back=" << mBackBtnCode
-              << " rclick=" << mRightClickBtnCode << " boostBtn=" << mBoostBtnCode
+              << " rclick=" << mRightClickBtnCode
               << " screen=" << mScreenW << "x" << mScreenH;
 }
 
@@ -367,7 +363,6 @@ void MouseMode::setActive(bool active) {
     mDpadX = 0;
     mDpadY = 0;
     mPassSynPending = false;
-    mSpeedBoost = false;
     mRStickX = 0;
     mRStickY = 0;
     mAccumX = 0.0f;
@@ -455,17 +450,126 @@ void MouseMode::showToast(const std::string& message) {
     }
 }
 
-bool MouseMode::checkComboTimeout() {
-    if (!mComboBothHeld) return false;
+bool MouseMode::checkChordTimers() {
+    if (!mActive) return false;
 
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - mComboBothHeldSince).count();
-    if (elapsed >= mComboHoldMs) {
-        setActive(!mActive);
-        mComboBothHeld = false;
+    const auto now = std::chrono::steady_clock::now();
+    bool any = false;
+
+    for (int i = 0; i < 2; ++i) {
+        if (!mChordPending[i]) continue;
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - mChordTime[i]).count();
+        if (elapsed >= mChordMs) {
+            mChordPending[i] = false;
+            mChordActed[i] = true;
+            chordAction(i, true);
+            any = true;
+        }
+    }
+    return any;
+}
+
+// Действие, назначенное коду кнопки. Вынесено из processEvent, потому что
+// кнопки аккорда выполняют его отложенно, по истечении окна.
+bool MouseMode::performButtonAction(int code, bool pressed) {
+    if (code == mClickBtnCode) {
+        // Нажатие эмулируется касанием тачскрина в точке курсора: так ведут
+        // себя TV-приложения, и так же работает перетаскивание.
+        if (mTouchscreen && mTouchscreen->isValid()) {
+            if (pressed) {
+                readCursorPosition();
+                mDragX = mCursorX;
+                mDragY = mCursorY;
+                int rawX, rawY;
+                displayToRaw(static_cast<int>(mDragX),
+                             static_cast<int>(mDragY), rawX, rawY);
+                mTouchscreen->touchDown(rawX, rawY);
+            } else {
+                mTouchscreen->touchUp();
+            }
+        }
         return true;
     }
+
+    if (code == mBackBtnCode) {
+        if (mMouse) {
+            if (pressed) mMouse->buttonDown(KEY_BACK);
+            else mMouse->buttonUp(KEY_BACK);
+        }
+        return true;
+    }
+
+    if (code == mRightClickBtnCode) {
+        if (mMouse) {
+            if (pressed) mMouse->buttonDown(BTN_RIGHT);
+            else mMouse->buttonUp(BTN_RIGHT);
+        }
+        return true;
+    }
+
     return false;
+}
+
+void MouseMode::chordAction(int idx, bool down) {
+    performButtonAction(idx == 0 ? mComboBtn1Code : mComboBtn2Code, down);
+}
+
+// Аккорд как в rgp2pad: срабатывает по почти одновременному нажатию двух
+// кнопок, а не по удержанию. Здесь же решается, что уходит в приложение:
+// отпускание пересылается только если пересылалось нажатие, поэтому половинки
+// аккорда не оставляют после себя ни залипшей кнопки, ни лишнего щелчка.
+bool MouseMode::handleChordButton(int idx, bool pressed) {
+    const int other = 1 - idx;
+    const auto now = std::chrono::steady_clock::now();
+
+    if (pressed) {
+        mChordDown[idx] = true;
+        mChordTime[idx] = now;
+
+        if (mChordDown[other] && !mChordUsed) {
+            auto gap = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - mChordTime[other]).count();
+            if (gap <= mChordMs) {
+                mChordUsed = true;
+                mChordPending[other] = false;   // отложенное действие отменяем
+                setActive(!mActive);
+                return true;
+            }
+        }
+
+        if (mActive) {
+            // Действие откладываем на окно аккорда: иначе щелчок успел бы
+            // уйти в приложение прежде, чем выяснится, что это аккорд.
+            mChordPending[idx] = true;
+            return true;
+        }
+
+        // Вне режима мыши это обычная кнопка геймпада.
+        mChordFwd[idx] = true;
+        mPassSynPending = true;
+        return false;
+    }
+
+    // Отпускание. Признак аккорда снимаем до сброса состояния: кнопки
+    // отпускают в произвольном порядке.
+    mChordDown[idx] = false;
+    if (!mChordDown[0] && !mChordDown[1]) mChordUsed = false;
+
+    if (mChordFwd[idx]) {
+        mChordFwd[idx] = false;
+        mPassSynPending = true;
+        return false;
+    }
+
+    if (mChordActed[idx]) {
+        mChordActed[idx] = false;
+        chordAction(idx, false);
+        return true;
+    }
+
+    mChordPending[idx] = false;   // половина аккорда: ни щелчка, ни пересылки
+    return true;
 }
 
 bool MouseMode::checkExternalToggle() {
@@ -479,43 +583,10 @@ bool MouseMode::checkExternalToggle() {
 }
 
 bool MouseMode::processEvent(const struct input_event& ev) {
-    // --- Combo detection (always runs, in both modes) ---
-    if (ev.type == EV_KEY) {
-        int code = ev.code;
-        bool pressed = (ev.value != 0);
-
-        // Track combo button states
-        if (code == mComboBtn1Code) {
-            mComboBtn1Held = pressed;
-        }
-        if (code == mComboBtn2Code) {
-            mComboBtn2Held = pressed;
-        }
-
-        // Check if both combo buttons are held
-        if (mComboBtn1Held && mComboBtn2Held) {
-            if (!mComboBothHeld) {
-                mComboBothHeld = true;
-                mComboBothHeldSince = std::chrono::steady_clock::now();
-            }
-        } else {
-            mComboBothHeld = false;
-        }
-    }
-
-    // Check combo timeout on every event type (stick noise ensures timely detection)
-    if (mComboBothHeld) {
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - mComboBothHeldSince).count();
-        if (elapsed >= mComboHoldMs) {
-            setActive(!mActive);
-            mComboBothHeld = false;
-            return true;
-        }
-
-        // While waiting for hold time, let combo button events pass through
-        // so they still function as normal buttons. They will be "recalled"
-        // (released) via flush events when mouse mode actually toggles.
+    // Кнопки аккорда разбираются отдельно и в обоих режимах.
+    if (ev.type == EV_KEY && ev.value != 2 /* не автоповтор */) {
+        if (ev.code == mComboBtn1Code) return handleChordButton(0, ev.value != 0);
+        if (ev.code == mComboBtn2Code) return handleChordButton(1, ev.value != 0);
     }
 
     // If mouse mode is not active, don't consume non-combo events
@@ -527,56 +598,7 @@ bool MouseMode::processEvent(const struct input_event& ev) {
         int code = ev.code;
         bool pressed = (ev.value != 0);
 
-        if (code == mClickBtnCode) {
-            // Touch simulation: tap/drag at actual cursor position
-            if (mTouchscreen && mTouchscreen->isValid()) {
-                if (pressed) {
-                    readCursorPosition();
-                    mDragX = mCursorX;
-                    mDragY = mCursorY;
-                    int rawX, rawY;
-                    displayToRaw(static_cast<int>(mDragX),
-                                 static_cast<int>(mDragY), rawX, rawY);
-                    LOG(INFO) << "MouseMode: touch at cursor (" << mDragX << "," << mDragY
-                              << ") raw=(" << rawX << "," << rawY << ")";
-                    mTouchscreen->touchDown(rawX, rawY);
-                } else {
-                    mTouchscreen->touchUp();
-                }
-            }
-            return true;
-        }
-
-        if (code == mBackBtnCode) {
-            // KEY_BACK via mouse device
-            if (pressed) {
-                mMouse->buttonDown(KEY_BACK);
-            } else {
-                mMouse->buttonUp(KEY_BACK);
-            }
-            return true;
-        }
-
-        if (code == mRightClickBtnCode) {
-            // Right click
-            if (pressed) {
-                mMouse->buttonDown(BTN_RIGHT);
-            } else {
-                mMouse->buttonUp(BTN_RIGHT);
-            }
-            return true;
-        }
-
-        if (code == mBoostBtnCode) {
-            // Speed boost toggle
-            mSpeedBoost = pressed;
-            return true;
-        }
-
-        // Кнопки аккорда. Своё действие они, если назначены кнопками мыши,
-        // уже выполнили выше; сюда доходят только когда не назначены. Съедаем,
-        // чтобы удержание аккорда не улетало в приложение.
-        if (code == mComboBtn1Code || code == mComboBtn2Code) {
+        if (performButtonAction(code, pressed)) {
             return true;
         }
 
@@ -687,15 +709,6 @@ void MouseMode::tick() {
     if (mDpadX != 0 || mDpadY != 0) {
         dx += mDpadX * mDpadSpeed;
         dy += mDpadY * mDpadSpeed;
-    }
-
-    // Кнопка-модификатор (по умолчанию X) замедляет курсор, а не ускоряет:
-    // на четырёхдюймовом экране труднее попасть в мелкий элемент, чем быстро
-    // добраться до дальнего угла. Делитель настраивается; значение меньше
-    // единицы, наоборот, ускорит.
-    if (mSpeedBoost && mSlowDiv > 0.0f) {
-        dx /= mSlowDiv;
-        dy /= mSlowDiv;
     }
 
     // Accumulate fractional movement for sub-pixel precision
