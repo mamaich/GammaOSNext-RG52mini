@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Запись страниц zram на постоянную память (zram writeback) выключена.
+
+         Значение по умолчанию в AOSP - false, но раздел vendor от DOOGEE
+         приносит свой RRO (/vendor/overlay/framework-res__auto_generated_rro_vendor.apk),
+         который ставит true, и он перекрывает системный ресурс. Проверяется так:
+
+             adb pull /vendor/overlay/framework-res__auto_generated_rro_vendor.apk
+             aapt2 dump resources framework-res__auto_generated_rro_vendor.apk \
+                 | grep -A1 zramWriteback
+
+         Нам это не нужно по двум причинам. Во-первых, writeback гоняет страницы
+         на флеш-память, а лишний износ eMMC или SD-карты на консоли того не
+         стоит. Во-вторых, под своп на eMMC есть раздел всего на 256 МБ - выгоды
+         от такого объёма всё равно нет. Сам zram при этом остаётся включённым,
+         выключается только выгрузка на носитель.
+
+         Побочно это же чинило падение в режиме nano: минимальная загрузка
+         GammaOS не поднимает JobSchedulerService, а StorageManagerService при
+         config_zramWriteback=true безусловно звал ZramWriteback, получал null и
+         ронял system_server по кругу. В ZramWriteback добавлена проверка на
+         null, но правильнее не включать то, чего мы не хотим. -->
+    <bool name="config_zramWriteback">false</bool>
+</resources>
