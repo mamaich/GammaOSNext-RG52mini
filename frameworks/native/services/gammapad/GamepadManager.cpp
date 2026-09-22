@@ -672,6 +672,23 @@ void GamepadManager::rebuildGlobalMaps() {
                 remapPerm[to] = from;
             }
         }
+        // Сначала пер-девайсные карты: именно они попадают в трансформер при
+        // обработке событий (см. setDeviceMaps ниже по файлу, в цикле чтения),
+        // а глобальная mAbsMap идёт лишь запасным вариантом. Пока перестановка
+        // применялась только к ней, свойство remap_axis не делало ровно
+        // ничего - ни на одном устройстве со своей картой, то есть всегда.
+        for (auto& [fd, dev] : mDevices) {
+            (void) fd;
+            for (auto& [sc, mappedCode] : dev.absMap) {
+                auto it = remapPerm.find(mappedCode);
+                if (it != remapPerm.end()) {
+                    LOG(INFO) << "Axis remap applied (" << dev.name << "): sc=" << sc
+                              << " " << mappedCode << " -> " << it->second;
+                    mappedCode = it->second;
+                }
+            }
+        }
+
         for (auto& [sc, mappedCode] : mAbsMap) {
             auto it = remapPerm.find(mappedCode);
             if (it != remapPerm.end()) {
