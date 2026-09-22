@@ -34,6 +34,29 @@ PRODUCT_PACKAGES += \
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52logcat.rc:system/etc/init/rg52logcat.rc
 
+# Гашение служб, которым на этом устройстве нечего делать (сейчас —
+# cameraserver: камер ноль). Почему не убрать из образа насовсем, написано
+# в самом rg52-trim.rc: PRODUCT_REMOVE_PACKAGES в этом дереве не объявлена и
+# ни на что не влияет, а править готовый system нельзя из-за
+# BOARD_EXT4_SHARE_DUP_BLOCKS.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-trim.rc:system/etc/init/rg52-trim.rc
+
+# Ресурсные правки поверх исходников. Сейчас там одно: SBC кодеком A2DP по
+# умолчанию вместо AAC — на игровой консоли задержка звука важнее качества
+# потока, а кодирование AAC этому процессору дорого обходится. Подробности —
+# в самом overlay/packages/modules/Bluetooth/.../config.xml.
+PRODUCT_PACKAGE_OVERLAYS += \
+    device/rg52mini/overlay
+
+# Штатный геймпад-демон GammaOS вместо vendor-овского rgp2pad. Умеет то же и
+# больше: режим мыши (SELECT+R1 удержать 2 с), отображение в тачскрин,
+# переназначение кнопок и калибровка с интерфейсом в настройках, вибрация.
+# Виртуальную мышь создаёт только на время режима, поэтому курсор не залипает.
+# Запускается по этому свойству, см. frameworks/native/services/gammapad.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.gammaos.gamepad.enable=1
+
 # Root здесь даёт KernelSU-Next, вшитый в ядро (ядро само ищет /data/adb/ksud,
 # а драйвер «коронует» менеджера по подписи — проверено на устройстве:
 # «Crowning manager: com.rifsxd.ksunext»). Magisk на этом устройстве не работает
