@@ -356,7 +356,7 @@ void GamepadManager::run() {
                 if (mMouseMode->checkExternalToggle()) {
                     drainMouseFlushEvents();
                 }
-                mMouseMode->checkComboTimeout();
+                mMouseMode->checkChordTimers();
             }
             // Check for external screen map mode toggle
             if (mScreenMapMode) {
