@@ -34,6 +34,17 @@ static constexpr float DEFAULT_SCROLL_SPEED = 0.4f;  // scroll ticks per tick
 // Deadzone for analog stick in mouse mode
 static constexpr int MOUSE_DEADZONE = 4096;
 
+// Кривая скорости курсора, как в rgp2pad. 750 пикселей в секунду на полном
+// отклонении и показатель 2,5: на четверти отклонения выходит 23 пикселя в
+// секунду, на полном - 750. Мёртвая зона маленькая, потому что драйвер
+// геймпада объявляет flat 256 и сам схлопывает окрестность нуля в точный ноль,
+// так что курсор трогается от малейшего касания стика.
+static constexpr float DEFAULT_CURVE_MAX = 750.0f;   // пикселей в секунду
+static constexpr float DEFAULT_CURVE_POW = 2.5f;
+static constexpr float DEFAULT_CURVE_DEAD = 250.0f;  // единицы оси
+static constexpr float DEFAULT_SLOW_DIV = 4.0f;
+static constexpr float AXIS_MAX = 32767.0f;
+
 // Deadzone for right stick scroll
 static constexpr int SCROLL_DEADZONE = 6000;
 
@@ -68,6 +79,10 @@ MouseMode::MouseMode()
       mStickSpeed(DEFAULT_STICK_SPEED),
       mDpadSpeed(DEFAULT_DPAD_SPEED),
       mBoostMultiplier(DEFAULT_BOOST_MULTIPLIER),
+      mCurveMax(DEFAULT_CURVE_MAX),
+      mCurvePow(DEFAULT_CURVE_POW),
+      mCurveDead(DEFAULT_CURVE_DEAD),
+      mSlowDiv(DEFAULT_SLOW_DIV),
       mScrollSpeed(DEFAULT_SCROLL_SPEED),
       mClickBtnCode(BTN_A),
       mBackBtnCode(BTN_B),
@@ -274,6 +289,19 @@ void MouseMode::loadConfig() {
     mScrollSpeed = static_cast<float>(
         GetIntProperty("persist.gammaos.gamepad.mouse_scroll_speed", 4)) / 10.0f;
 
+    // Параметры кривой. Целые свойства, поэтому дробные величины хранятся
+    // сотыми долями: 250 это 2,50. Подбираются на ходу, без пересборки -
+    // достаточно сменить значение и поднять config_version.
+    mCurveMax = static_cast<float>(
+        GetIntProperty("persist.gammaos.gamepad.mouse_speed_max", 750));
+    mCurvePow = static_cast<float>(
+        GetIntProperty("persist.gammaos.gamepad.mouse_speed_pow", 250)) / 100.0f;
+    mCurveDead = static_cast<float>(
+        GetIntProperty("persist.gammaos.gamepad.mouse_dead", 250));
+    mSlowDiv = static_cast<float>(
+        GetIntProperty("persist.gammaos.gamepad.mouse_slow_div", 400)) / 100.0f;
+    if (mSlowDiv < 0.01f) mSlowDiv = 1.0f;
+
     mClickBtnCode = GetIntProperty("persist.gammaos.gamepad.mouse_btn_click",
                                     BTN_A);
     mBackBtnCode = GetIntProperty("persist.gammaos.gamepad.mouse_btn_back",
@@ -290,7 +318,9 @@ void MouseMode::loadConfig() {
               << " hold=" << mComboHoldMs << "ms"
               << " stickSpeed=" << mStickSpeed << " dpadSpeed=" << mDpadSpeed
               << (mDpadSpeed <= 0.0f ? " (dpad passthrough)" : "")
-              << " boost=" << mBoostMultiplier << " scrollSpeed=" << mScrollSpeed
+              << " curveMax=" << mCurveMax << "px/s pow=" << mCurvePow
+              << " dead=" << mCurveDead << " slowDiv=" << mSlowDiv
+              << " scrollSpeed=" << mScrollSpeed
               << " click=" << mClickBtnCode << " back=" << mBackBtnCode
               << " rclick=" << mRightClickBtnCode << " boostBtn=" << mBoostBtnCode
               << " screen=" << mScreenW << "x" << mScreenH;
@@ -613,6 +643,20 @@ bool MouseMode::processEvent(const struct input_event& ev) {
     return true;
 }
 
+float MouseMode::curveSpeed(int v) const {
+    float a = std::abs(static_cast<float>(v));
+    if (a <= mCurveDead) return 0.0f;
+
+    float span = AXIS_MAX - mCurveDead;
+    float n = (span > 0.0f) ? (a - mCurveDead) / span : 1.0f;
+    if (n > 1.0f) n = 1.0f;
+
+    // mCurveMax задан в пикселях в секунду, а тик у нас TICK_INTERVAL_MS.
+    float perTick = mCurveMax * (TICK_INTERVAL_MS / 1000.0f);
+    float sp = perTick * std::pow(n, mCurvePow);
+    return (v < 0) ? -sp : sp;
+}
+
 void MouseMode::tick() {
     if (!mActive || !mMouse || !mMouse->isValid()) return;
 
@@ -623,22 +667,12 @@ void MouseMode::tick() {
     float dx = 0.0f;
     float dy = 0.0f;
 
-    // Analog stick contribution (proportional speed with non-linear curve)
-    if (std::abs(mStickX) > MOUSE_DEADZONE || std::abs(mStickY) > MOUSE_DEADZONE) {
-        float fx = static_cast<float>(mStickX) / 32767.0f;
-        float fy = static_cast<float>(mStickY) / 32767.0f;
-
-        // Apply quadratic curve for better precision at low speeds
-        float mag = std::sqrt(fx * fx + fy * fy);
-        if (mag > 0.0f) {
-            float adjustedMag = mag * mag;
-            fx = fx / mag * adjustedMag;
-            fy = fy / mag * adjustedMag;
-        }
-
-        dx += fx * mStickSpeed;
-        dy += fy * mStickSpeed;
-    }
+    // Левый стик: скорость по степенной кривой, отдельно по каждой оси -
+    // так же, как в rgp2pad. Прежний вариант нормировал вектор по длине и
+    // возводил в квадрат; по осям отклик предсказуемее, а показатель 2,5 даёт
+    // заметно более пологое начало, то есть точное наведение на мелкие цели.
+    dx += curveSpeed(mStickX);
+    dy += curveSpeed(mStickY);
 
     // DPAD contribution (fixed speed)
     if (mDpadX != 0 || mDpadY != 0) {
@@ -646,10 +680,13 @@ void MouseMode::tick() {
         dy += mDpadY * mDpadSpeed;
     }
 
-    // Apply speed boost
-    if (mSpeedBoost) {
-        dx *= mBoostMultiplier;
-        dy *= mBoostMultiplier;
+    // Кнопка-модификатор (по умолчанию X) замедляет курсор, а не ускоряет:
+    // на четырёхдюймовом экране труднее попасть в мелкий элемент, чем быстро
+    // добраться до дальнего угла. Делитель настраивается; значение меньше
+    // единицы, наоборот, ускорит.
+    if (mSpeedBoost && mSlowDiv > 0.0f) {
+        dx /= mSlowDiv;
+        dy /= mSlowDiv;
     }
 
     // Accumulate fractional movement for sub-pixel precision
