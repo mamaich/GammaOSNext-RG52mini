@@ -3428,6 +3428,12 @@
     <string name="gammaos_toolbox_bg_process_limit_summary">Maximum number of background processes allowed. Lower values free RAM but may kill apps. Default: system managed.</string>
     <string name="gammaos_toolbox_gesture_wake_title">Wake gesture filter</string>
     <string name="gammaos_toolbox_gesture_wake_summary">Filter specific wake gestures to prevent accidental screen wake. Comma-separated gesture identifiers.</string>
+    <!-- RG52 Mini: visibility of phone apps in app stores. English only: the
+         GammaOS strings around here are not translated either, and a
+         half-localized screen would look worse than a consistent one. -->
+    <string name="rg52_phone_apps_title">Show phone apps</string>
+    <string name="rg52_phone_apps_summary">Let app stores offer apps made for phones, not only the TV catalogue. Restart to apply.</string>
+
     <string name="gammaos_toolbox_performance_mode_title">Performance mode</string>
     <string name="gammaos_toolbox_performance_mode_summary">Performance profile for CPU/GPU governor tuning. Options: stock, max, powersave, 3d_game.</string>
     <string name="gammaos_toolbox_category_shader_crt">CRT Simple Shader</string>
