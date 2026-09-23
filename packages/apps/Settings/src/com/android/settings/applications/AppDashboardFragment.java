@@ -18,7 +18,12 @@ package com.android.settings.applications;
 
 import android.app.settings.SettingsEnums;
 import android.content.Context;
+import android.os.Bundle;
+import android.os.SystemProperties;
 import android.provider.SearchIndexableResource;
+
+import androidx.preference.Preference;
+import androidx.preference.TwoStatePreference;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.settings.R;
