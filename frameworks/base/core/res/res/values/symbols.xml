@@ -5385,6 +5385,7 @@
   <java-symbol type="drawable" name="ic_gammaos_brightness" />
   <java-symbol type="drawable" name="ic_gammaos_performance" />
   <java-symbol type="drawable" name="ic_gammaos_controller" />
+  <java-symbol type="id" name="soc_stats" />
   <java-symbol type="drawable" name="ic_gammaos_mouse" />
   <java-symbol type="string" name="gammaos_mouse_mode" />
   <java-symbol type="string" name="gammaos_mouse_mode_on" />
