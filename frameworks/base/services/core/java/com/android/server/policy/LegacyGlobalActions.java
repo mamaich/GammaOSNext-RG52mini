@@ -588,6 +588,7 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             mItems.add(0, getBrightnessAction());
             mBrightnessItemPosition = 0;
             mItems.add(getPerformanceAction());
+            mItems.add(getMouseModeAction());
             mItems.add(getControllerAction());
             mItems.add(getUsbAction());
         } else {
@@ -1041,6 +1042,53 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
                 }
             });
         }
+    }
+
+    /**
+     * Режим эмуляции мыши. Тот же внешний переключатель, что у плитки быстрых
+     * настроек: gammapad опрашивает sys.gammaos.gamepad.mouse_active и
+     * подхватывает изменение сам (MouseMode::checkExternalToggle), поэтому
+     * будить демон чем-то ещё не нужно.
+     *
+     * Состояние показываем строкой под названием: иначе из меню не понять,
+     * включён режим сейчас или нет.
+     */
+    private Action getMouseModeAction() {
+        return new SinglePressAction(R.drawable.ic_gammaos_mouse,
+                R.string.gammaos_mouse_mode) {
+
+            private boolean isOn() {
+                return SystemProperties.getInt("sys.gammaos.gamepad.mouse_active", 0) != 0;
+            }
+
+            @Override
+            public String getStatus() {
+                return mContext.getString(isOn()
+                        ? R.string.gammaos_mouse_mode_on
+                        : R.string.gammaos_mouse_mode_off);
+            }
+
+            @Override
+            public void onPress() {
+                final long token = Binder.clearCallingIdentity();
+                try {
+                    SystemProperties.set("sys.gammaos.gamepad.mouse_active",
+                            isOn() ? "0" : "1");
+                } finally {
+                    Binder.restoreCallingIdentity(token);
+                }
+            }
+
+            @Override
+            public boolean showDuringKeyguard() {
+                return true;
+            }
+
+            @Override
+            public boolean showBeforeProvisioning() {
+                return true;
+            }
+        };
     }
 
     private Action getControllerAction() {
