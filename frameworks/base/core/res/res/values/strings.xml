@@ -6463,6 +6463,13 @@ ul.</string>
     <string name="gammaos_ctrl_invert_left">Invert Left Analog</string>
     <string name="gammaos_ctrl_invert_right">Invert Right Analog</string>
 
+    <!-- Mouse mode entry in the power menu. Only English is provided here: the
+         other GammaOS strings in this file are not translated either, and a
+         half-localized menu would look worse than a consistent one. -->
+    <string name="gammaos_mouse_mode">Mouse Mode</string>
+    <string name="gammaos_mouse_mode_on">On</string>
+    <string name="gammaos_mouse_mode_off">Off</string>
+
     <!-- Title for preference of the GammaOS USB options. [CHAR LIMIT=50]-->
     <string name="gammaos_usb_options">USB Options</string>
 </resources>
