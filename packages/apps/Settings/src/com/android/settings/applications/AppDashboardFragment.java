@@ -77,6 +77,39 @@ public class AppDashboardFragment extends DashboardFragment {
     }
 
     @Override
+    // RG52 Mini: видимость телефонных приложений в магазинах.
+    //
+    // Пункт называется «показывать телефонные», а свойство — «только
+    // телевизор», и значения у них обратные. Свойство читает SystemConfig
+    // через <unavailable-feature-conditional>, а тот оставляет признак
+    // android.software.leanback_only ровно когда свойство истинно: имя
+    // свойства описывает поведение системы, имя пункта — то, что видит
+    // человек. Инверсия живёт здесь, в одном месте.
+    //
+    // Тот же переключатель есть в TvSettings. Оба приложения настроек на
+    // устройстве живые: панель справа — это TvSettings, а из лаунчера
+    // открывается вот это.
+    private static final String KEY_RG52_PHONE_APPS = "rg52_phone_apps";
+    private static final String RG52_TV_ONLY_PROP = "persist.rg52.tv_only";
+
+    @Override
+    public void onCreatePreferences(Bundle savedInstanceState, String rootKey) {
+        super.onCreatePreferences(savedInstanceState, rootKey);
+
+        final Preference phoneApps = findPreference(KEY_RG52_PHONE_APPS);
+        if (phoneApps instanceof TwoStatePreference) {
+            final TwoStatePreference phoneAppsSwitch = (TwoStatePreference) phoneApps;
+            phoneAppsSwitch.setChecked(
+                    !SystemProperties.getBoolean(RG52_TV_ONLY_PROP, false));
+            phoneAppsSwitch.setOnPreferenceChangeListener((pref, newValue) -> {
+                SystemProperties.set(RG52_TV_ONLY_PROP,
+                        ((Boolean) newValue) ? "false" : "true");
+                return true;
+            });
+        }
+    }
+
+    @Override
     public void onAttach(Context context) {
         super.onAttach(context);
         mAppsPreferenceController = use(AppsPreferenceController.class);
