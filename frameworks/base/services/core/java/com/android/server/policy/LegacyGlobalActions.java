@@ -1895,6 +1895,116 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
     }
 
 
+    // --- Частоты и температура для шапки меню -------------------------------
+    //
+    // Имена узлов зависят от SoC (у RK3562 графика - это ff320000.gpu), поэтому
+    // пути ищем перебором один раз, а не при каждом обновлении раз в секунду.
+    //
+    // Про доступ: чтение cpufreq разрешено всем доменам (domain.te), термозоны
+    // - system_server (system_server.te). Узлы devfreq на этом устройстве
+    // помечены обычным sysfs, и в enforcing их пришлось бы размечать отдельно;
+    // у нас SELinux permissive, так что чтение проходит. Если чего-то не
+    // хватает, соответствующая часть строки просто не выводится.
+    private static java.util.List<String> sCpuFreqPaths;
+    private static String sGpuFreqPath;
+    private static String sSocTempPath;
+    private static boolean sSocPathsResolved;
+
+    private static String readSysfsLine(String path) {
+        if (path == null) return null;
+        java.io.BufferedReader r = null;
+        try {
+            r = new java.io.BufferedReader(new java.io.FileReader(path));
+            String line = r.readLine();
+            return line == null ? null : line.trim();
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (r != null) {
+                try { r.close(); } catch (Exception ignored) { }
+            }
+        }
+    }
+
+    private static void resolveSocPaths() {
+        if (sSocPathsResolved) return;
+        sSocPathsResolved = true;
+
+        sCpuFreqPaths = new java.util.ArrayList<String>();
+        java.io.File[] policies = new java.io.File("/sys/devices/system/cpu/cpufreq").listFiles();
+        if (policies != null) {
+            for (java.io.File dir : policies) {
+                if (!dir.getName().startsWith("policy")) continue;
+                java.io.File cur = new java.io.File(dir, "scaling_cur_freq");
+                if (cur.exists()) sCpuFreqPaths.add(cur.getAbsolutePath());
+            }
+        }
+
+        java.io.File[] devfreq = new java.io.File("/sys/class/devfreq").listFiles();
+        if (devfreq != null) {
+            for (java.io.File dir : devfreq) {
+                // dmc - это контроллер памяти, он нам не нужен.
+                if (!dir.getName().contains("gpu")) continue;
+                java.io.File cur = new java.io.File(dir, "cur_freq");
+                if (cur.exists()) { sGpuFreqPath = cur.getAbsolutePath(); break; }
+            }
+        }
+
+        java.io.File[] zones = new java.io.File("/sys/class/thermal").listFiles();
+        if (zones != null) {
+            for (java.io.File zone : zones) {
+                if (!zone.getName().startsWith("thermal_zone")) continue;
+                String type = readSysfsLine(new java.io.File(zone, "type").getAbsolutePath());
+                if (type == null) continue;
+                String lower = type.toLowerCase(java.util.Locale.US);
+                // На RK3562 зона называется soc-thermal; на других - cpu-thermal.
+                if (lower.contains("soc") || lower.contains("cpu")) {
+                    sSocTempPath = new java.io.File(zone, "temp").getAbsolutePath();
+                    break;
+                }
+            }
+        }
+    }
+
+    private static String buildSocStats() {
+        resolveSocPaths();
+        StringBuilder sb = new StringBuilder();
+
+        long cpuKHz = 0;
+        if (sCpuFreqPaths != null) {
+            for (String path : sCpuFreqPaths) {
+                String value = readSysfsLine(path);
+                if (value == null) continue;
+                try {
+                    cpuKHz = Math.max(cpuKHz, Long.parseLong(value));
+                } catch (NumberFormatException ignored) { }
+            }
+        }
+        if (cpuKHz > 0) {
+            sb.append("CPU ").append(cpuKHz / 1000).append(" MHz");
+        }
+
+        String gpu = readSysfsLine(sGpuFreqPath);
+        if (gpu != null) {
+            try {
+                long hz = Long.parseLong(gpu);
+                if (sb.length() > 0) sb.append("    ");
+                sb.append("GPU ").append(hz / 1000000).append(" MHz");
+            } catch (NumberFormatException ignored) { }
+        }
+
+        String temp = readSysfsLine(sSocTempPath);
+        if (temp != null) {
+            try {
+                long milli = Long.parseLong(temp);
+                if (sb.length() > 0) sb.append("    ");
+                sb.append(String.format(java.util.Locale.US, "%.1f\u00B0C", milli / 1000.0f));
+            } catch (NumberFormatException ignored) { }
+        }
+
+        return sb.toString();
+    }
+
     private void updateBatteryStatus() {
         IntentFilter filter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
         // Log to confirm registration is happening
@@ -1924,6 +2034,9 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
                                         float avgCpuUsage = getAverageCpuUsage();
                                         String cpuUsageText = String.format("CPU: %.1f%%", avgCpuUsage);
 
+                                        // Частоты и температура - вторая строка шапки.
+                                        final String socStatsText = buildSocStats();
+
                                         // Update UI on the main thread
                                         mHandler.post(new Runnable() {
                                                 @Override
@@ -1941,6 +2054,11 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
                                                                 cpuText.setText(cpuUsageText);
                                                         } else {
                                                                 Log.e(TAG, "CPU TextView not found");
+                                                        }
+
+                                                        TextView socText = headerView.findViewById(R.id.soc_stats);
+                                                        if (socText != null) {
+                                                                socText.setText(socStatsText);
                                                         }
                                                 }
                                         });
