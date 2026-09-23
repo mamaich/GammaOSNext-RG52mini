@@ -57,6 +57,7 @@ MouseMode::MouseMode()
       mChordActed{false, false},
       mChordPending{false, false},
       mChordUsed(false),
+      mTimerArmed(false),
       mComboBtn1Code(DEFAULT_COMBO_BTN1),
       mComboBtn2Code(DEFAULT_COMBO_BTN2),
       mChordMs(DEFAULT_CHORD_MS),
@@ -340,12 +341,14 @@ void MouseMode::startTimer() {
     ts.it_interval.tv_nsec = TICK_INTERVAL_MS * 1000000L;
     ts.it_value.tv_nsec = TICK_INTERVAL_MS * 1000000L;
     timerfd_settime(mTimerFd, 0, &ts, nullptr);
+    mTimerArmed = true;
 
     LOG(INFO) << "MouseMode timer started (" << TICK_INTERVAL_MS << "ms interval)";
 }
 
 void MouseMode::stopTimer() {
-    if (mTimerFd < 0) return;
+    if (mTimerFd < 0 || !mTimerArmed) return;
+    mTimerArmed = false;
 
     struct itimerspec ts = {};
     timerfd_settime(mTimerFd, 0, &ts, nullptr);
@@ -451,8 +454,6 @@ void MouseMode::showToast(const std::string& message) {
 }
 
 bool MouseMode::checkChordTimers() {
-    if (!mActive) return false;
-
     const auto now = std::chrono::steady_clock::now();
     bool any = false;
 
@@ -460,12 +461,25 @@ bool MouseMode::checkChordTimers() {
         if (!mChordPending[i]) continue;
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             now - mChordTime[i]).count();
-        if (elapsed >= mChordMs) {
-            mChordPending[i] = false;
+        if (elapsed < mChordMs) continue;
+
+        mChordPending[i] = false;
+        any = true;
+
+        if (mActive) {
             mChordActed[i] = true;
             chordAction(i, true);
-            any = true;
+        } else {
+            // Аккорд не сложился - отдаём нажатие приложению как обычную
+            // кнопку. Отпускание уйдёт следом, когда придёт настоящее.
+            mChordFwd[i] = true;
+            pushFlushKey(i == 0 ? mComboBtn1Code : mComboBtn2Code, 1);
         }
+    }
+
+    // Вне режима мыши такт заводится только ради этих нажатий.
+    if (!mActive && !mChordPending[0] && !mChordPending[1]) {
+        stopTimer();
     }
     return any;
 }
@@ -511,6 +525,20 @@ bool MouseMode::performButtonAction(int code, bool pressed) {
     return false;
 }
 
+void MouseMode::pushFlushKey(int code, int value) {
+    struct input_event ev = {};
+    ev.type = EV_KEY;
+    ev.code = static_cast<unsigned short>(code);
+    ev.value = value;
+    mFlushEvents.push_back(ev);
+
+    struct input_event syn = {};
+    syn.type = EV_SYN;
+    syn.code = SYN_REPORT;
+    syn.value = 0;
+    mFlushEvents.push_back(syn);
+}
+
 void MouseMode::chordAction(int idx, bool down) {
     performButtonAction(idx == 0 ? mComboBtn1Code : mComboBtn2Code, down);
 }
@@ -545,10 +573,13 @@ bool MouseMode::handleChordButton(int idx, bool pressed) {
             return true;
         }
 
-        // Вне режима мыши это обычная кнопка геймпада.
-        mChordFwd[idx] = true;
-        mPassSynPending = true;
-        return false;
+        // Вне режима мыши нажатие придерживаем на то же окно. Иначе
+        // приложение успевает получить щелчок стиком до того, как выяснится,
+        // что это аккорд: в списке приложений от такого открывалось окно
+        // настроек. Такт для дозревания заводим сами, он же нас и остановит.
+        mChordPending[idx] = true;
+        startTimer();
+        return true;
     }
 
     // Отпускание. Признак аккорда снимаем до сброса состояния: кнопки
@@ -571,10 +602,17 @@ bool MouseMode::handleChordButton(int idx, bool pressed) {
     if (mChordPending[idx]) {
         // Отпустили раньше, чем истекло окно аккорда, - это короткий щелчок.
         // Выдаём его целиком здесь: иначе он бы потерялся, ведь отложенное
-        // действие ещё не выполнялось, а отменять его нечестно.
+        // действие ещё не выполнялось.
         mChordPending[idx] = false;
-        chordAction(idx, true);
-        chordAction(idx, false);
+        if (mActive) {
+            chordAction(idx, true);
+            chordAction(idx, false);
+        } else {
+            int code = (idx == 0) ? mComboBtn1Code : mComboBtn2Code;
+            pushFlushKey(code, 1);
+            pushFlushKey(code, 0);
+            stopTimer();
+        }
         return true;
     }
 
@@ -698,17 +736,17 @@ float MouseMode::curveSpeed(int v) const {
 }
 
 void MouseMode::tick() {
-    if (!mActive || !mMouse || !mMouse->isValid()) return;
-
     // Drain the timerfd
     uint64_t expirations;
     if (read(mTimerFd, &expirations, sizeof(expirations)) < 0) return;
 
-    // Отложенные действия кнопок аккорда доводим здесь, на каждом такте.
-    // Опрос в GamepadManager для этого не годится: он приходит раз в секунду,
-    // а окно аккорда - 80 мс, и обычный щелчок успевал закончиться раньше, чем
-    // действие срабатывало.
+    // Отложенные нажатия кнопок аккорда дозревают на каждом такте, и вне
+    // режима мыши тоже - ради них такт и заводится. Опрос в GamepadManager
+    // для этого не годится: он приходит раз в секунду при окне в 80 мс.
     checkChordTimers();
+
+    if (!mActive || !mMouse || !mMouse->isValid()) return;
+
 
     float dx = 0.0f;
     float dy = 0.0f;
