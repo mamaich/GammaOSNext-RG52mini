@@ -108,7 +108,9 @@ private:
     uint64_t getBlockDevSize(const std::string& path);
     std::string getDmDevPath(const std::string& dmName);
     bool execCommand(const std::string& cmd, std::string* output = nullptr);
-    void stopFramework();
+    // needVendor: маскировать ли /vendor пустым tmpfs. Нужно только когда
+    // раздел vendor сам перезаписывается.
+    void stopFramework(bool maskVendor);
     void dropCaches();
     void dumpSuperMetadata(const char* label);
 
