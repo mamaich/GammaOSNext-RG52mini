@@ -141,6 +141,11 @@ public class GamepadSettingsFragment extends SettingsPreferenceFragment
     private static final String PROP_PA_COUNT = "persist.gammaos.gamepad.pa_count";
     private static final String PROP_MOUSE_COMBO1 = "persist.gammaos.gamepad.mouse_combo1";
     private static final String PROP_MOUSE_COMBO2 = "persist.gammaos.gamepad.mouse_combo2";
+    // Куда прячется комбинация на время выключения режима мыши.
+    private static final String PROP_MOUSE_COMBO1_PREV =
+            "persist.gammaos.gamepad.mouse_combo1_prev";
+    private static final String PROP_MOUSE_COMBO2_PREV =
+            "persist.gammaos.gamepad.mouse_combo2_prev";
     private static final String PROP_MOUSE_HOLD_MS = "persist.gammaos.gamepad.mouse_hold_ms";
     private static final String PROP_MOUSE_STICK_SPEED = "persist.gammaos.gamepad.mouse_stick_speed";
     private static final String PROP_MOUSE_DPAD_SPEED = "persist.gammaos.gamepad.mouse_dpad_speed";
@@ -445,6 +450,35 @@ public class GamepadSettingsFragment extends SettingsPreferenceFragment
             Preference p = findPreference(key);
             if (p != null) p.setVisible(enabled && mouseOn);
         }
+
+        // RG52 Mini: в интерфейсе оставлен только переключатель режима мыши.
+        //
+        // Всё остальное на этом устройстве задано в device/rg52mini/rg52mini.mk
+        // и подобрано под его железо: переставленные местами триггеры, раскладка
+        // режима мыши, аккорд на стиках, кривая скорости курсора. Правка вслепую
+        // отсюда ломает управление, а вернуть исходные значения можно было бы
+        // только пересборкой - свойства persist из /data перекрывают build.prop.
+        //
+        // Гасим здесь, а не удалением из xml: фрагмент держит ссылки на эти
+        // элементы и без них падает при открытии экрана.
+        String[] hiddenOnRg52 = {
+            KEY_ENABLE, KEY_MERGE, KEY_HIDE_SOURCE, KEY_DEVICES_CATEGORY,
+            "gamepad_identity_category", "gamepad_remap_category",
+            "gamepad_calibration_category", "gamepad_conversion_category",
+            "gamepad_rumble_category", "gamepad_perapp_category",
+            "gamepad_testing_category",
+            KEY_MOUSE_COMBO, KEY_MOUSE_HOLD_TIME, KEY_MOUSE_BUTTONS,
+            KEY_MOUSE_STICK_SPEED, KEY_MOUSE_DPAD_SPEED,
+            KEY_MOUSE_BOOST, KEY_MOUSE_SCROLL_SPEED
+        };
+        for (String key : hiddenOnRg52) {
+            Preference p = findPreference(key);
+            if (p != null) p.setVisible(false);
+        }
+        // Сама категория мыши висит на общем выключателе gammapad, который мы
+        // только что спрятали, - поднимаем её явно, иначе исчезнет и она.
+        Preference mouseCat = findPreference("gamepad_mouse_category");
+        if (mouseCat != null) mouseCat.setVisible(true);
     }
 
     @Override
@@ -1073,10 +1107,29 @@ public class GamepadSettingsFragment extends SettingsPreferenceFragment
                 boolean mouseEnabled = (Boolean) newValue;
                 if (mouseEnabled) {
                     if (SystemProperties.get(PROP_MOUSE_COMBO1, "").isEmpty()) {
-                        SystemProperties.set(PROP_MOUSE_COMBO1, "314");
-                        SystemProperties.set(PROP_MOUSE_COMBO2, "311");
+                        // Возвращаем ту комбинацию, что была до выключения.
+                        // Раньше здесь безусловно ставились 314/311, и устройство
+                        // со своей комбинацией (RG52 Mini: оба стика, 317/318)
+                        // после выключения и включения получало чужие кнопки.
+                        String c1 = SystemProperties.get(PROP_MOUSE_COMBO1_PREV, "");
+                        String c2 = SystemProperties.get(PROP_MOUSE_COMBO2_PREV, "");
+                        if (c1.isEmpty()) {
+                            c1 = "314";
+                            c2 = "311";
+                        }
+                        SystemProperties.set(PROP_MOUSE_COMBO1, c1);
+                        SystemProperties.set(PROP_MOUSE_COMBO2, c2);
                     }
                 } else {
+                    // Запоминаем перед тем, как стереть: свойства persist живут в
+                    // /data и перекрывают значения из build.prop, поэтому иначе
+                    // настройка устройства теряется безвозвратно.
+                    String c1 = SystemProperties.get(PROP_MOUSE_COMBO1, "");
+                    if (!c1.isEmpty()) {
+                        SystemProperties.set(PROP_MOUSE_COMBO1_PREV, c1);
+                        SystemProperties.set(PROP_MOUSE_COMBO2_PREV,
+                                SystemProperties.get(PROP_MOUSE_COMBO2, ""));
+                    }
                     SystemProperties.set(PROP_MOUSE_COMBO1, "");
                     SystemProperties.set(PROP_MOUSE_COMBO2, "");
                 }
