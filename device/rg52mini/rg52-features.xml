@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RG52 Mini: снять признак «только телевизионная оболочка».
+
+     android.software.leanback_only приходит из
+     device/google/atv/permissions/tv_core_hardware.xml. Система на него не
+     смотрит вовсе - во всём дереве это только константа в PackageManager и
+     тесты CTS, - а вот магазины приложений по нему решают, показывать нам
+     телевизионный каталог или обычный. С ним Aurora и Play предлагают только
+     приложения для ТВ.
+
+     Устройство при этом остаётся телевизором для всего, что это проверяет:
+     android.hardware.type.television, android.software.leanback,
+     ro.build.characteristics=tv и UI_MODE_TYPE_TELEVISION не трогаются.
+
+     Про тачскрин: он у нас и так объявлен, вместе с мультитачем, и приходит
+     из планшетного /vendor/etc/permissions/tablet_core_hardware.xml. Этот
+     файл к тому ничего не добавляет.
+
+     Условный вариант тега: признак остаётся, только если свойство истинно.
+     Значит persist.rg52.tv_only=true возвращает телевизионный каталог, а
+     пустое или false (умолчание) открывает обычный. Переключатель в
+     настройках («Show phone apps») пишет то же свойство наоборот: имя
+     свойства описывает поведение системы, имя пункта - то, что видит
+     человек. Читается при старте system_server, поэтому нужна перезагрузка. -->
+<permissions>
+    <unavailable-feature-conditional name="android.software.leanback_only"
+                                     prop="persist.rg52.tv_only" />
+</permissions>
