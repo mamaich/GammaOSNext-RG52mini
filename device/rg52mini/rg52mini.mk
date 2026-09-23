@@ -321,3 +321,17 @@ PRODUCT_PRODUCT_PROPERTIES += \
 # то есть в /system/build.prop, а /product/etc/build.prop читается позже и
 # перекрывает его (порядок в PropertyLoadBootDefaults: system -> system_ext ->
 # vendor -> odm -> product).
+
+# Имя устройства для штатного механизма обновлений GammaOS. По нему
+# /system/bin/gammaos-ota сверяет поле device в manifest.json пакета и
+# отказывается ставить чужую прошивку. В GammaOS свойство задаётся в
+# конфигурации каждого устройства; у нас его не было, и проверка отвергала
+# любой пакет («Device '' not compatible»).
+#
+# Механизм даёт перепрошивку без извлечения карты: пакет распаковывается в
+# /data и пишется прямо в /dev/block/by-name/system, с которого в этот момент
+# смонтирован корень. Разделов super на этом устройстве нет, поэтому в
+# manifest.json они описываются как physical - подробности и сборка пакета в
+# device/rg52mini/tools/make-ota.sh.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    ro.gammaos.device=rg52mini
