@@ -81,7 +81,6 @@ public class AppDashboardFragment extends DashboardFragment {
         return R.xml.apps;
     }
 
-    @Override
     // RG52 Mini: видимость телефонных приложений в магазинах.
     //
     // Пункт называется «показывать телефонные», а свойство — «только
