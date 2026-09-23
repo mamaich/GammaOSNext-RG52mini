@@ -306,7 +306,10 @@ void GamepadManager::run() {
             } else if (tag == TAG_UINPUT) {
                 handleUinputEvent();
             } else if (tag == TAG_MOUSE_TIMER) {
+                // Такт может поставить события в очередь (дозревшее нажатие
+                // кнопки аккорда), поэтому очередь надо разобрать и здесь.
                 if (mMouseMode) mMouseMode->tick();
+                drainMouseFlushEvents();
             } else if (tag == TAG_SCREENMAP_TIMER) {
                 if (mScreenMapMode) mScreenMapMode->tick();
             } else {
