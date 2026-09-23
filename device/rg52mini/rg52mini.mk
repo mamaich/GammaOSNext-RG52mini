@@ -335,3 +335,21 @@ PRODUCT_PRODUCT_PROPERTIES += \
 # device/rg52mini/tools/make-ota.sh.
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.gammaos.device=rg52mini
+
+# Режимы производительности. В GammaOS это одно свойство
+# persist.gammaos.performance_mode, а применяют его скрипты
+# /vendor/bin/setclock_<режим>.sh вместе с init.gammaos_power.rc — и то и
+# другое приходит с vendor каждого устройства. В нашем vendor (он от SyachOS)
+# их нет, поэтому все три режима в меню не делали ничего: свойство менялось,
+# регуляторы оставались на месте. Проверено на устройстве — переключение
+# stock/max/powersave не меняло ни scaling_governor, ни границы частот, ни
+# регулятор графики.
+#
+# rg52-perf.rc заводит службы с теми же именами (setclock_<режим>), что
+# ожидает код GammaOS, и добавляет триггеры по свойству: меню выключателя,
+# плитка быстрых настроек и оболочка nano только пишут свойство и ничего не
+# запускают. Значения частот взяты из perf_apply.sh самой SyachOS, разбор —
+# в rg52-perf.sh.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-perf.sh:system/bin/rg52-perf.sh \
+    device/rg52mini/rg52-perf.rc:system/etc/init/rg52-perf.rc
