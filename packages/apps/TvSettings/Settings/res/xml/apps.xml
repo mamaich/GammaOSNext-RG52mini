@@ -55,4 +55,12 @@
         android:fragment="com.android.tv.settings.system.SecurityFragment"
         android:key="security"
         android:title="@string/system_security"/>
+
+    <!-- RG52 Mini: снимает android.software.leanback_only, разбор - в
+         device/rg52mini/rg52-features.xml -->
+    <SwitchPreference
+        android:key="rg52_phone_apps"
+        android:title="@string/rg52_phone_apps_title"
+        android:summary="@string/rg52_phone_apps_summary"
+        android:defaultValue="true" />
 </PreferenceScreen>
