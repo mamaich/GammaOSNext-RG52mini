@@ -994,8 +994,14 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
 
     private void showPerformanceDialog() {
         String current = SystemProperties.get("persist.gammaos.performance_mode", "stock");
-        final String[] modes = {"stock", "max", "powersave"};
-        final String[] labels = {"Normal", "Max Performance", "Power Saver"};
+        // 3d_game придерживает процессор (потолок 1416 МГц), а графику
+        // оставляет свободной: четыре ядра съедают тепловой бюджет заметно
+        // быстрее одного графического, и при перегреве выгоднее придержать
+        // их, чем позволить троттлингу резать кадры. Названия режимов -
+        // это значения persist.gammaos.performance_mode, по ним стартуют
+        // службы setclock_<режим>.
+        final String[] modes = {"stock", "max", "powersave", "3d_game"};
+        final String[] labels = {"Normal", "Max Performance", "Power Saver", "3D Games"};
         int checkedItem = 0;
         for (int i = 0; i < modes.length; i++) {
             if (modes[i].equals(current)) {
