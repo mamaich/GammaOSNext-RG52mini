@@ -353,3 +353,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-perf.sh:system/bin/rg52-perf.sh \
     device/rg52mini/rg52-perf.rc:system/etc/init/rg52-perf.rc
+
+# Сжатие zram. Разбор — в device/rg52mini/rg52-zram.rc.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-zram.rc:system/etc/init/rg52-zram.rc
+
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.rg52.zram.algo=lz4
