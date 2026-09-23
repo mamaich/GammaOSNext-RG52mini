@@ -26,12 +26,14 @@ import android.app.Application;
 import android.app.tvsettings.TvSettingsEnums;
 import android.content.Context;
 import android.os.Bundle;
+import android.os.SystemProperties;
 import android.provider.DeviceConfig;
 import android.text.TextUtils;
 
 import androidx.annotation.Keep;
 import androidx.annotation.Nullable;
 import androidx.preference.Preference;
+import androidx.preference.TwoStatePreference;
 
 import com.android.settingslib.core.AbstractPreferenceController;
 import com.android.tv.settings.PreferenceControllerFragment;
@@ -55,6 +57,21 @@ public class AppsFragment extends PreferenceControllerFragment {
     private static final String KEY_UPDATE = "update";
     private static final String TOP_LEVEL_SLICE_URI = "top_level_settings_slice_uri";
     private static final String KEY_HIBERNATED_APPS = "see_unused_apps";
+
+    // RG52 Mini: видимость телефонных приложений в магазинах.
+    //
+    // Пункт называется «показывать телефонные приложения», а свойство —
+    // «только телевизор», и значения у них обратные. Так вышло не от
+    // небрежности: свойство читает SystemConfig через
+    // <unavailable-feature-conditional>, а тот оставляет признак
+    // android.software.leanback_only ровно когда свойство истинно. Имя
+    // свойства описывает поведение системы, имя пункта — то, что видит
+    // человек, и инверсия живёт в одном месте, здесь.
+    //
+    // Признак читается при старте system_server, поэтому изменение вступает
+    // в силу после перезагрузки — об этом сказано в подписи к пункту.
+    private static final String KEY_RG52_PHONE_APPS = "rg52_phone_apps";
+    private static final String RG52_TV_ONLY_PROP = "persist.rg52.tv_only";
 
     public static void prepareArgs(Bundle b, String volumeUuid, String volumeName) {
         b.putString(AppsActivity.EXTRA_VOLUME_UUID, volumeUuid);
@@ -106,6 +123,18 @@ public class AppsFragment extends PreferenceControllerFragment {
         }
         if (hibernatedAppsPreference != null) {
             hibernatedAppsPreference.setVisible(isHibernationEnabled());
+        }
+
+        final Preference phoneApps = findPreference(KEY_RG52_PHONE_APPS);
+        if (phoneApps instanceof TwoStatePreference) {
+            final TwoStatePreference phoneAppsSwitch = (TwoStatePreference) phoneApps;
+            phoneAppsSwitch.setChecked(
+                    !SystemProperties.getBoolean(RG52_TV_ONLY_PROP, false));
+            phoneAppsSwitch.setOnPreferenceChangeListener((pref, newValue) -> {
+                SystemProperties.set(RG52_TV_ONLY_PROP,
+                        ((Boolean) newValue) ? "false" : "true");
+                return true;
+            });
         }
     }
 
