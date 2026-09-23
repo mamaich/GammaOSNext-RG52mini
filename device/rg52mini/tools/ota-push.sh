@@ -57,7 +57,12 @@ for f in "$SRC"/manifest.json "$SRC"/*.img.xz; do
 done
 
 echo "== запускаю прошивку"
-"$ADB" shell 'rm -f /data/gammaos_ota/ota.log'
+# Пишем logcat в файл на /data: он переживёт прошивку и перезагрузку, а
+# кольцевой буфер в памяти - нет. Один раз это уже понадобилось, когда экран
+# во время записи гас и надо было понять, кто его забрал.
+"$ADB" shell 'rm -f /data/gammaos_ota/ota.log /data/local/tmp/flash.log'
+"$ADB" shell 'nohup logcat -b all -v time > /data/local/tmp/flash.log 2>&1 &' &
+sleep 1
 "$ADB" shell 'setprop sys.gammaos.ota.autoinstall 1'
 "$ADB" shell 'setprop sys.gammaos.ota.package ""'
 "$ADB" shell 'start gammaos-ota'
