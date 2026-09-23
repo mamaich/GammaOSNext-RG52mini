@@ -1,0 +1,64 @@
+# RG52 Mini: применение режима производительности. Разбор — в самом скрипте,
+# device/rg52mini/rg52-perf.sh.
+#
+# Имена служб не случайны: setclock_<режим> — это ровно то, что запускает
+# через ctl.start код GammaOS (drastic-nano, NanoMenu). На устройствах, где
+# такие службы приходят с vendor, этот файл лишний; у нас их нет, поэтому
+# заводим свои со стороны system.
+#
+# Триггеры по свойству нужны отдельно: меню выключателя, плитка быстрых
+# настроек и оболочка nano только пишут persist.gammaos.performance_mode и
+# ничего не запускают — применение ожидается от vendor.
+
+service setclock_stock /system/bin/rg52-perf.sh stock
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+service setclock_max /system/bin/rg52-perf.sh max
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+service setclock_powersave /system/bin/rg52-perf.sh powersave
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+service setclock_3d_game /system/bin/rg52-perf.sh 3d_game
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+# Без аргумента: скрипт сам прочитает сохранённый режим. Нужен на загрузку —
+# свойство persist.* к этому моменту уже восстановлено, но изменения его не
+# было, а значит и триггер не сработал.
+service rg52_perf_boot /system/bin/rg52-perf.sh
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+on property:persist.gammaos.performance_mode=stock
+    start setclock_stock
+
+on property:persist.gammaos.performance_mode=max
+    start setclock_max
+
+on property:persist.gammaos.performance_mode=powersave
+    start setclock_powersave
+
+on property:persist.gammaos.performance_mode=3d_game
+    start setclock_3d_game
+
+on property:sys.boot_completed=1
+    start rg52_perf_boot
