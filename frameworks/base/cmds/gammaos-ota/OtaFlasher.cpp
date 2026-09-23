@@ -286,6 +286,18 @@ std::string OtaFlasher::getSlotSuffix() {
 void OtaFlasher::notifyStatus(FlashPhase phase, const std::string& partition,
                                int idx, int count, int progress,
                                const std::string& error) {
+    // SurfaceFlinger может поднять анимацию и после того, как мы её погасили:
+    // она перекроет ход прошивки, а мы этого уже не увидим. Раз в секунду
+    // повторяем, пока идёт запись. Два property_set в секунду ничего не стоят.
+    {
+        static time_t sLastSuppress = 0;
+        const time_t now = time(nullptr);
+        if (now != sLastSuppress) {
+            sLastSuppress = now;
+            suppressBootanim();
+        }
+    }
+
     if (mCallback) {
         FlashStatus s;
         s.phase = phase;
@@ -505,6 +517,17 @@ bool OtaFlasher::backup(const OtaManifest& manifest) {
     return true;
 }
 
+// Гасит анимацию загрузки. Вызывается не один раз, и это не перестраховка:
+// поднимает её сам SurfaceFlinger, когда умирает system_server, и он же
+// сбрасывает service.bootanim.exit в 0. Одного гашения не хватает по двум
+// причинам сразу — оно случается раньше, чем init успевает обработать
+// ctl.stop zygote (в замерах разрыв доходил до 13 секунд), и раньше, чем SF
+// вообще решит анимацию запустить.
+static void suppressBootanim() {
+    property_set("service.bootanim.exit", "1");
+    property_set("ctl.stop", "bootanim");
+}
+
 void OtaFlasher::stopFramework(bool maskVendor) {
     ALOGI("Stopping framework...");
     logToFile("INFO", "=== STOPPING FRAMEWORK ===");
@@ -524,9 +547,7 @@ void OtaFlasher::stopFramework(bool maskVendor) {
     // Either way the user is left staring at a black panel for the length of
     // the flash. Raise the exit flag first, so an instance that wins the race
     // leaves on its own, then stop the service.
-    property_set("service.bootanim.exit", "1");
-    property_set("ctl.stop", "bootanim");
-    logToFile("INFO", "Bootanimation suppressed (it would cover the progress UI)");
+    suppressBootanim();
 
     // Stop zygote but KEEP SurfaceFlinger running for progress display.
     // SurfaceFlinger is already loaded in memory from /system — the bind-mount
@@ -535,7 +556,21 @@ void OtaFlasher::stopFramework(bool maskVendor) {
     // the progress bar through the HWC pipeline, which works universally.
     logToFile("INFO", "Stopping zygote (keeping SurfaceFlinger for progress display)...");
     property_set("ctl.stop", "zygote");
-    usleep(500000); // 500ms for zygote to stop
+
+    // Ждём, пока zygote действительно уйдёт, а не 500 мс наугад: init
+    // обрабатывает ctl.stop в своей очереди и может задержаться на секунды.
+    // Гасить анимацию раньше бесполезно — её ещё не запустили.
+    for (int i = 0; i < 300; i++) {   // до 30 с
+        if (android::base::GetProperty("init.svc.zygote", "") == "stopped") break;
+        usleep(100 * 1000);
+    }
+    logToFile("INFO", "zygote is %s",
+              android::base::GetProperty("init.svc.zygote", "?").c_str());
+
+    // Теперь system_server мёртв, и SurfaceFlinger как раз поднимает анимацию.
+    usleep(300 * 1000);
+    suppressBootanim();
+    logToFile("INFO", "Bootanimation suppressed (it would cover the progress UI)");
 
     // Bind-mount tmpfs directories over /system paths so nothing reads from
     // the system block device during the flash. This prevents kernel page cache
