@@ -10244,10 +10244,11 @@ void NanoMenu::pollDualScreenDetect() {
 void NanoMenu::openPerformanceChooser() {
     mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
     mPs3DlgKind = 1; mPs3DlgThemeKey = 10; mPs3DlgTitle = "Performance Mode"; mPs3DlgBody.clear();
-    static const char* kPerfOpts[] = {"Normal", "Max Performance", "Power Saver"};
+    static const char* kPerfOpts[] = {"Normal", "Max Performance", "Power Saver", "3D Games"};
     for (const char* s : kPerfOpts) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
     char cur[PROPERTY_VALUE_MAX]; property_get("persist.gammaos.performance_mode", cur, "stock");
-    mPs3DlgSel = !strcmp(cur, "max") ? 1 : (!strcmp(cur, "powersave") ? 2 : 0);
+    mPs3DlgSel = !strcmp(cur, "max") ? 1 : (!strcmp(cur, "powersave") ? 2
+                 : (!strcmp(cur, "3d_game") ? 3 : 0));
     mPs3DlgIconTex = 0; mPs3DlgIconNmap = nmapForIcon(21);   // performance glyph header (glass)
     mPs3DlgIconR = mPs3DlgIconG = mPs3DlgIconB = 1.0f;
     mPs3DlgOrigSel = mPs3DlgSel;
@@ -10945,8 +10946,8 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
         case 10: {  // Quick Menu -> Performance Mode. Replicates the legacy
             // global action / PerformanceTile: set persist.gammaos.performance_mode
             // to stock/max/powersave; the vendor governor trigger applies it.
-            static const char* kPerfModes[]  = {"stock", "max", "powersave"};
-            static const char* kPerfLabels[] = {"Normal", "Max Performance", "Power Saver"};
+            static const char* kPerfModes[]  = {"stock", "max", "powersave", "3d_game"};
+            static const char* kPerfLabels[] = {"Normal", "Max Performance", "Power Saver", "3D Games"};
             if (sel >= 0 && sel < 3) {
                 property_set("persist.gammaos.performance_mode", kPerfModes[sel]);
                 mPs3PerfModeLabel = kPerfLabels[sel];
