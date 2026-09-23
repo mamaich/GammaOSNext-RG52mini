@@ -1239,6 +1239,7 @@ void NanoMenu::nanoApplyPerfClock(const char* mode) {
     if (mode) {
         if (!strcmp(mode, "max")) m = "max";
         else if (!strcmp(mode, "powersave")) m = "powersave";
+        else if (!strcmp(mode, "3d_game")) m = "3d_game";
         else m = "stock";
     }
     char cmd[96];
