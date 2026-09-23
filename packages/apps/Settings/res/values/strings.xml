@@ -13751,4 +13751,10 @@
     <!-- GammaOS Toolbox: BFI mode entries -->
     <string name="gammaos_toolbox_bfi_mode_ctm">CTM (Hardware)</string>
     <string name="gammaos_toolbox_bfi_mode_re">RE (Software)</string>
+    <!-- RG52 Mini: visibility of phone apps in app stores. English only: the
+         GammaOS strings in this build are not translated either, and a
+         half-localized screen would look worse than a consistent one. -->
+    <string name="rg52_phone_apps_title" translatable="false">Show phone apps</string>
+    <string name="rg52_phone_apps_summary" translatable="false">Let app stores offer apps made for phones, not only the TV catalogue. Restart to apply.</string>
+
 </resources>
