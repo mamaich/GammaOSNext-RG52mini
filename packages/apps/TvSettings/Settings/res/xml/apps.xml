@@ -30,6 +30,16 @@
         android:title="@string/apps_see_all_apps"
         android:fragment="com.android.tv.settings.device.apps.AllAppsFragment" />
 
+    <!-- RG52 Mini: снимает android.software.leanback_only, разбор - в
+         device/rg52mini/rg52-features.xml. Стоит сразу за списком приложений,
+         а не в конце экрана: в конце его не находят. -->
+    <SwitchPreference
+        android:key="rg52_phone_apps"
+        android:title="@string/rg52_phone_apps_title"
+        android:summary="@string/rg52_phone_apps_summary"
+        android:defaultValue="true" />
+
+
     <Preference
         android:key="see_unused_apps"
         android:title="@string/unused_apps">
@@ -55,12 +65,4 @@
         android:fragment="com.android.tv.settings.system.SecurityFragment"
         android:key="security"
         android:title="@string/system_security"/>
-
-    <!-- RG52 Mini: снимает android.software.leanback_only, разбор - в
-         device/rg52mini/rg52-features.xml -->
-    <SwitchPreference
-        android:key="rg52_phone_apps"
-        android:title="@string/rg52_phone_apps_title"
-        android:summary="@string/rg52_phone_apps_summary"
-        android:defaultValue="true" />
 </PreferenceScreen>
