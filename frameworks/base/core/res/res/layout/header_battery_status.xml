@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+     Шапка меню по удержанию выключателя. Две строки: сверху память, загрузка
+     процессора и батарея, снизу частоты и температура. Второй строкой, а не
+     в общий ряд: на экране 1280x720 шесть значений в одну строку уже не
+     читаются.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:padding="16dp"
+    android:orientation="vertical">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:gravity="center_vertical">
 
@@ -44,5 +55,17 @@
         android:textSize="18sp"
         android:layout_marginLeft="8dp"
         android:textColor="#FFFFFF" />
+
+</LinearLayout>
+
+    <!-- Частоты и температура. Значения числовые, переводить нечего, поэтому
+         строка собирается в коде и локализации не требует. -->
+    <TextView
+        android:id="@+id/soc_stats"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="14sp"
+        android:textColor="#B0B0B0" />
 
 </LinearLayout>
