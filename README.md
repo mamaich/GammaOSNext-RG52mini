@@ -32,6 +32,17 @@ Treble-совместимый (`ro.treble.enabled=true`, `ro.vndk.version=33`), 
 Flycast, DraStic, mupen64plus, Daijishō, и вырезана телефония, которой на
 устройстве без модема взяться неоткуда.
 
+## Скачать
+
+Готовый образ SD-карты — на странице
+[выпусков](https://github.com/mamaich/GammaOSNext-RG52mini/releases). Собирать
+ничего не нужно: записал на карту, вставил, включил. При первой загрузке раздел
+`userdata` сам растягивается на всю карту.
+
+| Выпуск | Подробности |
+|---|---|
+| [v1.0](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.0) | [doc/rg52mini/release-v1.0.md](doc/rg52mini/release-v1.0.md) |
+
 ## С чего начать
 
 | | |
