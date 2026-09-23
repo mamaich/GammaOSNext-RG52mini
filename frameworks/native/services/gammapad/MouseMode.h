@@ -50,6 +50,9 @@ public:
     // если событие поглощено и в приложение уходить не должно.
     bool handleChordButton(int idx, bool pressed);
 
+    // Положить событие клавиши в очередь на виртуальный геймпад.
+    void pushFlushKey(int code, int value);
+
     // Действие кнопки мыши, назначенной на эту половину аккорда.
     void chordAction(int idx, bool down);
 
@@ -99,6 +102,7 @@ private:
     bool mChordActed[2];    // действие мыши выполнено, при отпускании его надо снять
     bool mChordPending[2];  // ждём, не придёт ли вторая кнопка в окно аккорда
     bool mChordUsed;        // этот аккорд уже переключил режим
+    bool mTimerArmed;       // такт заведён (нужен и вне режима мыши, см. handleChordButton)
     int mComboBtn1Code;
     int mComboBtn2Code;
     int mChordMs;           // окно аккорда, мс
