@@ -375,3 +375,12 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 # Выбирается это скриптом сборки: buildtv.sh — уплотняющий, buildtv_cc.sh —
 # копирующий. Присваивать PRODUCT_ENABLE_UFFD_GC здесь бесполезно: значение из
 # base.mk приходит раньше, а art_config.mk берёт firstword.
+
+# Видимость телефонных приложений в магазинах. Разбор - в самом файле,
+# device/rg52mini/rg52-features.xml. Свойство задаётся явно, чтобы состояние
+# было видно в getprop, а не выводилось из отсутствия строки.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-features.xml:system/etc/permissions/rg52-features.xml
+
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.rg52.tv_only=false
