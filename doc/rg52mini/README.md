@@ -47,9 +47,9 @@ Flycast, DraStic, mupen64plus, Daijishō, и вырезана телефония
 ничего не нужно: записал на карту, вставил, включил. При первой загрузке раздел
 `userdata` сам растягивается на всю карту.
 
-| Выпуск | Подробности |
-|---|---|
-| [v1.0](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.0) | [doc/rg52mini/release-v1.0.md](release-v1.0.md) |
+| Выпуск | Дата | Коротко |
+|---|---|---|
+| [v1.0](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.0) — [подробности](release-v1.0.md) | 23.09.2026 | Первый публичный. Поддержка железа консоли, microG со входом в Google-аккаунт, переработанный режим мыши, починенные WebView и оболочка nano |
 
 ## Состояние
 
