@@ -5385,6 +5385,10 @@
   <java-symbol type="drawable" name="ic_gammaos_brightness" />
   <java-symbol type="drawable" name="ic_gammaos_performance" />
   <java-symbol type="drawable" name="ic_gammaos_controller" />
+  <java-symbol type="drawable" name="ic_gammaos_mouse" />
+  <java-symbol type="string" name="gammaos_mouse_mode" />
+  <java-symbol type="string" name="gammaos_mouse_mode_on" />
+  <java-symbol type="string" name="gammaos_mouse_mode_off" />
   <java-symbol type="string" name="gammaos_ctrl_abxy_swap" />
   <java-symbol type="string" name="gammaos_ctrl_dpad_analog_swap" />
   <java-symbol type="string" name="gammaos_ctrl_invert_left" />
