@@ -1981,7 +1981,7 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             }
         }
         if (cpuKHz > 0) {
-            sb.append("CPU ").append(cpuKHz / 1000).append(" MHz");
+            sb.append("CPU: ").append(cpuKHz / 1000).append(" MHz");
         }
 
         String gpu = readSysfsLine(sGpuFreqPath);
@@ -1989,7 +1989,7 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             try {
                 long hz = Long.parseLong(gpu);
                 if (sb.length() > 0) sb.append("    ");
-                sb.append("GPU ").append(hz / 1000000).append(" MHz");
+                sb.append("GPU: ").append(hz / 1000000).append(" MHz");
             } catch (NumberFormatException ignored) { }
         }
 
@@ -1998,7 +1998,7 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             try {
                 long milli = Long.parseLong(temp);
                 if (sb.length() > 0) sb.append("    ");
-                sb.append(String.format(java.util.Locale.US, "%.1f\u00B0C", milli / 1000.0f));
+                sb.append(String.format(java.util.Locale.US, "SoC: %.1f\u00B0C", milli / 1000.0f));
             } catch (NumberFormatException ignored) { }
         }
 
