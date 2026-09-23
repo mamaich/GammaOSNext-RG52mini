@@ -505,9 +505,28 @@ bool OtaFlasher::backup(const OtaManifest& manifest) {
     return true;
 }
 
-void OtaFlasher::stopFramework() {
+void OtaFlasher::stopFramework(bool maskVendor) {
     ALOGI("Stopping framework...");
     logToFile("INFO", "=== STOPPING FRAMEWORK ===");
+
+    // Stopping zygote makes init start bootanim, and that hurts twice over.
+    // It covers the progress UI we are about to draw, and on a device whose
+    // GLES driver lives in /vendor it aborts outright once /vendor is masked
+    // below:
+    //
+    //   Cmdline: /system/bin/bootanimation
+    //   Abort message: 'couldn't find an OpenGL ES implementation, make sure
+    //   one of persist.graphics.egl, ro.hardware.egl and ro.board.platform
+    //   is set'
+    //   #03 libEGL.so (android::Loader::open)
+    //   #06 libbootanimation.so (BootAnimation::readyToRun)
+    //
+    // Either way the user is left staring at a black panel for the length of
+    // the flash. Raise the exit flag first, so an instance that wins the race
+    // leaves on its own, then stop the service.
+    property_set("service.bootanim.exit", "1");
+    property_set("ctl.stop", "bootanim");
+    logToFile("INFO", "Bootanimation suppressed (it would cover the progress UI)");
 
     // Stop zygote but KEEP SurfaceFlinger running for progress display.
     // SurfaceFlinger is already loaded in memory from /system — the bind-mount
@@ -534,8 +553,21 @@ void OtaFlasher::stopFramework() {
     // when writing to the vendor partition. Without this, writing a large
     // image to the vendor block device while /vendor is mounted can cause
     // kernel page cache conflicts → OOM/crash.
-    execCommand("mount -t tmpfs tmpfs /vendor");
-    logToFile("INFO", "  Mounted tmpfs over /vendor");
+    //
+    // Only when vendor is actually being written, though. Masking it for a
+    // system-only update buys nothing and takes the GLES driver away from
+    // every process that has not loaded it yet - bootanimation being exactly
+    // the one init starts as we stop zygote.
+    if (maskVendor) {
+        execCommand("mount -t tmpfs tmpfs /vendor");
+        logToFile("INFO", "  Mounted tmpfs over /vendor");
+    } else {
+        logToFile("INFO", "  /vendor left alone (not part of this update)");
+    }
+
+    // Once more, now that the mounts are in place: init may have started
+    // bootanim in the window above.
+    property_set("ctl.stop", "bootanim");
 
     logToFile("INFO", "Syncing filesystems...");
     sync();
@@ -663,7 +695,7 @@ bool OtaFlasher::flash(const OtaManifest& manifest) {
 
     // Phase: Stop framework
     notifyStatus(FlashPhase::STOPPING_FRAMEWORK);
-    stopFramework();
+    stopFramework(manifest.findPartition("vendor") != nullptr);
 
     // Phase: Flash physical partitions (safe — not mounted)
     // Physical partition failures are non-fatal: log a warning and continue.
