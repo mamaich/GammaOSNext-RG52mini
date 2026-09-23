@@ -68,4 +68,12 @@
         android:title="@string/overlay_security_slice_title"
         android:fragment="com.android.tv.twopanelsettings.slices.SliceFragment"
         custom:uri="@string/overlay_security_slice_uri"/>
+
+    <!-- RG52 Mini: снимает android.software.leanback_only, разбор - в
+         device/rg52mini/rg52-features.xml -->
+    <SwitchPreference
+        android:key="rg52_phone_apps"
+        android:title="@string/rg52_phone_apps_title"
+        android:summary="@string/rg52_phone_apps_summary"
+        android:defaultValue="true" />
 </PreferenceScreen>
