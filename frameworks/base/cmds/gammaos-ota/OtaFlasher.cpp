@@ -283,6 +283,17 @@ std::string OtaFlasher::getSlotSuffix() {
     return android::base::GetProperty("ro.boot.slot_suffix", "_a");
 }
 
+// Гасит анимацию загрузки. Вызывается не один раз, и это не перестраховка:
+// поднимает её сам SurfaceFlinger, когда умирает system_server, и он же
+// сбрасывает service.bootanim.exit в 0. Одного гашения не хватает по двум
+// причинам сразу — оно случается раньше, чем init успевает обработать
+// ctl.stop zygote (в замерах разрыв доходил до 13 секунд), и раньше, чем SF
+// вообще решит анимацию запустить.
+static void suppressBootanim() {
+    property_set("service.bootanim.exit", "1");
+    property_set("ctl.stop", "bootanim");
+}
+
 void OtaFlasher::notifyStatus(FlashPhase phase, const std::string& partition,
                                int idx, int count, int progress,
                                const std::string& error) {
@@ -515,17 +526,6 @@ bool OtaFlasher::backup(const OtaManifest& manifest) {
     ALOGI("Backup complete");
     logToFile("INFO", "=== BACKUP COMPLETE ===");
     return true;
-}
-
-// Гасит анимацию загрузки. Вызывается не один раз, и это не перестраховка:
-// поднимает её сам SurfaceFlinger, когда умирает system_server, и он же
-// сбрасывает service.bootanim.exit в 0. Одного гашения не хватает по двум
-// причинам сразу — оно случается раньше, чем init успевает обработать
-// ctl.stop zygote (в замерах разрыв доходил до 13 секунд), и раньше, чем SF
-// вообще решит анимацию запустить.
-static void suppressBootanim() {
-    property_set("service.bootanim.exit", "1");
-    property_set("ctl.stop", "bootanim");
 }
 
 void OtaFlasher::stopFramework(bool maskVendor) {
