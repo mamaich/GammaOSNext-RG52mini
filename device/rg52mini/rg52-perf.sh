@@ -24,7 +24,27 @@
 #
 # Формат свойства persist.rg52.perf.<режим>:
 #
-#     <регулятор cpu>:<мин. частота cpu>:<макс. частота cpu>:<регулятор gpu>
+#     <рег. cpu>:<мин. cpu>:<макс. cpu>:<рег. gpu>:<мин. память>:<макс. память>
+#
+# Два последних поля необязательны, пустое значит «не ограничивать». Заданное
+# ими не прописывается в память числом: список частот у неё не фиксирован, он
+# приходит от ATF и зависит от загрузчика. На штатном устройстве это
+# 324/528/780/798 МГц, на устройстве с поднятой частотой - 324/528/780/928.
+# Поэтому из available_frequencies выбирается ближайшая подходящая: для потолка
+# наибольшая не выше заданной, для пола наименьшая не ниже.
+#
+# Про память по умолчанию. Ограничивается только powersave сверху (528 МГц) и
+# max снизу (780 МГц) - обе частоты есть в любом списке, и с разгоном, и без,
+# так что поведение одинаково на всех устройствах.
+#
+# В stock и 3d_game память намеренно свободна. Для 3d_game это принципиально:
+# режим придерживает процессор, чтобы отдать тепловой бюджет графике, а графика
+# работает на общей с процессором памяти - срезав ей полосу, мы уронили бы ровно
+# те кадры, ради которых всё и затевалось.
+#
+# Выигрыш от потолка в powersave скромнее, чем кажется: регулятор dmc_ondemand и
+# так держит память на нижней ступени почти всё время, а потолок ограничивает
+# пики, а не постоянное потребление.
 #
 # Про режим 3d_game. Он снижает потолок процессора, а графику оставляет
 # свободной. Смысл в тепловом бюджете: четыре ядра съедают его заметно
@@ -46,9 +66,16 @@ for d in /sys/class/devfreq/*gpu*; do
     [ -d "$d" ] && GPU=$d && break
 done
 
+# Контроллер памяти. У него свой регулятор (dmc_ondemand) и свои границы,
+# независимые от процессора и графики.
+DMC=
+for d in /sys/class/devfreq/*dmc*; do
+    [ -d "$d" ] && DMC=$d && break
+done
+
 case "$MODE" in
-    powersave) DEF=schedutil:408000:1416000:powersave ;;
-    max)       DEF=performance:1416000:2016000:performance ;;
+    powersave) DEF=schedutil:408000:1416000:powersave::528000000 ;;
+    max)       DEF=performance:1416000:2016000:performance:780000000: ;;
     3d_game)   DEF=schedutil:408000:1416000:simple_ondemand ;;
     stock|*)   MODE=stock; DEF=schedutil:408000:2016000:simple_ondemand ;;
 esac
@@ -58,6 +85,7 @@ SPEC=$(getprop "persist.rg52.perf.$MODE")
 
 OLDIFS=$IFS; IFS=:; set -- $SPEC; IFS=$OLDIFS
 CPU_GOV=${1:-}; CPU_MIN=${2:-}; CPU_MAX=${3:-}; GPU_GOV=${4:-}
+DDR_MIN=${5:-}; DDR_MAX=${6:-}
 
 w() { [ -e "$1" ] && echo "$2" > "$1" 2>/dev/null; }
 
@@ -72,6 +100,38 @@ LOWEST=$(set -- $(cat "$CPU/scaling_available_frequencies" 2>/dev/null); echo "$
 [ -n "$CPU_MIN" ] && w "$CPU/scaling_min_freq" "$CPU_MIN"
 [ -n "$GPU_GOV" ] && [ -n "$GPU" ] && w "$GPU/governor" "$GPU_GOV"
 
+# Память. Порядок тот же, что у процессора: сначала распускаем границы на весь
+# список, потом ставим потолок, потом пол. Иначе ядро не примет потолок ниже
+# текущего пола. Роспуск заодно снимает ограничение, поставленное прежним
+# режимом, - без него powersave оставлял бы свой потолок навсегда.
+if [ -n "$DMC" ]; then
+    DDR_LO=; DDR_HI=
+    for f in $(cat "$DMC/available_frequencies" 2>/dev/null); do
+        [ -z "$DDR_LO" ] || [ "$f" -lt "$DDR_LO" ] && DDR_LO=$f
+        [ -z "$DDR_HI" ] || [ "$f" -gt "$DDR_HI" ] && DDR_HI=$f
+    done
+    [ -n "$DDR_LO" ] && w "$DMC/min_freq" "$DDR_LO"
+    [ -n "$DDR_HI" ] && w "$DMC/max_freq" "$DDR_HI"
+
+    # Ближайшая доступная: для потолка не выше заданной, для пола не ниже.
+    if [ -n "$DDR_MAX" ]; then
+        PICK=
+        for f in $(cat "$DMC/available_frequencies" 2>/dev/null); do
+            [ "$f" -le "$DDR_MAX" ] || continue
+            [ -z "$PICK" ] || [ "$f" -gt "$PICK" ] && PICK=$f
+        done
+        [ -n "$PICK" ] && w "$DMC/max_freq" "$PICK"
+    fi
+    if [ -n "$DDR_MIN" ]; then
+        PICK=
+        for f in $(cat "$DMC/available_frequencies" 2>/dev/null); do
+            [ "$f" -ge "$DDR_MIN" ] || continue
+            [ -z "$PICK" ] || [ "$f" -lt "$PICK" ] && PICK=$f
+        done
+        [ -n "$PICK" ] && w "$DMC/min_freq" "$PICK"
+    fi
+fi
+
 log -t rg52-perf "режим $MODE: cpu $(cat $CPU/scaling_governor 2>/dev/null) \
 $(cat $CPU/scaling_min_freq 2>/dev/null)-$(cat $CPU/scaling_max_freq 2>/dev/null), \
-gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null)"
+gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null)"
