@@ -40,6 +40,24 @@ SRC=${SRC:-/mnt/t/Dump/RG52Mini/android/SyachOS-RG52Mini-V1.0.317m6.3.img}
 #
 # Пусто или файлов нет — берём что было в эталоне и громко об этом говорим.
 KERNELDIR=${KERNELDIR:-/home/mamaich/rg52/out-kernel-uffd}
+
+# Пользовательская часть драйвера Mali. В vendor от Android 13 лежит
+# g7p1-01bet0 — версия, в которой две функции резервируют по 192 КБ стека
+# одним кадром. Игры, дающие потоку отрисовки 128 КБ (Shantae and the Seven
+# Sirens, например), падают на ней с переполнением стека.
+#
+# Подменяем на g25p0-00eac0 из прошивки KickPi K3B под Android 14: функций с
+# таким кадром там нет вовсе, а главное — это ровно та версия, что у ядерной
+# половины драйвера в нашем ядре (MALI_RELEASE_NAME = g25p0-00eac0).
+#
+# Новый блоб тянет две библиотеки AIDL, которых в vendor от Android 13 нет, и
+# нужны обе разрядности: с одними 64-битными система встаёт на
+# zygote_secondary. Берутся они из apex VNDK самой системы — версии совпадают,
+# потому что GSI у нас Android 14.
+#
+# Каталог: lib64/ и lib/ с libGLES_mali.so и обеими библиотеками.
+# Нет каталога — остаётся драйвер из эталона, о чём скрипт скажет вслух.
+MALIDIR=${MALIDIR:-/home/mamaich/rg52/out-mali-g25p0}
 TREE=/home/mamaich/rg52/GammaOSNext-RG52mini
 WORK=/home/mamaich/rg52/gamma
 OUTDIR=$WORK/out
@@ -176,6 +194,24 @@ if [ -f "$RGP" ] && [ -f /mnt/imgven/bin/rgp2pad ]; then
 fi
 
 sync
+# --- драйвер Mali посвежее ---
+for abi in lib64 lib; do
+    for f in libGLES_mali.so \
+             android.hardware.graphics.allocator-V2-ndk.so \
+             android.hardware.graphics.common-V4-ndk.so; do
+        src="$MALIDIR/$abi/$f"
+        [ -f "$src" ] || { echo "   !! нет $src"; continue; }
+        case "$f" in
+            libGLES_mali.so) dst=/mnt/imgven/$abi/egl/$f ;;
+            *)               dst=/mnt/imgven/$abi/$f ;;
+        esac
+        sudo cp "$src" "$dst"
+        sudo chmod 644 "$dst"
+        sudo chcon u:object_r:same_process_hal_file:s0 "$dst" 2>/dev/null || true
+        echo "   Mali: /vendor/$abi/${dst#/mnt/imgven/$abi/} ($(stat -c %s "$src") байт)"
+    done
+done
+
 # --- модули aic8800 из своей сборки ---
 for m in aic8800_bsp.ko aic8800_fdrv.ko; do
     if [ -f "$KERNELDIR/$m" ]; then
