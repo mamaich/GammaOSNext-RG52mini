@@ -1913,6 +1913,7 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
     // хватает, соответствующая часть строки просто не выводится.
     private static java.util.List<String> sCpuFreqPaths;
     private static String sGpuFreqPath;
+    private static String sDdrFreqPath;
     private static String sSocTempPath;
     private static boolean sSocPathsResolved;
 
@@ -1946,13 +1947,20 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             }
         }
 
+        // В devfreq нас интересуют два узла: графика и dmc - контроллер памяти.
+        // Частота памяти показывается затем, чтобы разгон был виден глазами: она
+        // задаётся загрузчиком на eMMC, а не образом, и проверить её иначе нечем.
         java.io.File[] devfreq = new java.io.File("/sys/class/devfreq").listFiles();
         if (devfreq != null) {
             for (java.io.File dir : devfreq) {
-                // dmc - это контроллер памяти, он нам не нужен.
-                if (!dir.getName().contains("gpu")) continue;
                 java.io.File cur = new java.io.File(dir, "cur_freq");
-                if (cur.exists()) { sGpuFreqPath = cur.getAbsolutePath(); break; }
+                if (!cur.exists()) continue;
+                String name = dir.getName();
+                if (sGpuFreqPath == null && name.contains("gpu")) {
+                    sGpuFreqPath = cur.getAbsolutePath();
+                } else if (sDdrFreqPath == null && name.contains("dmc")) {
+                    sDdrFreqPath = cur.getAbsolutePath();
+                }
             }
         }
 
@@ -1996,6 +2004,15 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
                 long hz = Long.parseLong(gpu);
                 if (sb.length() > 0) sb.append("    ");
                 sb.append("GPU: ").append(hz / 1000000).append(" MHz");
+            } catch (NumberFormatException ignored) { }
+        }
+
+        String ddr = readSysfsLine(sDdrFreqPath);
+        if (ddr != null) {
+            try {
+                long hz = Long.parseLong(ddr);
+                if (sb.length() > 0) sb.append("    ");
+                sb.append("DDR: ").append(hz / 1000000).append(" MHz");
             } catch (NumberFormatException ignored) { }
         }
 
