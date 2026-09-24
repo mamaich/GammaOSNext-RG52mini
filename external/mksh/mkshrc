@@ -8,6 +8,17 @@
 
 set +o nohup
 
+# Имя в приглашении. adbd отдаёт HOSTNAME из ro.product.device, а у GSI это
+# tdgsi_arm64_ab - имя эталонного образа, а не устройства. Само ro.product.device
+# менять нельзя: по нему сверяется совместимость vendor, на него смотрят
+# обновления и приложения. Поэтому подменяем только показываемое имя, и только
+# если устройство себя назвало.
+if [[ -z $GAMMAOS_KEEP_HOSTNAME ]]; then
+	_gos_dev=$(getprop ro.gammaos.device 2>/dev/null)
+	[[ -n $_gos_dev ]] && HOSTNAME=$_gos_dev
+	unset _gos_dev
+fi
+
 if (( USER_ID )); then PS1='$'; else PS1='#'; fi
 PS4='[$EPOCHREALTIME] '; PS1='${|
 	local e=$?
