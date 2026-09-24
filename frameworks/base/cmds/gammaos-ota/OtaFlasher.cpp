@@ -372,6 +372,46 @@ std::string OtaFlasher::preflight(const OtaManifest& manifest) {
         }
     }
 
+    // Physical partitions are sized by the partition table on the card, and
+    // the update writes a whole filesystem image into them. If the partition is
+    // even one block smaller than that filesystem, ext4 refuses to mount it:
+    //
+    //     EXT4-fs (mmcblk1p4): bad geometry: block count 768484 exceeds size
+    //                          of device (763136 blocks)
+    //
+    // init then cannot mount /system, calls InitFatalReboot, and the device
+    // loops through the bootloader with no way back but rewriting the card.
+    // This is not hypothetical: it happened when the system partition was sized
+    // to its contents and shrank by 21 MB between two builds. Refuse here, while
+    // nothing has been written yet and the running system is still intact.
+    for (const auto* part : manifest.physicalPartitions()) {
+        std::string blockDev = "/dev/block/by-name/" + part->name;
+        if (access(blockDev.c_str(), F_OK) != 0) {
+            blockDev = "/dev/block/by-name/" + part->name + "_a";
+        }
+        uint64_t devSize = getBlockDevSize(blockDev);
+        logToFile("INFO", "  Fit check %s: image=%llu bytes, %s=%llu bytes",
+                  part->name.c_str(), (unsigned long long)part->size,
+                  blockDev.c_str(), (unsigned long long)devSize);
+        if (devSize == 0) {
+            logToFile("WARN", "  Cannot read size of %s - fit check skipped",
+                      blockDev.c_str());
+            continue;
+        }
+        if (part->size > devSize) {
+            std::string err = "Partition " + part->name + " on this card is " +
+                   std::to_string(devSize / 1048576) + " MB, but the update needs " +
+                   std::to_string(part->size / 1048576) + " MB. The card was written " +
+                   "from an image with a different layout; rewrite the card instead " +
+                   "of updating over the air.";
+            logToFile("ERROR", "PREFLIGHT FAIL: %s", err.c_str());
+            return err;
+        }
+        logToFile("INFO", "  Fit check %s: OK, %llu MB spare",
+                  part->name.c_str(),
+                  (unsigned long long)((devSize - part->size) / 1048576));
+    }
+
     // Check super free space for logical partition size increases.
     // On non-A/B (single slot), partitions are replaced in place: the old
     // allocation will be freed before the new one is allocated, so the usable
