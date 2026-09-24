@@ -41,6 +41,7 @@ Flycast, DraStic, mupen64plus, Daijishō, и вырезана телефония
 
 | Выпуск | Дата | Коротко |
 |---|---|---|
+| [v1.2](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.2) — [подробности](doc/rg52mini/release-v1.2.md) | 24.09.2026 | Свежий драйвер Mali и свойства ARM от Android 14 — заработали Minecraft и Shantae; Wi-Fi на платах ревизии A и сеть сразу после загрузки, а не через пять минут; частота памяти в меню выключателя и в режимах производительности; постоянная разметка карты; свой загрузчик в образе |
 | [v1.1](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.1) — [подробности](doc/rg52mini/release-v1.1.md) | 24.09.2026 | Уплотняющий сборщик мусора ART, zram на lz4, заработавшие режимы производительности и новый «3D Games», частоты и температура в меню выключателя, показ телефонных приложений в магазинах |
 | [v1.0](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.0) — [подробности](doc/rg52mini/release-v1.0.md) | 23.09.2026 | Первый публичный. Поддержка железа консоли, microG со входом в Google-аккаунт, переработанный режим мыши, починенные WebView и оболочка nano |
 
