@@ -240,8 +240,16 @@ for abi in lib64 lib; do
     done
 done
 
-# --- модули aic8800 из своей сборки ---
-for m in aic8800_bsp.ko aic8800_fdrv.ko; do
+# --- модули Wi-Fi из своей сборки ---
+# rk915.ko здесь не для галочки. Плата ревизии A несёт RK915 вместо AIC8800D80,
+# оба чипа сидят на одном слоте SDIO и делят вывод питания, поэтому vendor
+# грузит их по факту железа: сперва rk915 из init.insmod.cfg, и только если
+# интерфейс не появился - aic8800 из /vendor/bin/wifi_pick.sh. Модуль из эталона
+# с нашим ядром не грузится (modversions), интерфейс не появляется, дальше
+# грузится aic8800, не находит своего чипа и гасит питание шины: на ревизии A
+# Wi-Fi нет вовсе, и молча - в logcat ровно та же строка, что при исправной
+# работе на ревизии B.
+for m in aic8800_bsp.ko aic8800_fdrv.ko rk915.ko; do
     if [ -f "$KERNELDIR/$m" ]; then
         sudo cp "$KERNELDIR/$m" /mnt/imgven/lib/modules/"$m"
         sudo chmod 644 /mnt/imgven/lib/modules/"$m"
