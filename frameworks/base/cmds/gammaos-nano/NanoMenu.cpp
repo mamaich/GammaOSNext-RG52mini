@@ -5217,6 +5217,7 @@ if (sRingPrimedCount >= 2) {
             }
         }
 
+        if (mMtpActive) mtpTick();   // MTP screen: cable edges + service watchdog, every loop, wall-clock paced
         if (!ndsIdleSkip) {
         mMinimaWantsFrame = false;   // the Minima renderer re-arms it while anything animates
         render();
