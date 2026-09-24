@@ -57,6 +57,14 @@ KERNELDIR=${KERNELDIR:-/home/mamaich/rg52/out-kernel-uffd}
 #
 # Каталог: lib64/ и lib/ с libGLES_mali.so и обеими библиотеками.
 # Нет каталога — остаётся драйвер из эталона, о чём скрипт скажет вслух.
+#
+# Одного драйвера мало. Начиная с этой версии он строит список конфигураций EGL
+# не сам, а по свойствам ro.vendor.arm.egl.configs.*, которые должен задавать
+# vendor. В нашем от Android 13 их нет, и драйвер остаётся без описания
+# форматов: HWUI в каждом приложении жалуется «Device claims wide gamut support,
+# cannot find matching config», а Minecraft падает на старте - поток отрисовки
+# бросает необработанное исключение через 200 мс после инициализации графики.
+# Поэтому ниже в /vendor/build.prop дописывается device/rg52mini/mali-g25p0.prop.
 MALIDIR=${MALIDIR:-/home/mamaich/rg52/out-mali-g25p0}
 
 # u-boot из своей сборки. Голова эталонного образа уже содержит наш загрузчик
@@ -239,6 +247,25 @@ for abi in lib64 lib; do
         echo "   Mali: /vendor/$abi/${dst#/mnt/imgven/$abi/} ($(stat -c %s "$src") байт)"
     done
 done
+
+# --- свойства ARM для драйвера Mali ---
+# ro.vendor.* может задавать только раздел vendor, поэтому дописываем в его
+# build.prop. Без них новый драйвер остаётся без конфигураций EGL, см. выше.
+PROPS=${PROPS:-$TREE/device/rg52mini/mali-g25p0.prop}
+if [ -f "$PROPS" ] && [ -f "$MALIDIR/lib64/libGLES_mali.so" ]; then
+    if sudo grep -q "^ro.vendor.arm.egl.configs" /mnt/imgven/build.prop 2>/dev/null; then
+        echo "   свойства ARM уже есть в vendor, не дублирую"
+    else
+        sudo tee -a /mnt/imgven/build.prop > /dev/null <<'EOPROP'
+
+# --- свойства ARM для драйвера Mali g25p0, см. device/rg52mini/mali-g25p0.prop ---
+EOPROP
+        sudo sh -c "grep '^ro.vendor.arm' '$PROPS' >> /mnt/imgven/build.prop"
+        echo "   свойства ARM: $(grep -c '^ro.vendor.arm' "$PROPS") строк в /vendor/build.prop"
+    fi
+else
+    [ -f "$PROPS" ] || echo "   !! нет $PROPS — новый драйвер останется без конфигураций EGL"
+fi
 
 # --- модули Wi-Fi из своей сборки ---
 # rk915.ko здесь не для галочки. Плата ревизии A несёт RK915 вместо AIC8800D80,
