@@ -58,6 +58,18 @@ KERNELDIR=${KERNELDIR:-/home/mamaich/rg52/out-kernel-uffd}
 # Каталог: lib64/ и lib/ с libGLES_mali.so и обеими библиотеками.
 # Нет каталога — остаётся драйвер из эталона, о чём скрипт скажет вслух.
 MALIDIR=${MALIDIR:-/home/mamaich/rg52/out-mali-g25p0}
+
+# u-boot из своей сборки. Голова эталонного образа уже содержит наш загрузчик
+# (патч про HUSB311 в нём есть), но она заморожена: всё, что мы добавляем в
+# u-boot после того, как эталон был сделан, сам собой в образ не попадёт.
+# Раздел p1 — это ровно uboot.img, FIT с u-boot и trust, 4 МиБ в обрез.
+#
+# idbloader (RKNS с сектора 64) намеренно остаётся из эталона: там SPL и блоб
+# инициализации DDR, а их мы не меняли. Если когда-нибудь тронем SPL или
+# частоту памяти — сюда придётся добавить и его.
+#
+# Нет файла — остаётся загрузчик из эталона, о чём скрипт скажет вслух.
+UBOOTDIR=${UBOOTDIR:-/home/mamaich/rg52/u-boot-rg52}
 TREE=/home/mamaich/rg52/GammaOSNext-RG52mini
 WORK=/home/mamaich/rg52/gamma
 OUTDIR=$WORK/out
@@ -137,6 +149,22 @@ echo "== system"
 sudo dd if="$SYSIMG" of="${LOOP}p4" bs=4M status=none conv=fsync
 echo "== vendor"
 sudo dd if="$VEN" of="${LOOP}p5" bs=4M status=none conv=fsync
+
+# --- u-boot из своей сборки ---
+echo "== загрузчик"
+UB="$UBOOTDIR/uboot.img"
+if [ -f "$UB" ]; then
+    UBBYTES=$(stat -c %s "$UB")
+    P1BYTES=$(( $(sudo blockdev --getsz "${LOOP}p1") * 512 ))
+    if [ "$UBBYTES" -gt "$P1BYTES" ]; then
+        echo "   !! uboot.img $UBBYTES байт не влезает в p1 ($P1BYTES) — оставляю эталонный"
+    else
+        sudo dd if="$UB" of="${LOOP}p1" bs=1M status=none conv=fsync
+        echo "   u-boot из своей сборки: $UBBYTES байт"
+    fi
+else
+    echo "   !! нет $UB — в образе останется загрузчик из эталона"
+fi
 
 # --- убираем из vendor лаунчер Android 13 ---
 # /vendor/app/syach1Home регистрируется как HOME и перехватывает экран: система
