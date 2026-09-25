@@ -15,5 +15,33 @@
 # Поэтому служба просто останавливается после загрузки. Обратно — `start
 # cameraserver`, если однажды появится камера.
 
+# rkpdapp выдаёт ключи для аттестации и для Widevine. На этом устройстве оба
+# адресата отсутствуют физически: в /vendor/lib64/mediadrm и
+# /system/lib64/mediadrm лежит только libdrmclearkeyplugin.so — плагина Widevine
+# нет вовсе, — а HAL IRemotelyProvisionedComponent в lshal не виден. Задания при
+# этом не падают с ошибкой, а подвисают:
+#
+#     JobServiceContext: Client timed out while executing (no jobFinished
+#     received) ... com.android.rkpdapp/...SystemJobService
+#
+# и каждое держит PARTIAL_WAKE_LOCK до истечения таймаута. По статистике
+# планировщика за сутки 12 таких таймаутов, отметки времени — 26 и 36 минут
+# после загрузки: WorkManager повторяет попытки, пока JobScheduler не выводит
+# приложение за квоту на сутки. То есть примерно полчаса после каждого включения
+# устройство не может заснуть, хотя выглядит спящим.
+#
+# Терять при отключении нечего: аттестация на сборке с test-keys невозможна
+# в принципе, Widevine отсутствует. Убрать пакет из образа нельзя (причины выше
+# про cameraserver), поэтому отключаем его штатным pm. Состояние живёт в /data и
+# переживает перезагрузку и обновление по воздуху; проверка перед отключением
+# нужна, чтобы не запускать pm на каждой загрузке впустую.
+service rg52_disable_rkpd /system/bin/sh -c "pm list packages -d | grep -q com.android.rkpdapp || pm disable com.android.rkpdapp"
+    user root
+    group root shell
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
 on property:sys.boot_completed=1
     stop cameraserver
+    start rg52_disable_rkpd
