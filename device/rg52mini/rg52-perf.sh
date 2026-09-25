@@ -53,7 +53,50 @@
 
 set -u
 
+# Внешнее питание — любой источник, который не батарея и у которого online=1.
+# Имена узлов привязывать нельзя: на этом устройстве их четыре (ac типа Mains,
+# battery, usb и tcpm-source-psy-2-004e типа USB), а на другом SoC набор другой.
+# Кабель к компьютеру тоже считается внешним питанием, и это осознанно: с точки
+# зрения теплового и энергетического бюджета разницы с зарядкой нет.
+on_external_power() {
+    local d t
+    for d in /sys/class/power_supply/*; do
+        [ -d "$d" ] || continue
+        t=$(cat "$d/type" 2>/dev/null)
+        [ "$t" = Battery ] && continue
+        [ "$(cat "$d/online" 2>/dev/null)" = 1 ] && return 0
+    done
+    return 1
+}
+
 MODE=${1:-}
+
+# Особый аргумент boot: его передаёт только служба rg52_perf_boot. Режим
+# выбирается по тому, от чего устройство включилось — со вставленной зарядкой
+# есть смысл в max, от батареи разумнее stock. Выбранное записывается в
+# persist.gammaos.performance_mode, иначе меню выключателя показывало бы
+# сохранённый с прошлого раза режим, а не действующий.
+#
+# Решение принимается на каждой загрузке и перебивает сохранённое: так просил
+# владелец. Кому это мешает — выключается одним свойством, пересборка не нужна:
+#
+#     setprop persist.rg52.perf.boot_by_power 0
+#
+# Тогда на загрузке, как раньше, применяется сохранённый режим.
+if [ "$MODE" = boot ]; then
+    MODE=""
+    if [ "$(getprop persist.rg52.perf.boot_by_power 1)" = 1 ]; then
+        if on_external_power; then
+            MODE=max
+            log -t rg52-perf "загрузка от внешнего питания: режим max"
+        else
+            MODE=stock
+            log -t rg52-perf "загрузка от батареи: режим stock"
+        fi
+        setprop persist.gammaos.performance_mode "$MODE"
+    fi
+fi
+
 [ -z "$MODE" ] && MODE=$(getprop persist.gammaos.performance_mode)
 [ -z "$MODE" ] && MODE=stock
 

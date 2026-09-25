@@ -38,10 +38,11 @@ service setclock_3d_game /system/bin/rg52-perf.sh 3d_game
     oneshot
     seclabel u:r:shell:s0
 
-# Без аргумента: скрипт сам прочитает сохранённый режим. Нужен на загрузку —
-# свойство persist.* к этому моменту уже восстановлено, но изменения его не
-# было, а значит и триггер не сработал.
-service rg52_perf_boot /system/bin/rg52-perf.sh
+# Аргумент boot: скрипт сам выберет режим по источнику питания (со вставленной
+# зарядкой max, от батареи stock) и запишет его в свойство. Служба нужна ещё и
+# потому, что свойство persist.* к этому моменту уже восстановлено, но изменения
+# его не было, а значит и триггер по свойству не сработал.
+service rg52_perf_boot /system/bin/rg52-perf.sh boot
     user root
     group root system
     disabled
