@@ -154,16 +154,35 @@ extract_archive_once() {
 extract_archive() {
     local archive=$1
     [ -f "$archive" ] || { step "warning: missing payload $archive"; return 1; }
-    retry_step "extracting $archive" extract_archive_once "$archive"
+    # The big payloads produce no output of their own and take minutes: retroarch.tar.zst is
+    # ~1.1GB unpacked, and on a class-10 card that is over a minute of silence right after pm
+    # has printed "Success". From the outside the wizard looks finished or hung, so announce
+    # the work before starting it and report what it cost afterwards.
+    local name size t0
+    name=${archive##*/}
+    size=$(( $(stat -c %s "$archive" 2>/dev/null || echo 0) / 1048576 ))
+    t0=$(date +%s)
+    step "Extracting $name (${size} MB compressed), this takes a while."
+    retry_step "extracting $archive" extract_archive_once "$archive" || return 1
+    step "Extracted $name in $(( $(date +%s) - t0 ))s."
 }
 
 # Flush the page cache after a big write burst. drop_caches only frees CLEAN pages, so sync
 # (dirty -> clean) MUST come first. echo 1 = pagecache only (safer than 3 mid-setup).
 flush_caches() {
+    # sync after a ~1GB write burst to an SD card can itself take tens of seconds, and it is
+    # the second half of the long silence after a big extract. Say what is happening, and how
+    # long it took when it was not instant.
+    local t0 spent
+    t0=$(date +%s)
+    step "Flushing written data to the card."
     sync
     if [ -w /proc/sys/vm/drop_caches ]; then
         echo 1 > /proc/sys/vm/drop_caches 2>/dev/null || true
     fi
+    spent=$(( $(date +%s) - t0 ))
+    [ "$spent" -ge 5 ] && step "Flush took ${spent}s."
+    return 0
 }
 
 # Owner of the app being post-processed. install_apps captures these from the freshly
@@ -180,6 +199,9 @@ own_app_data() {
     local dir="/data/data/$1"
     [ -d "$dir" ] || return 0
     [ -n "$APP_U" ] || { step "warning: no owner captured for $1, leaving $dir as-is"; return 1; }
+    # Walks everything the payload just unpacked - for RetroArch that is tens of thousands of
+    # files, which is not instant either.
+    step "Setting ownership of $dir to $APP_U."
     chown -R "$APP_U:$APP_G" "$dir"
 }
 
@@ -292,6 +314,7 @@ post_retroarch() {
     local u
     u=$(app_user com.retroarch.aarch64)
     if [ -n "$u" ]; then
+        step "Setting ownership of the RetroArch files on the card to $u."
         [ -d /sdcard/RetroArch ] && chown -R "$u:media_rw" /sdcard/RetroArch
         [ -d /sdcard/Android/data/com.retroarch.aarch64 ] && \
             chown -R "$u:ext_data_rw" /sdcard/Android/data/com.retroarch.aarch64
