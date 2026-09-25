@@ -41,6 +41,7 @@ import android.text.TextUtils;
 import android.util.ArraySet;
 import android.util.FeatureFlagUtils;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -64,6 +65,8 @@ import androidx.window.embedding.SplitRule;
 import androidx.window.java.embedding.SplitControllerCallbackAdapter;
 
 import com.android.settings.R;
+
+import com.google.android.material.appbar.AppBarLayout;
 import com.android.settings.Settings;
 import com.android.settings.SettingsActivity;
 import com.android.settings.SettingsApplication;
@@ -183,6 +186,55 @@ public class SettingsHomepageActivity extends FragmentActivity implements
         return mCategoryMixin;
     }
 
+    // GammaOS: домашний экран настроек кладёт список в NestedScrollView под
+    // сворачивающимся заголовком (app_bar_container со scroll|exitUntilCollapsed).
+    // Пальцем это работает: жест непрерывный, заголовок сворачивается и список
+    // доезжает. А переход фокуса кнопкой - это одна порция прокрутки, и её
+    // забирает сворачивание заголовка: содержимое сдвигается меньше нужного, и
+    // строка под фокусом остаётся подрезанной снизу.
+    //
+    // Измерено на устройстве: с развёрнутым заголовком строка в фокусе имела
+    // границы [0,677][1280,720], то есть из 117 пикселей высоты было видно 43;
+    // со свёрнутым - [0,603][1280,720], то есть целиком. Во вложенных разделах
+    // этого нет вовсе: там прокручивается сам RecyclerView.
+    //
+    // На устройстве без сенсорного экрана сворачивающийся заголовок не даёт
+    // ничего, кроме этой беды, поэтому там он сворачивается сразу. Проверять
+    // это через PackageManager нельзя - GSI объявляет FEATURE_TOUCHSCREEN
+    // независимо от железа; конфигурация же считается по реальным устройствам
+    // ввода, и на этом аппарате в ней стоит -touch.
+    //
+    // Нажатие "вниз" сворачивает заголовок в любом случае: если список
+    // прокрутили обратно наверх, он разворачивается снова, и без этого всё
+    // повторилось бы на первой же строке.
+    private boolean mAppBarExpanded = true;
+
+    private void setUpAppBarForKeyNavigation() {
+        final AppBarLayout appBar = findViewById(R.id.app_bar);
+        if (appBar == null) {
+            return;
+        }
+        appBar.addOnOffsetChangedListener(
+                (AppBarLayout.OnOffsetChangedListener) (bar, verticalOffset) ->
+                        mAppBarExpanded = verticalOffset == 0);
+        if (getResources().getConfiguration().touchscreen
+                == Configuration.TOUCHSCREEN_NOTOUCH) {
+            appBar.setExpanded(false /* expanded */, false /* animate */);
+        }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (mAppBarExpanded && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getKeyCode() == KeyEvent.KEYCODE_DPAD_DOWN) {
+            final AppBarLayout appBar = findViewById(R.id.app_bar);
+            if (appBar != null) {
+                appBar.setExpanded(false /* expanded */, true /* animate */);
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -218,6 +270,7 @@ public class SettingsHomepageActivity extends FragmentActivity implements
 
         setupEdgeToEdge();
         setContentView(R.layout.settings_homepage_container);
+        setUpAppBarForKeyNavigation();
 
         mIsTwoPane = ActivityEmbeddingUtils.isAlreadyEmbedded(this);
 
