@@ -92,6 +92,15 @@ public:
     // Get the slot suffix (e.g. "_a")
     static std::string getSlotSuffix();
 
+    // Освобождение панели под прямой вывод прогресса. Мастером DRM на этом
+    // железе является HAL композитора (/vendor/bin/hw/...composer@2.1-service),
+    // за ним SurfaceFlinger; пока они живы, панель принадлежит им, и рисовать
+    // в неё напрямую нельзя. releaseDisplayServices() останавливает их и
+    // запоминает, что именно остановила, restoreDisplayServices() возвращает.
+    static bool releaseDisplayServices();
+    static void restoreDisplayServices();
+
+
     // File logging — public so OtaMenu can log too
     static FILE* sLogFile;
     static void initLogFile();

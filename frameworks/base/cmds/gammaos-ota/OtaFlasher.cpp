@@ -661,6 +661,84 @@ void OtaFlasher::stopFramework(bool maskVendor) {
     logToFile("INFO", "Framework stopped, /system/bin and /system/lib64 bind-mounted to tmpfs");
 }
 
+// Службы, остановленные ради панели: возвращаем их в обратном порядке.
+static std::vector<std::string> sDisplayServicesStopped;
+
+// Ищем HAL композитора по имени службы, а не прописываем его: у каждого vendor
+// он называется по-своему (здесь vendor.hwcomposer-2-1).
+static void collectComposerService(const char* key, const char* value, void* cookie) {
+    static const char kPrefix[] = "init.svc.";
+    if (strncmp(key, kPrefix, sizeof(kPrefix) - 1) != 0) return;
+    const char* name = key + sizeof(kPrefix) - 1;
+    if (!strstr(name, "composer")) return;
+    if (strcmp(value, "running") != 0) return;
+    ((std::vector<std::string>*)cookie)->push_back(name);
+}
+
+static bool waitForSvcState(const std::string& svc, const char* want, int deciseconds) {
+    std::string prop = "init.svc." + svc;
+    for (int i = 0; i < deciseconds; i++) {
+        if (android::base::GetProperty(prop, "") == want) return true;
+        usleep(100000);
+    }
+    return false;
+}
+
+bool OtaFlasher::releaseDisplayServices() {
+    std::vector<std::string> order;
+    order.push_back("surfaceflinger");
+    property_list(collectComposerService, &order);
+
+    for (const auto& svc : order) {
+        std::string prop = "init.svc." + svc;
+        if (android::base::GetProperty(prop, "") != "running") continue;
+        logToFile("INFO", "Display handover: stopping %s", svc.c_str());
+        property_set("ctl.stop", svc.c_str());
+        bool gone = waitForSvcState(svc, "stopped", 50);
+        logToFile("INFO", "Display handover: %s is %s", svc.c_str(),
+                  android::base::GetProperty(prop, "?").c_str());
+        sDisplayServicesStopped.push_back(svc);
+        if (!gone) {
+            logToFile("WARN", "Display handover: %s did not stop in 5s", svc.c_str());
+        }
+    }
+    if (sDisplayServicesStopped.empty()) {
+        logToFile("WARN", "Display handover: nothing to stop, panel may be busy");
+        return false;
+    }
+    // Драйверу нужен момент, чтобы отпустить DRM после ухода последнего клиента.
+    usleep(300000);
+    return true;
+}
+
+void OtaFlasher::restoreDisplayServices() {
+    for (auto it = sDisplayServicesStopped.rbegin();
+         it != sDisplayServicesStopped.rend(); ++it) {
+        logToFile("INFO", "Display handover: starting %s", it->c_str());
+        property_set("ctl.start", it->c_str());
+        waitForSvcState(*it, "running", 50);
+    }
+    sDisplayServicesStopped.clear();
+
+    // Перезапуск SurfaceFlinger тянет за собой перезапуск каркаса, а init при
+    // этом поднимает bootanimation. Сигнал "загрузка закончена" выдаётся один
+    // раз за загрузку, второй раз его никто не выставит, и анимация останется
+    // крутиться поверх работающей системы - проверено на устройстве.
+    //
+    // Одной команды не хватает: init заводит bootanim уже после неё, и гонку
+    // видно в журнале (после восстановления init.svc.bootanim=running). Поэтому
+    // держим дозор десять секунд и гасим каждый раз, как она появится.
+    for (int i = 0; i < 40; i++) {
+        property_set("service.bootanim.exit", "1");
+        if (android::base::GetProperty("init.svc.bootanim", "") == "running") {
+            property_set("ctl.stop", "bootanim");
+        }
+        usleep(250000);
+    }
+    logToFile("INFO", "Display handover: framework back, bootanim is %s",
+              android::base::GetProperty("init.svc.bootanim", "?").c_str());
+}
+
 void OtaFlasher::dropCaches() {
     android::base::WriteStringToFile("3", "/proc/sys/vm/drop_caches");
 }

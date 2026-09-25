@@ -32,6 +32,7 @@
 
 #include "OtaMenu.h"
 #include "OtaFlasher.h"
+#include "OtaDisplay.h"
 
 using namespace android;
 
@@ -53,6 +54,42 @@ int main(int argc, char** argv) {
     setpriority(PRIO_PROCESS, 0, ANDROID_PRIORITY_DISPLAY);
 
     ALOGI("GammaOS OTA starting...");
+
+    // --test-display [секунды]: проверка прямого вывода на панель без всякой
+    // прошивки. Нужен потому, что проверять вывод прогресса настоящим
+    // обновлением - это пять минут записи и незагружаемое устройство при
+    // ошибке. Здесь тот же путь: отпустить панель, взять DRM, отрисовать
+    // прогресс, вернуть каркас.
+    if (argc > 1 && strcmp(argv[1], "--test-display") == 0) {
+        OtaFlasher::initLogFile();
+        int seconds = (argc > 2) ? atoi(argv[2]) : 12;
+        if (seconds < 2) seconds = 2;
+        OtaFlasher::logToFile("INFO", "=== DISPLAY TEST (%d s) ===", seconds);
+
+        bool released = OtaFlasher::releaseDisplayServices();
+        OtaDisplay display;
+        bool ok = display.init();
+        printf("backend: %s, %dx%d\n", display.backendName(),
+               display.width(), display.height());
+        if (ok) {
+            int steps = seconds * 5;
+            for (int i = 0; i <= steps; i++) {
+                char status[64];
+                snprintf(status, sizeof(status), "Writing system (%d of %d)", i, steps);
+                display.drawProgress(i * 100 / steps, status);
+                usleep(200000);
+            }
+            display.drawMessage("Display test finished",
+                                "the panel is driven directly",
+                                "restoring the framework");
+            sleep(2);
+            display.close();
+        }
+        if (released) OtaFlasher::restoreDisplayServices();
+        printf("%s\n", ok ? "OK" : "FAILED");
+        OtaFlasher::logToFile("INFO", "=== DISPLAY TEST %s ===", ok ? "OK" : "FAILED");
+        return ok ? 0 : 1;
+    }
 
     // Check if we need to stage to tmpfs first
     if (!OtaFlasher::isRunningFromTmpfs()) {
