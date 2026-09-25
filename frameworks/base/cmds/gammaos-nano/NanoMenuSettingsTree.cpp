@@ -647,6 +647,11 @@ void NanoMenu::buildSettingsTree() {
                SettingSource::kProp, "persist.gammaos.gesture_wake_ignore", "");
         b.text("performance_mode", "Performance Mode",
                SettingSource::kProp, "persist.gammaos.performance_mode", "stock");
+        // Снята - режим выбирается на каждой загрузке по питанию (от батареи
+        // Normal, со вставленной зарядкой Max Performance). Поставлена -
+        // восстанавливается тот, что был выбран последним.
+        b.toggle("perf_remember_mode", "Remember Performance Mode",
+                 SettingSource::kProp, "persist.rg52.perf.remember_mode", "0");
         b.text("qs_override_tiles", "QS Override Default Tiles",
                SettingSource::kProp, "persist.gammaos.qs.override_default_tiles", "");
       b.endCategory();

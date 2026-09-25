@@ -1069,6 +1069,12 @@
             android:summary="@string/gammaos_toolbox_performance_mode_summary"
             android:defaultValue="stock" />
 
+        <SwitchPreference
+            android:key="persist.rg52.perf.remember_mode"
+            android:title="@string/gammaos_toolbox_perf_remember_title"
+            android:summary="@string/gammaos_toolbox_perf_remember_summary"
+            android:defaultValue="0" />
+
         <EditTextPreference
             android:key="persist.gammaos.qs.override_default_tiles"
             android:title="@string/gammaos_toolbox_qs_override_title"

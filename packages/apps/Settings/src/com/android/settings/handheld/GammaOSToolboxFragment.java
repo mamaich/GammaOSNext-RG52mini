@@ -78,6 +78,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
     private static final Map<String, String> DEFAULTS = new HashMap<>();
     static {
         // Display
+        DEFAULTS.put("persist.rg52.perf.remember_mode", "0");
         DEFAULTS.put("persist.gammaos.immersive", "0");
         DEFAULTS.put("persist.gammaos.refresh.lock", "false");
         DEFAULTS.put("persist.gammaos.refresh.rate", "0");
