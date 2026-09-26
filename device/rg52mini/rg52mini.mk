@@ -354,6 +354,35 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-perf.sh:system/bin/rg52-perf.sh \
     device/rg52mini/rg52-perf.rc:system/etc/init/rg52-perf.rc
 
+# Размер zram. Vendor заводит его на 100 % памяти (fstab.rk30board,
+# zramsize=100%), и при таком объёме ядро набивает только его, а до файла
+# подкачки очередь не доходит никогда: сжатые страницы продолжают занимать ту же
+# физическую память. Мерили на игре, которой нужно около 1,8 ГБ (память 2 ГБ,
+# файл подкачки 2 ГБ): при zram 1,9 ГБ её убивали через минуту, при 512 МБ — через
+# три, при выключенном zram она играет. Разбор — в самом скрипте.
+#
+# 512 МБ и файл подкачки идут парой: по отдельности 512 МБ означали бы, что
+# подкачки стало меньше, чем было (0,5 ГБ вместо 1,9), а вместе получается
+# 2,5 ГБ, из которых память занимают только 512 МБ.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-zram.sh:system/bin/rg52-zram.sh \
+    device/rg52mini/rg52-zram-wb.sh:system/bin/rg52-zram-wb.sh \
+    device/rg52mini/rg52-zram.rc:system/etc/init/rg52-zram.rc
+
+# zram остаётся большим (как и заводил vendor), но получает подложку на карте и
+# сторож, который сбрасывает на неё содержимое при нехватке памяти. Проверено:
+# игра, которой нужно около 1,8 ГБ, при заводской настройке умирала через минуту,
+# а с подложкой играет - за две минуты через неё прошло 700 МБ.
+#
+# Место под подложку берётся из той же настройки, что раньше задавала файл
+# подкачки (persist.gammaos.swap.size_mb, строка «Virtual memory» в настройках):
+# при включённом zram отдельный файл смысла не имеет, и gammaos-swap.sh в этом
+# случае уступает.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.rg52.zram.size_mb=1900 \
+    persist.rg52.zram.wb_threshold_mb=300 \
+    persist.gammaos.swap.size_mb=2048
+
 # Сжатие zram. Разбор — в device/rg52mini/rg52-zram.rc.
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-zram.rc:system/etc/init/rg52-zram.rc

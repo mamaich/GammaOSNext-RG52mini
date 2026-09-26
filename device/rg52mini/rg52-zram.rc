@@ -1,25 +1,41 @@
-# Алгоритм сжатия для zram.
-#
-# Выяснилось, что lz4 просил ещё vendor: в init.rk3562.rc есть строка
-# `write /sys/block/zram0/comp_algorithm lz4`. Только в ядре не было
-# CONFIG_CRYPTO_LZ4, запись молча не срабатывала, и оставалось умолчание
-# ядра — lzo-rle. Опцию включили (коммит ed1aada в ядре), и просьба vendor
-# наконец исполняется сама.
-#
-# Этот файл нужен не для того, чтобы поставить lz4 — он уже стоит, — а чтобы
-# выбор был нашим и его можно было поменять. Пишем после vendor и своим
-# значением его перекрываем.
-#
-# Почему post-fs-data. Менять алгоритм можно только пока zram не занят: как
-# только выставлен disksize, ядро возвращает EBUSY. Поднимается zram поздно —
-# vendor делает это по триггеру `sys-boot-completed-set` из
-# init.rk30board.rc, — так что post-fs-data заведомо раньше. И к этому
-# моменту уже отработал load_persist_props, то есть свойство ниже читается
-# из /data, а не только из build.prop.
-#
-# Значение вынесено в свойство, чтобы можно было сравнить алгоритмы без
-# пересборки: `setprop persist.rg52.zram.algo lzo-rle` и перезагрузка.
-# Пустое или неизвестное значение ядро отвергнет, и останется умолчание.
+# RG52 Mini: подкачка — zram с подложкой на карте и вытеснение по давлению.
+# Разбор с измерениями — в самих скриптах, device/rg52mini/rg52-zram.sh и
+# device/rg52mini/rg52-zram-wb.sh.
 
+service rg52_zram /system/bin/rg52-zram.sh
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+service rg52_zram_wb /system/bin/rg52-zram-wb.sh
+    user root
+    group root system
+    disabled
+    seclabel u:r:shell:s0
+
+# Настройка подкачки — на post-fs-data: /data уже смонтирована (подложка живёт
+# там же, где файл подкачки GammaOS, в области, доступной до разблокировки), а
+# zram к этому моменту уже поднят init-ом по vendor/etc/fstab.rk30board, и мы
+# его переделываем.
 on post-fs-data
-    write /sys/block/zram0/comp_algorithm ${persist.rg52.zram.algo}
+    start rg52_zram
+
+# Изменение любого из двух размеров применяется сразу, без перезагрузки.
+on property:persist.rg52.zram.size_mb=*
+    start rg52_zram
+
+on property:persist.gammaos.swap.size_mb=*
+    start rg52_zram
+
+# Сторож вытеснения работает только при включённом экране: опрос раз в две
+# секунды при погашенном мешал бы засыпанию, а смысла там нет.
+on property:sys.screen.state=on
+    start rg52_zram_wb
+
+on property:sys.screen.state=off
+    stop rg52_zram_wb
+
+on property:persist.rg52.zram.wb_threshold_mb=*
+    restart rg52_zram_wb

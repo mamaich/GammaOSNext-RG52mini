@@ -13629,6 +13629,10 @@
     <string name="gammaos_toolbox_performance_mode_title">Performance mode</string>
     <string name="gammaos_toolbox_performance_mode_summary">Performance profile for CPU/GPU/memory governor tuning. Options: stock, max, powersave, 3d_game.</string>
     <string name="gammaos_toolbox_perf_remember_title">Remember performance mode across reboots</string>
+    <string name="gammaos_toolbox_zram_size_title">zRAM size (MB)</string>
+    <string name="gammaos_toolbox_zram_wb_title">zRAM writeback threshold (MB)</string>
+    <string name="gammaos_toolbox_zram_wb_summary">When free memory drops below this, zRAM contents are pushed out to the backing store on the card. 0 never pushes, so zRAM only ever compresses in place. Runs while the screen is on.</string>
+    <string name="gammaos_toolbox_zram_size_summary">Compressed swap kept in RAM. With a backing store (see Virtual memory below) its contents are pushed to the card when memory runs low, which frees real RAM and lets a heavy game use more than the device has. 0 turns zRAM off, so paging goes straight to a plain swap file. Applies immediately.</string>
     <string name="gammaos_toolbox_perf_remember_summary">On: the device restores the performance mode you selected last. Off: the mode is chosen at every boot from the power source - Normal on battery, Max Performance with a charger connected.</string>
 
     <!-- GammaOS Toolbox: CRT Shader Sub-Parameters -->
@@ -13713,7 +13717,7 @@
     <string name="gammaos_toolbox_ultra_low_power_exclude_title">Low power freeze exclusions</string>
     <string name="gammaos_toolbox_ultra_low_power_exclude_summary">Comma-separated package names to exclude from process freezing in ultra low power mode.</string>
     <string name="gammaos_toolbox_swap_size_title">Virtual memory (swap)</string>
-    <string name="gammaos_toolbox_swap_size_summary">Use a swap file on storage to extend available RAM. Larger sizes let more apps stay open but use more storage and can slow the device.</string>
+    <string name="gammaos_toolbox_swap_size_summary">Storage given to paging. With zRAM on it becomes the zRAM backing store: cold pages leave RAM for the card while hot ones stay compressed in memory. With zRAM off it is a plain swap file. Larger sizes let more apps stay open but use more storage and wear the card.</string>
     <string name="gammaos_toolbox_swap_size_off">Off</string>
     <string name="gammaos_toolbox_swap_size_custom_entry">Custom…</string>
     <!-- %1$d is a number of megabytes, e.g. "1536 MB" -->

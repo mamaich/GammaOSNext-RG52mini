@@ -662,6 +662,15 @@ void NanoMenu::buildSettingsTree() {
                SettingSource::kProp, "persist.gammaos.fan_mode", "");
         b.toggle("ultra_low_power", "Ultra Low Power Saving",
                  SettingSource::kProp, "persist.gammaos.ultra_low_power_saving_mode", "0");
+        // Подкачка: zram и его подложка на карте. Размер места на карте берётся
+        // из настройки «Virtual memory» (persist.gammaos.swap.size_mb): при
+        // включённом zram это подложка, при выключенном - обычный файл подкачки.
+        b.text("zram_size", "zRAM Size (MB)",
+               SettingSource::kProp, "persist.rg52.zram.size_mb", "1900");
+        b.text("zram_wb", "zRAM Writeback Threshold (MB)",
+               SettingSource::kProp, "persist.rg52.zram.wb_threshold_mb", "300");
+        b.text("swap_size", "Virtual Memory / zRAM Backing (MB)",
+               SettingSource::kProp, "persist.gammaos.swap.size_mb", "2048");
         b.text("ulp_exclude", "Exclude Packages",
                SettingSource::kProp, "persist.gammaos.ultra_low_power_saving_freeze_exclude_packages", "");
       b.endCategory();

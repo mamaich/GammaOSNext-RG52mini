@@ -79,6 +79,8 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
     static {
         // Display
         DEFAULTS.put("persist.rg52.perf.remember_mode", "0");
+        DEFAULTS.put("persist.rg52.zram.size_mb", "1900");
+        DEFAULTS.put("persist.rg52.zram.wb_threshold_mb", "300");
         DEFAULTS.put("persist.gammaos.immersive", "0");
         DEFAULTS.put("persist.gammaos.refresh.lock", "false");
         DEFAULTS.put("persist.gammaos.refresh.rate", "0");
@@ -632,7 +634,16 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
                 continue;
             }
             String key = pref.getKey();
-            if (key == null || !key.startsWith("persist.gammaos.")) continue;
+            // GammaOS: keys are property names, and the binder only touches the
+            // GammaOS namespace so an unrelated preference is never written to a
+            // property. Device-specific settings of this port live under
+            // persist.rg52.*, so that prefix is accepted too - without it the
+            // preference renders but is dead: nothing reads it back and toggling
+            // writes nowhere.
+            if (key == null
+                    || !(key.startsWith("persist.gammaos.") || key.startsWith("persist.rg52."))) {
+                continue;
+            }
             if (LAUNCH_TARGET_KEY.equals(key)) continue;   // handled by bindLaunchTarget (app/activity picker)
 
             if (pref instanceof SwitchPreference) {
