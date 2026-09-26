@@ -29,7 +29,7 @@ THRESH=$(getprop persist.rg52.zram.wb_threshold_mb)
 case "$THRESH" in
     ''|*[!0-9]*) THRESH=0 ;;
 esac
-CARD=$(getprop persist.gammaos.swap.size_mb)
+CARD=$(getprop persist.rg52.zram.backing_mb)
 case "$CARD" in
     ''|*[!0-9]*) CARD=0 ;;
 esac

@@ -1123,7 +1123,21 @@
             android:key="persist.rg52.zram.size_mb"
             android:title="@string/gammaos_toolbox_zram_size_title"
             android:summary="@string/gammaos_toolbox_zram_size_summary"
-            android:defaultValue="1900" />
+            android:defaultValue="256" />
+
+        <ListPreference
+            android:key="persist.rg52.zram.algo"
+            android:title="@string/gammaos_toolbox_zram_algo_title"
+            android:summary="@string/gammaos_toolbox_zram_algo_summary"
+            android:entries="@array/gammaos_zram_algo_entries"
+            android:entryValues="@array/gammaos_zram_algo_values"
+            android:defaultValue="zstd" />
+
+        <EditTextPreference
+            android:key="persist.rg52.zram.backing_mb"
+            android:title="@string/gammaos_toolbox_zram_backing_title"
+            android:summary="@string/gammaos_toolbox_zram_backing_summary"
+            android:defaultValue="0" />
 
         <EditTextPreference
             android:key="persist.rg52.zram.wb_threshold_mb"

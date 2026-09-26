@@ -79,7 +79,9 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
     static {
         // Display
         DEFAULTS.put("persist.rg52.perf.remember_mode", "0");
-        DEFAULTS.put("persist.rg52.zram.size_mb", "1900");
+        DEFAULTS.put("persist.rg52.zram.size_mb", "256");
+        DEFAULTS.put("persist.rg52.zram.algo", "zstd");
+        DEFAULTS.put("persist.rg52.zram.backing_mb", "0");
         DEFAULTS.put("persist.rg52.zram.wb_threshold_mb", "300");
         DEFAULTS.put("persist.gammaos.immersive", "0");
         DEFAULTS.put("persist.gammaos.refresh.lock", "false");
@@ -801,6 +803,17 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
 
     private void bindEditText(EditTextPreference etp, String key) {
         String def = DEFAULTS.getOrDefault(key, "");
+
+        // Поля размеров - однострочные и цифровые. В многострочном поле кнопка
+        // ввода добавляет перевод строки вместо подтверждения, и на устройстве
+        // без сенсорного экрана из такого поля неудобно выбираться.
+        if (key.endsWith("_mb") || key.endsWith("_ms") || key.endsWith("_ns")) {
+            etp.setOnBindEditTextListener(editText -> {
+                editText.setInputType(InputType.TYPE_CLASS_NUMBER);
+                editText.setSingleLine(true);
+                editText.setSelection(editText.getText().length());
+            });
+        }
 
         // Package-list properties are stored across a base prop plus _1, _2, ... continuation
         // segments (because a single Android prop caps at ~92 bytes), exactly as the dedicated

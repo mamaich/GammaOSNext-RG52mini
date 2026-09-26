@@ -26,7 +26,10 @@ on post-fs-data
 on property:persist.rg52.zram.size_mb=*
     start rg52_zram
 
-on property:persist.gammaos.swap.size_mb=*
+on property:persist.rg52.zram.algo=*
+    start rg52_zram
+
+on property:persist.rg52.zram.backing_mb=*
     start rg52_zram
 
 # Сторож вытеснения работает только при включённом экране: опрос раз в две
@@ -40,8 +43,14 @@ on property:sys.screen.state=off
 on property:persist.rg52.zram.wb_threshold_mb=*
     restart rg52_zram_wb
 
+# И ещё раз после загрузки. На том самом запуске, когда persist.sys.zram_enabled
+# ещё равно 1, vendor успевает поднять zram по своему правилу уже после нас -
+# здесь мы возвращаем всё к выбранной настройке.
+on property:sys.boot_completed=1
+    start rg52_zram
+
 # Размеры тоже меняют смысл сторожа: подложка могла появиться или исчезнуть.
-on property:persist.gammaos.swap.size_mb=*
+on property:persist.rg52.zram.backing_mb=*
     restart rg52_zram_wb
 
 on property:persist.rg52.zram.size_mb=*

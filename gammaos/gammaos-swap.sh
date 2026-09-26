@@ -25,19 +25,25 @@ MAX_MB=16384
 
 log_i() { log -p i -t "$TAG" "$1"; }
 
-# RG52 Mini: при включённом zram это же место на карте отдаётся ему под
-# подложку (device/rg52mini/rg52-zram.sh), и отдельный файл подкачки не нужен -
-# он всё равно задействовался бы только при переполнении zram, а сторож
-# вытеснения этого не допускает. Два файла по паре гигабайт на карте были бы
-# просто потерей места, поэтому здесь мы уходим, убрав свой файл.
+# RG52 Mini: файл подкачки и zram живут независимо, и это намеренно. zram -
+# быстрый сжатый ярус перед файлом (приоритет 2 против -2), а не замена ему:
+# сжатые страницы продолжают занимать ту же физическую память, поэтому одним
+# zram память не расширить. Уступать файлу подкачки zram должен только тогда,
+# когда у него есть своя подложка на карте (persist.rg52.zram.backing_mb) - там
+# место на карте действительно занято под вытеснение, и второй файл был бы его
+# потерей.
 zram_mb=$(getprop persist.rg52.zram.size_mb)
 case "$zram_mb" in ''|*[!0-9]*) zram_mb=0 ;; esac
-if [ "$zram_mb" -gt 0 ]; then
+back_mb=$(getprop persist.rg52.zram.backing_mb)
+case "$back_mb" in ''|*[!0-9]*) back_mb=0 ;; esac
+wb_mb=$(getprop persist.rg52.zram.wb_threshold_mb)
+case "$wb_mb" in ''|*[!0-9]*) wb_mb=0 ;; esac
+if [ "$zram_mb" -gt 0 ] && [ "$back_mb" -gt 0 ] && [ "$wb_mb" -gt 0 ]; then
     if grep -q " /data/gammaos_swap/swapfile " /proc/swaps 2>/dev/null; then
         swapoff /data/gammaos_swap/swapfile 2>/dev/null
     fi
     rm -f /data/gammaos_swap/swapfile 2>/dev/null
-    log -p i -t gammaos_swap "zram включён, место отдано ему под подложку"
+    log -p i -t gammaos_swap "у zram своя подложка, отдельный файл подкачки не нужен"
     exit 0
 fi
 

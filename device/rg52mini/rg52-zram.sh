@@ -21,11 +21,13 @@
 #
 # Свойства:
 #   persist.rg52.zram.size_mb          размер zram в МБ, 0 — zram выключен
-#   persist.gammaos.swap.size_mb       сколько места на карте отдано подкачке;
-#                                      при включённом zram это его подложка, при
-#                                      выключенном — обычный файл подкачки,
-#                                      который делает gammaos-swap.sh
+#   persist.rg52.zram.algo             алгоритм сжатия, пусто — как в ядре
+#   persist.rg52.zram.backing_mb       подложка zram на карте в МБ, 0 — без неё
 #   persist.rg52.zram.wb_threshold_mb  порог вытеснения, см. rg52-zram-wb.sh
+#
+# Обычный файл подкачки (persist.gammaos.swap.size_mb, gammaos-swap.sh) живёт
+# отдельно и не зависит от zram: их можно включать вместе, и тогда zram работает
+# быстрым сжатым ярусом перед файлом (приоритет 2 против -2).
 #
 # Размер меняется только целиком: swapoff, сброс устройства, подложка, disksize,
 # mkswap, swapon. На загрузке это дёшево (zram почти пуст), в работе — тем
@@ -50,15 +52,60 @@ num() {   # $1 значение, $2 запасное — всё, что не ц�
 
 [ -e "$SYS/disksize" ] || { log_i "zram в этом ядре нет"; exit 0; }
 
+# Отбираем zram у vendor, иначе им управляют двое и оба мешают.
+#
+# В init.rk30board.rc есть правило
+#
+#     on sys-boot-completed-set && property:persist.sys.zram_enabled=1
+#         swapon_all /vendor/etc/fstab.${ro.hardware}
+#
+# и fstab заводит zram размером во всю память (zramsize=100%). Из этого выходит
+# сразу две беды.
+#
+# Первая: правило срабатывает позже нас (мы работаем на post-fs-data), поэтому
+# любой выбранный здесь размер молча перекрывался стопроцентным. В журнале это
+# видно как "zram: Cannot change disksize for initialized device", а на
+# устройстве - как настройка, которая ничего не меняет: выключение zram не
+# выключало его вовсе.
+#
+# Вторая, тяжёлая: "один раз за загрузку" в комментарии vendor означает "один
+# раз на выставление sys.boot_completed", а оно выставляется снова при каждом
+# перезапуске каркаса. Тогда swapon_all выполняет mkswap поверх работающего
+# устройства подкачки:
+#
+#     zram: Cannot change disksize for initialized device
+#     mkswap: xwrite: Text file busy
+#     init: [libfs_mgr] mkswap failed for /dev/block/zram0
+#
+# Через несколько секунд после этого ядро дважды падало с повреждением учёта
+# страниц - "BUG: Bad rss-counter state ... val:-38654706715" и следом
+# обращение по разрушенному адресу в execve, а в другой раз - разыменование
+# нуля в приёмной очереди сокетов. Оба раза при перезапуске каркаса, оба раза
+# через 5-13 секунд после этих строк.
+#
+# Свойство persist.sys.zram_enabled наши настройки не используют, так что
+# гасим его насовсем: подкачкой на этом устройстве распоряжается только этот
+# скрипт.
+if [ "$(getprop persist.sys.zram_enabled)" != 0 ]; then
+    setprop persist.sys.zram_enabled 0
+    log_i "vendor-овское управление zram отключено (persist.sys.zram_enabled=0)"
+fi
+
 ZSIZE=$(num "$(getprop persist.rg52.zram.size_mb)" 0)
-CARD=$(num "$(getprop persist.gammaos.swap.size_mb)" 0)
+BACK=$(num "$(getprop persist.rg52.zram.backing_mb)" 0)
+# Алгоритм сжатия. Замерено на этом устройстве, игра TMNT, одинаковый отрезок:
+# zstd держит 268 МБ данных в 74 МБ памяти (3,63x), lz4 те же 268 МБ - в 105 МБ
+# (2,55x). Разница в памяти уходит игре, а на карту за сеанс ушло на 17 %
+# меньше. Процессорная цена zstd на этой нагрузке окупается: запись на карту
+# втрое дороже по времени, чем сжатие.
+ALGO=$(getprop persist.rg52.zram.algo)
+CURALGO=$(sed -n 's/.*\[\([^]]*\)\].*/\1/p' "$SYS/comp_algorithm" 2>/dev/null)
 WBTH=$(num "$(getprop persist.rg52.zram.wb_threshold_mb)" 0)
 
 # Подложка имеет смысл только вместе со сторожем: ядро само на неё ничего не
 # пишет, вытеснение происходит только по команде. Поэтому ноль в любом из двух
 # полей означает одно и то же — вытеснения нет, — и состояние получается
 # одинаковым: файла на карте нет, петля не занята, сторож не крутится впустую.
-BACK=$CARD
 [ "$WBTH" = 0 ] && BACK=0
 
 detach_backing_loops() {
@@ -89,7 +136,8 @@ CURBACKSZ=0
 [ -f "$BACKFILE" ] && CURBACKSZ=$(( $(stat -c %s "$BACKFILE" 2>/dev/null || echo 0) / 1048576 ))
 
 # Уже настроено как надо — не трогаем: пересборка стоит возврата страниц в память.
-if [ "$CUR" = "$WANT" ] && [ "$CURBACKSZ" = "$BACK" ]; then
+if [ "$CUR" = "$WANT" ] && [ "$CURBACKSZ" = "$BACK" ] \
+   && { [ -z "$ALGO" ] || [ "$ALGO" = "$CURALGO" ]; }; then
     if [ "$BACK" = 0 ] || [ "$CURBACK" != "none" ]; then
         exit 0
     fi
@@ -103,6 +151,13 @@ if grep -q "^$DEV " /proc/swaps 2>/dev/null; then
 fi
 echo 1 > "$SYS/reset" 2>/dev/null    # сброс отцепляет и подложку
 detach_backing_loops
+
+# Алгоритм принимается только у сброшенного устройства, поэтому здесь.
+if [ -n "$ALGO" ] && [ "$ALGO" != "$CURALGO" ]; then
+    if ! echo "$ALGO" > "$SYS/comp_algorithm" 2>/dev/null; then
+        log_i "алгоритм $ALGO ядром не принят, остаётся $CURALGO"
+    fi
+fi
 
 # --- подложка ---
 if [ "$BACK" -gt 0 ]; then
@@ -131,4 +186,4 @@ mkswap "$DEV" >/dev/null 2>&1
 # быстрый сжатый ярус.
 swapon -p 2 "$DEV" 2>/dev/null
 
-log_i "zram ${ZSIZE} МБ, подложка $(cat "$SYS/backing_dev" 2>/dev/null) на ${BACK} МБ"
+log_i "zram ${ZSIZE} МБ ($(sed -n 's/.*\[\([^]]*\)\].*/\1/p' "$SYS/comp_algorithm" 2>/dev/null)), подложка $(cat "$SYS/backing_dev" 2>/dev/null) на ${BACK} МБ"
