@@ -25,20 +25,33 @@ set -u
 TAG=rg52-zram-wb
 SYS=/sys/block/zram0
 
-THRESH=$(getprop persist.rg52.zram.wb_threshold_mb)
-case "$THRESH" in
-    ''|*[!0-9]*) THRESH=0 ;;
-esac
-CARD=$(getprop persist.rg52.zram.backing_mb)
-case "$CARD" in
-    ''|*[!0-9]*) CARD=0 ;;
-esac
+num() {   # $1 значение, $2 запасное
+    case "$1" in
+        ''|*[!0-9]*) echo "$2" ;;
+        *) echo "$1" ;;
+    esac
+}
 
-# Ноль в любом из двух полей означает одно и то же: вытеснения нет. Выходим, а
-# не ждём подложку, которой не будет.
-[ "$THRESH" = 0 ] && exit 0
-[ "$CARD" = 0 ] && exit 0
-[ -e "$SYS/writeback" ] || exit 0
+[ -e "$SYS/writeback" ] || { log -p i -t "$TAG" "вытеснение этим ядром не поддерживается"; sleep infinity; }
+
+# Пока вытеснять некуда — ждём, а не выходим.
+#
+# Выход здесь выглядел естественно: ноль в размере подложки или в пороге
+# означает, что делать нечего. Но служба не oneshot, и init поднимает её снова
+# через пять секунд, снова, снова - на свежем образе с заводскими настройками
+# (подложки нет) это бесконечный запуск процесса каждые пять секунд. Заметно в
+# getprop: init.svc.rg52_zram_wb навсегда остаётся в состоянии restarting.
+#
+# Поэтому просто спим и перечитываем настройки: подложку могут включить на
+# ходу, и тогда сторож начнёт работать сам, без перезапуска службы.
+while :; do
+    THRESH=$(num "$(getprop persist.rg52.zram.wb_threshold_mb)" 0)
+    CARD=$(num "$(getprop persist.rg52.zram.backing_mb)" 0)
+    if [ "$THRESH" != 0 ] && [ "$CARD" != 0 ]; then
+        break
+    fi
+    sleep 30
+done
 
 log -p i -t "$TAG" "сторож вытеснения запущен, порог ${THRESH} МБ"
 
