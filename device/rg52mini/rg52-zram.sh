@@ -50,6 +50,51 @@ num() {   # $1 значение, $2 запасное — всё, что не ц�
     esac
 }
 
+# --- zswap: сжатый ярус перед настоящей подкачкой ---
+#
+# Отличие от zram принципиальное. zram - это отдельное устройство подкачки,
+# которое целиком живёт в памяти: что в него попало, там и осталось, и когда он
+# полон, страницы идут дальше на карту мимо него. zswap же стоит перед
+# настоящей подкачкой: сжимает страницы в памяти, а когда его пул заполнен,
+# сам вытесняет самые давние на карту - уже разжатыми. То есть он экономит
+# записи на карту, не занимая под себя фиксированный кусок памяти.
+#
+# Замеры на этом устройстве показали, что zram записи на карту не сокращает:
+# сколько он принял, настолько же отнял памяти у игры, и ядру пришлось выгружать
+# больше. У zswap таких качелей быть не должно - пул ограничен долей памяти и
+# отдаёт её обратно, - но это надо проверить, поэтому по умолчанию выключен.
+#
+# Свойства:
+#   persist.rg52.zswap.enabled           1 — включить
+#   persist.rg52.zswap.max_pool_percent  какую долю памяти отдать пулу (20)
+#   persist.rg52.zswap.algo              алгоритм сжатия (zstd)
+ZSWAP_DIR=/sys/module/zswap/parameters
+setup_zswap() {
+    [ -d "$ZSWAP_DIR" ] || return 0
+    local on algo pct
+    on=$(getprop persist.rg52.zswap.enabled)
+    case "$on" in 1|true|Y|y) on=Y ;; *) on=N ;; esac
+
+    if [ "$on" = N ]; then
+        [ "$(cat "$ZSWAP_DIR/enabled" 2>/dev/null)" = "Y" ] && echo N > "$ZSWAP_DIR/enabled" 2>/dev/null
+        return 0
+    fi
+
+    algo=$(getprop persist.rg52.zswap.algo)
+    [ -n "$algo" ] || algo=zstd
+    pct=$(num "$(getprop persist.rg52.zswap.max_pool_percent)" 20)
+    [ "$pct" -gt 0 ] 2>/dev/null || pct=20
+
+    # Сперва настройка пула, потом включение: смена алгоритма на работающем
+    # zswap заводит второй пул и оставляет старый до опустошения.
+    echo "$algo" > "$ZSWAP_DIR/compressor" 2>/dev/null
+    echo zsmalloc > "$ZSWAP_DIR/zpool" 2>/dev/null
+    echo "$pct" > "$ZSWAP_DIR/max_pool_percent" 2>/dev/null
+    echo Y > "$ZSWAP_DIR/enabled" 2>/dev/null
+    log_i "zswap включён: $(cat "$ZSWAP_DIR/compressor" 2>/dev/null)/$(cat "$ZSWAP_DIR/zpool" 2>/dev/null), пул до ${pct}% памяти"
+}
+setup_zswap
+
 [ -e "$SYS/disksize" ] || { log_i "zram в этом ядре нет"; exit 0; }
 
 # Отбираем zram у vendor, иначе им управляют двое и оба мешают.
@@ -185,5 +230,11 @@ mkswap "$DEV" >/dev/null 2>&1
 # Приоритет выше, чем у обычного файла подкачки, если тот вдруг есть: сперва
 # быстрый сжатый ярус.
 swapon -p 2 "$DEV" 2>/dev/null
+
+# zswap стоит перед всеми устройствами подкачки, включая zram, - выйдет
+# двойное сжатие одних и тех же страниц. Вместе включать незачем.
+if [ "$(cat "$ZSWAP_DIR/enabled" 2>/dev/null)" = "Y" ]; then
+    log_i "внимание: включены и zswap, и zram - страницы сожмутся дважды"
+fi
 
 log_i "zram ${ZSIZE} МБ ($(sed -n 's/.*\[\([^]]*\)\].*/\1/p' "$SYS/comp_algorithm" 2>/dev/null)), подложка $(cat "$SYS/backing_dev" 2>/dev/null) на ${BACK} МБ"

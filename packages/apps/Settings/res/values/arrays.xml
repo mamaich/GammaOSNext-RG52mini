@@ -1587,6 +1587,19 @@
 
     <!-- GammaOS virtual memory (swap) size presets. The final entry opens a
          dialog to type a custom size in MB. -->
+    <string-array name="gammaos_zram_algo_entries" translatable="false">
+        <item>zstd — denser (default)</item>
+        <item>lz4 — faster</item>
+        <item>lzo-rle</item>
+        <item>lzo</item>
+    </string-array>
+    <string-array name="gammaos_zram_algo_values" translatable="false">
+        <item>zstd</item>
+        <item>lz4</item>
+        <item>lzo-rle</item>
+        <item>lzo</item>
+    </string-array>
+
     <string-array name="gammaos_swap_size_entries">
         <item>@string/gammaos_toolbox_swap_size_off</item>
         <item>512 MB</item>

@@ -29,6 +29,16 @@ on property:persist.rg52.zram.size_mb=*
 on property:persist.rg52.zram.algo=*
     start rg52_zram
 
+# zswap настраивается тем же скриптом.
+on property:persist.rg52.zswap.enabled=*
+    start rg52_zram
+
+on property:persist.rg52.zswap.max_pool_percent=*
+    start rg52_zram
+
+on property:persist.rg52.zswap.algo=*
+    start rg52_zram
+
 on property:persist.rg52.zram.backing_mb=*
     start rg52_zram
 
@@ -42,6 +52,7 @@ on property:sys.screen.state=off
 
 on property:persist.rg52.zram.wb_threshold_mb=*
     restart rg52_zram_wb
+    start rg52_zram
 
 # И ещё раз после загрузки. На том самом запуске, когда persist.sys.zram_enabled
 # ещё равно 1, vendor успевает поднять zram по своему правилу уже после нас -
@@ -55,3 +66,16 @@ on property:persist.rg52.zram.backing_mb=*
 
 on property:persist.rg52.zram.size_mb=*
     restart rg52_zram_wb
+
+# Файл подкачки уступает место только подложке zram, поэтому при любой смене
+# настроек zram его надо переспросить: подложку могли выключить, и тогда файл
+# нужно создать заново. Сам он этого не заметит - его служба (init.rc,
+# gammaos_swap) просыпается только по изменению собственного размера.
+on property:persist.rg52.zram.size_mb=*
+    start gammaos_swap
+
+on property:persist.rg52.zram.backing_mb=*
+    start gammaos_swap
+
+on property:persist.rg52.zram.wb_threshold_mb=*
+    start gammaos_swap

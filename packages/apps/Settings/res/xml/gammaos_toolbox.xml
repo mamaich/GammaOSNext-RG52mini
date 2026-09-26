@@ -1123,7 +1123,7 @@
             android:key="persist.rg52.zram.size_mb"
             android:title="@string/gammaos_toolbox_zram_size_title"
             android:summary="@string/gammaos_toolbox_zram_size_summary"
-            android:defaultValue="256" />
+            android:defaultValue="0" />
 
         <ListPreference
             android:key="persist.rg52.zram.algo"

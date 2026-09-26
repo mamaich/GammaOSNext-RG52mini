@@ -1,6 +1,8 @@
 #!/bin/bash
-# Пересборка ядра RG52 Mini с CONFIG_USERFAULTFD, CONFIG_CRYPTO_LZ4 и
-# CONFIG_MEMTEST.
+# Пересборка ядра RG52 Mini с CONFIG_USERFAULTFD, CONFIG_CRYPTO_LZ4,
+# CONFIG_MEMTEST и CONFIG_ZSWAP (вместе с CONFIG_FRONTSWAP, без которого
+# zswap в ядре 5.10 недоступен - зависимость легко пропустить, olddefconfig
+# тихо выбрасывает CONFIG_ZSWAP и сборка выглядит удачной).
 #
 # Модули Wi-Fi собираются тем же проходом, и это обязательно: CONFIG_USERFAULTFD
 # меняет разметку vm_area_struct, ядро собрано с modversions, и старые .ko
@@ -19,7 +21,12 @@ OUT=$RG/out-kernel-uffd
 TCBIN=$(echo "$RG"/toolchain/arm-gnu-toolchain-*-x86_64-aarch64-none-linux-gnu/bin)
 export PATH="$TCBIN:$PATH" ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu-
 cd "$SRC"
-cp "$RG/config.new" .config
+# Конфигурация лежит рядом, в device/rg52mini/kernel-config: это такой же
+# входной материал сборки, как и патчи, и единственная копия в домашнем
+# каталоге означала бы, что собранное ядро не воспроизвести. Здесь же
+# видно, чем наше ядро отличается от заводского - CONFIG_USERFAULTFD,
+# CONFIG_CRYPTO_LZ4, CONFIG_MEMTEST, CONFIG_FRONTSWAP и CONFIG_ZSWAP.
+cp "$(dirname "$0")/../kernel-config" .config
 make olddefconfig >/dev/null
 echo "=== KERNELRELEASE = $(make -s kernelrelease)"
 grep -E "^CONFIG_USERFAULTFD|^CONFIG_CRYPTO_LZ4|^CONFIG_MEMTEST|^CONFIG_RK915" .config

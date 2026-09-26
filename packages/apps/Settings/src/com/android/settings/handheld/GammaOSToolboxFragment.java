@@ -79,7 +79,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
     static {
         // Display
         DEFAULTS.put("persist.rg52.perf.remember_mode", "0");
-        DEFAULTS.put("persist.rg52.zram.size_mb", "256");
+        DEFAULTS.put("persist.rg52.zram.size_mb", "0");
         DEFAULTS.put("persist.rg52.zram.algo", "zstd");
         DEFAULTS.put("persist.rg52.zram.backing_mb", "0");
         DEFAULTS.put("persist.rg52.zram.wb_threshold_mb", "300");

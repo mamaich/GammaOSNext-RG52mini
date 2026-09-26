@@ -392,6 +392,9 @@ PRODUCT_COPY_FILES += \
 # умолчанию тогда zstd - он держит те же данные в полтора раза меньшей памяти,
 # чем lz4 (3,63x против 2,55x на этой же игре).
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.rg52.zswap.enabled=0 \
+    persist.rg52.zswap.max_pool_percent=20 \
+    persist.rg52.zswap.algo=zstd \
     persist.rg52.zram.size_mb=0 \
     persist.rg52.zram.algo=zstd \
     persist.rg52.zram.backing_mb=0 \

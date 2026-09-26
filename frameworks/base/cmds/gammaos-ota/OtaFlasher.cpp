@@ -46,6 +46,7 @@
 #include <android-base/strings.h>
 #include <cutils/properties.h>
 #include <utils/Log.h>
+#include <gui/SurfaceComposerClient.h>
 
 namespace android {
 
@@ -859,8 +860,37 @@ void OtaFlasher::drawTick() {
 // подводил: процесс переселён в tmpfs, каркас остановлен, /system/bin и
 // /system/lib64 подменены пустым tmpfs, панель забрана у композитора. Раздел не
 // пишется, в конце система возвращается на место.
+// Разбудить панель настоящим переходом ВЫКЛ->ВКЛ через SurfaceFlinger. Ровно
+// это делает меню обновления перед тем, как забрать панель, и делает не от
+// хорошей жизни: панель на этом устройстве умеет оказаться в состоянии, когда
+// всё программное показывает "включено" - SurfaceFlinger в powerMode=On, VOP
+// активен, подсветка горит, - а на панели пусто. Лечится только настоящим
+// переходом питания; захват DRM с перенастройкой режима не помогает.
+//
+// Сухому прогону этот шаг нужен по той же причине: без него он проверяет не
+// тот путь, каким идёт настоящее обновление, и чёрный экран в нём ничего не
+// говорит о прошивке.
+static void wakePanel() {
+    const auto ids = SurfaceComposerClient::getPhysicalDisplayIds();
+    if (ids.empty()) {
+        OtaFlasher::logToFile("WARN", "wake panel: no displays");
+        return;
+    }
+    sp<IBinder> token = SurfaceComposerClient::getPhysicalDisplayToken(ids[0]);
+    if (token == nullptr) {
+        OtaFlasher::logToFile("WARN", "wake panel: no display token");
+        return;
+    }
+    SurfaceComposerClient::setDisplayPowerMode(token, 0);   // OFF
+    usleep(150 * 1000);
+    SurfaceComposerClient::setDisplayPowerMode(token, 2);   // ON
+    usleep(150 * 1000);
+    OtaFlasher::logToFile("INFO", "wake panel: display power cycled");
+}
+
 bool OtaFlasher::dryRunDisplay(int seconds) {
     logToFile("INFO", "=== FLASH DISPLAY DRY RUN (%d s) ===", seconds);
+    wakePanel();
     stopFramework(false);
     if (!mDisplayActive) {
         logToFile("ERROR", "dry run: panel was not taken over, nothing to show");

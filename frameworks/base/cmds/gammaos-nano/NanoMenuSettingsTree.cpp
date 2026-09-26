@@ -666,7 +666,7 @@ void NanoMenu::buildSettingsTree() {
         // памяти, «Virtual memory» - обычный файл подкачки на карте, а подложка
         // нужна только тем, кто хочет вытеснять содержимое zram на карту.
         b.text("zram_size", "zRAM Size (MB)",
-               SettingSource::kProp, "persist.rg52.zram.size_mb", "256");
+               SettingSource::kProp, "persist.rg52.zram.size_mb", "0");
         b.text("zram_algo", "zRAM Compression (zstd/lz4/lzo-rle)",
                SettingSource::kProp, "persist.rg52.zram.algo", "zstd");
         b.text("zram_back", "zRAM Backing Store (MB)",
