@@ -141,6 +141,7 @@ static const Ps3DataItem kThemeSettingsCh[] = {
   {"Font",22,"Sets the font displayed on the home screen.",nullptr,1,nullptr,0},
   {"Day/Night",22,"Sets the time-of-day lighting (day, dusk, night or automatic).",nullptr,1,nullptr,0},
   {"Home Theme",22,"Switches the home screen between GammaOS XMB, DSi Menu and Minima. Applying restarts the home screen.","GammaOS XMB",1,nullptr,0},
+  {"Startup Menu",22,"Chooses what the home opens on boot or restart: a game system's game list (e.g. jump straight into NDS), a top-level category such as Game, or the Default view. Takes effect on the next boot.","Default",1,nullptr,0},
   {"DSi Dark Theme",22,"DSi Menu theme only: switches the DSi home to a dark variant (dark field, light text and icons) for low-light use. Applies immediately.","Off",1,nullptr,0},
   {"Menu Music",22,"DSi Menu theme only: plays the looping ambient background music on the DSi home. Turn off for a silent menu. Applies immediately.","On",1,nullptr,0},
   {"Titles From ROM",22,"DSi Menu theme only: names a DS game from the title stored in its cartridge banner instead of the file name, unless you renamed the game or it was scraped. Applies immediately.","On",1,nullptr,0},
