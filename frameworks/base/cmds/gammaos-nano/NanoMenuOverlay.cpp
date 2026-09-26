@@ -702,6 +702,7 @@ void NanoMenu::overlayGpuPark() {
 // rebuild the categories so the Ps3Cat/Ps3Item handle copies are fresh. Everything
 // else refills lazily as it is drawn.
 void NanoMenu::overlayGpuUnpark() {
+    if (mOverlayIconsDropped) { initIconTextures(); mOverlayIconsDropped = false; }
     if (!mPs3MenuBuilt) {
         initPs3Menu();
     } else if (mOverlayGpuParked) {
