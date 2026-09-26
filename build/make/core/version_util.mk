@@ -244,6 +244,21 @@ ifndef PLATFORM_MIN_SUPPORTED_TARGET_SDK_VERSION
   # Used to set minimum supported target sdk version. Apps targeting sdk
   # version lower than the set value will result in a warning being shown
   # when any activity from the app is started.
-  PLATFORM_MIN_SUPPORTED_TARGET_SDK_VERSION := 28
+  # RG52 Mini: 0 вместо 28.
+  #
+  # Из этой величины берётся ro.build.version.min_supported_target_sdk, и по
+  # ней Android отказывается устанавливать приложения, собранные под меньший
+  # SDK: "App package must target at least SDK version 28". На телефоне это
+  # разумно - так отсекают вредоносное, которое нарочно собирается под старый
+  # SDK, чтобы обойти современные ограничения. На ретро-консоли это отсекает
+  # ровно то, ради чего её и берут: порты и игры десятилетней давности
+  # собраны под SDK 19-22 и в графическом установщике просто отказываются
+  # ставиться, причём с сообщением про несовместимость с ТВ, которое уводит в
+  # сторону от настоящей причины.
+  #
+  # Ноль снимает проверку целиком. Через adb её и так можно было обойти
+  # (install --bypass-low-target-sdk-block), то есть защиты от осознанной
+  # установки здесь не было - только неудобство.
+  PLATFORM_MIN_SUPPORTED_TARGET_SDK_VERSION := 0
 endif
 .KATI_READONLY := PLATFORM_MIN_SUPPORTED_TARGET_SDK_VERSION

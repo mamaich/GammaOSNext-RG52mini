@@ -50,6 +50,10 @@ public:
     void drawMessage(const std::string& title, const std::string& line1,
                      const std::string& line2);
 
+    // Взять панель ещё раз: композитор отпускает DRM позже, чем init
+    // отчитывается о его остановке, и его уход сбрасывает нашу настройку.
+    void reassert();
+
     // Release the display.
     void close();
 
@@ -68,6 +72,7 @@ private:
     // DRM helpers
     bool drmTakeOutput();     // resources -> connector -> crtc -> mode
     bool drmMakeBuffer();     // dumb buffer -> fb -> mmap -> setcrtc
+    bool drmApplyCrtc();      // выставить наш буфер на развёртку
     void drmDpmsOn();
 
     // Поворот: панель у этого устройства портретная, а картинка на ней

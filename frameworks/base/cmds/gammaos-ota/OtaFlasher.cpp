@@ -696,6 +696,52 @@ static bool waitForSvcState(const std::string& svc, const char* want, int decise
     return false;
 }
 
+// Дождаться, пока панель действительно выключится, и дать ей время.
+//
+// Это оказалось главной причиной чёрного экрана при прошивке, и найти её стоило
+// вечера. Замерено на устройстве по времени событий ядра:
+//
+//   разрыв между vop2_crtc_atomic_disable и нашим vop2_crtc_atomic_enable
+//     28-30 мс  -> панель тёмная
+//     192 мс    -> картинка есть
+//     3 с       -> картинка есть
+//
+// Причём в тёмном случае всё остальное выглядит исправным: DSI поднят
+// (dw_mipi_dsi_bridge_atomic_enable, 516 x 4 Mbps), VOP сканирует именно наш
+// буфер (в debugfs он числится за нашим процессом), подсветка горит - а на
+// панели пусто. То есть контроллер панели остаётся спать, если включение
+// приходит в середину её последовательности выключения.
+//
+// Прежней паузы в 300 мс не хватало, и не потому, что она мала: композитор
+// отпускает DRM уже после того, как init отчитался о его остановке, поэтому
+// ждать надо не состояние службы, а саму панель. Сперва дожидаемся, что VOP
+// погас, и только потом выдерживаем паузу. Секунда против пяти минут записи
+// ничего не стоит.
+static void waitForPanelOff() {
+    static const char* kSummary = "/sys/kernel/debug/dri/0/summary";
+    std::string summary;
+    int waited = 0;
+    for (; waited < 3000; waited += 50) {
+        if (!android::base::ReadFileToString(kSummary, &summary)) {
+            // Без debugfs остаётся только выждать вслепую.
+            break;
+        }
+        if (summary.find("ACTIVE") == std::string::npos) break;
+        usleep(50 * 1000);
+    }
+    OtaFlasher::logToFile("INFO", "Display handover: panel state polled for %d ms", waited);
+
+    // И ровно три секунды сверху. Величина не с потолка: именно так - службы
+    // остановлены, выдержана пауза, потом захват - единственная
+    // последовательность, при которой картинка появилась на устройстве.
+    // Короткие паузы (0,3 и 0,7 с) давали чёрную панель при внешне исправном
+    // DSI. Три секунды против пяти минут записи ничего не стоят.
+    unsigned settle = 3;
+    std::string prop = android::base::GetProperty("persist.gammaos.ota.settle_s", "");
+    if (!prop.empty()) settle = (unsigned)atoi(prop.c_str());
+    sleep(settle);
+}
+
 bool OtaFlasher::releaseDisplayServices() {
     std::vector<std::string> order;
     order.push_back("surfaceflinger");
@@ -718,8 +764,7 @@ bool OtaFlasher::releaseDisplayServices() {
         logToFile("WARN", "Display handover: nothing to stop, panel may be busy");
         return false;
     }
-    // Драйверу нужен момент, чтобы отпустить DRM после ухода последнего клиента.
-    usleep(300000);
+    waitForPanelOff();
     return true;
 }
 
@@ -774,6 +819,14 @@ void OtaFlasher::handoverDisplay() {
     mDisplayActive = true;
     logToFile("INFO", "Display handover: drawing progress via %s, %dx%d",
               mDisplay.backendName(), mDisplay.width(), mDisplay.height());
+    mDisplay.drawProgress(0, "Preparing to write");
+
+    // И ещё раз, когда композитор точно ушёл. Он отпускает DRM позже, чем init
+    // отчитывается о его остановке, и этот поздний уход сбрасывает нашу
+    // настройку развёртки - панель остаётся тёмной при внешне исправном DSI.
+    // Две секунды против пяти минут записи ничего не стоят.
+    sleep(2);
+    mDisplay.reassert();
     mDisplay.drawProgress(0, "Preparing to write");
 }
 
@@ -871,6 +924,17 @@ void OtaFlasher::drawTick() {
 // тот путь, каким идёт настоящее обновление, и чёрный экран в нём ничего не
 // говорит о прошивке.
 static void wakePanel() {
+    // По умолчанию НЕ делаем. Пробуждение через SurfaceFlinger само по себе
+    // переключает режим панели, и если сразу за ним остановить композитор и
+    // забрать DRM, панель остаётся в середине этого перехода - тёмной, при
+    // поднятом DSI и горящей подсветке. Проверено на устройстве: с этим шагом
+    // прогресс не виден, без него - виден.
+    //
+    // Свойство оставлено на случай, если где-то понадобится обратное.
+    if (android::base::GetProperty("persist.gammaos.ota.wake_panel", "0") != "1") {
+        OtaFlasher::logToFile("INFO", "wake panel: skipped (default)");
+        return;
+    }
     const auto ids = SurfaceComposerClient::getPhysicalDisplayIds();
     if (ids.empty()) {
         OtaFlasher::logToFile("WARN", "wake panel: no displays");

@@ -357,6 +357,13 @@ bool OtaDisplay::drmMakeBuffer() {
         }
     }
 
+    return drmApplyCrtc();
+}
+
+// Выставить наш кадровый буфер на развёртку. Вынесено отдельно, потому что
+// делать это приходится не один раз: см. reassert().
+bool OtaDisplay::drmApplyCrtc() {
+    if (mDrmFd < 0 || !mDrmFbId || !mDrmMode) return false;
     struct drm_mode_crtc set;
     memset(&set, 0, sizeof(set));
     set.crtc_id = mDrmCrtcId;
@@ -373,6 +380,26 @@ bool OtaDisplay::drmMakeBuffer() {
         return false;
     }
     return true;
+}
+
+// Взять панель ещё раз.
+//
+// Из-за чего это нужно. HAL композитора отпускает DRM позже, чем init
+// отчитывается о его остановке: в журнале ядра видно вторую пару
+// disable/enable через полторы секунды после нашего захвата. Его уход гасит
+// VOP, кто-то (восстановление fbdev) тут же включает его обратно - и на
+// развёртке оказывается уже не наш буфер. Внешне всё выглядит исправным: DSI
+// поднят, подсветка горит, а панель тёмная.
+//
+// Ожиданием это не лечится: ждать нечего, композитор в этот момент ещё держит
+// DRM и панель числится живой. Поэтому просто берём её заново, когда он уже
+// точно ушёл.
+void OtaDisplay::reassert() {
+    if (mBackend != DRM) return;
+    if (drmApplyCrtc()) {
+        drmDpmsOn();
+        OtaFlasher::logToFile("INFO", "OtaDisplay: panel re-taken");
+    }
 }
 
 void OtaDisplay::drmDpmsOn() {
