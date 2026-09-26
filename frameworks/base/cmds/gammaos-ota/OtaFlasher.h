@@ -60,6 +60,17 @@ public:
     // Set the callback for UI updates
     void setStatusCallback(FlashStatusCallback cb) { mCallback = cb; }
 
+    // Вызывается перед тем, как забрать панель: меню должно свернуть свой
+    // вывод через EGL и отпустить всё, что держит SurfaceFlinger. После этого
+    // ход прошивки рисует OtaDisplay напрямую через DRM.
+    void setDisplayHandover(std::function<void()> cb) { mDisplayHandover = cb; }
+
+    // Итоговый экран после записи. Рисуется тем же прямым выводом: каркаса к
+    // этому моменту нет, и вернуть его нельзя - /system/bin и /system/lib64
+    // подменены пустым tmpfs.
+    void drawResult(bool ok, const std::string& line1, const std::string& line2);
+    bool displayActive() const { return mDisplayActive; }
+
     // Set the OTA package directory (where extracted .img.xz files live)
     void setPackageDir(const std::string& dir) { mPackageDir = dir; }
 
@@ -135,6 +146,9 @@ private:
     static constexpr const char* STAGING_DIR = "/data/gammaos_ota/staging";
 
     FlashStatusCallback mCallback;
+    std::function<void()> mDisplayHandover;
+    bool mDisplayActive = false;
+    void handoverDisplay();
     std::string mPackageDir;
     OtaDisplay mDisplay;  // Direct framebuffer/DRM display for progress during flash
 

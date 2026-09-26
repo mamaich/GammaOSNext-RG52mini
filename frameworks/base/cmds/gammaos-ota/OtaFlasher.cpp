@@ -309,6 +309,34 @@ void OtaFlasher::notifyStatus(FlashPhase phase, const std::string& partition,
         }
     }
 
+    // Пока панель за нами, ход прошивки рисуем сами: каркас остановлен, и
+    // показать его больше некому.
+    if (mDisplayActive) {
+        const char* what = "Working";
+        switch (phase) {
+            case FlashPhase::STAGING:             what = "Staging"; break;
+            case FlashPhase::PREFLIGHT:           what = "Checking the package"; break;
+            case FlashPhase::BACKUP:              what = "Backing up"; break;
+            case FlashPhase::STOPPING_FRAMEWORK:  what = "Stopping the framework"; break;
+            case FlashPhase::DECOMPRESSING:       what = "Unpacking"; break;
+            case FlashPhase::FLASHING_PHYSICAL:   what = "Writing"; break;
+            case FlashPhase::FLASHING_LOGICAL:    what = "Writing"; break;
+            case FlashPhase::VERIFYING:           what = "Verifying"; break;
+            case FlashPhase::COMPLETE:            what = "Done"; break;
+            case FlashPhase::FAILED:              what = "Failed"; break;
+        }
+        char line[96];
+        if (!partition.empty() && count > 1) {
+            snprintf(line, sizeof(line), "%s %s (%d of %d)", what, partition.c_str(),
+                     idx + 1, count);
+        } else if (!partition.empty()) {
+            snprintf(line, sizeof(line), "%s %s", what, partition.c_str());
+        } else {
+            snprintf(line, sizeof(line), "%s", what);
+        }
+        mDisplay.drawProgress(progress, line);
+    }
+
     if (mCallback) {
         FlashStatus s;
         s.phase = phase;
@@ -653,9 +681,7 @@ void OtaFlasher::stopFramework(bool maskVendor) {
     // init's reboot_on_failure and force-reboots mid-write. The write loop
     // uses O_DIRECT, so dirty page accumulation is not a concern.
 
-    // Display progress is handled by OtaMenu's EGL render loop via notifyStatus.
-    // SurfaceFlinger is kept alive so EGL rendering works throughout the flash.
-    // OtaDisplay (fbdev) is available as a fallback but not used when SF is alive.
+    handoverDisplay();
 
     ALOGI("Framework stopped, system paths bind-mounted to tmpfs");
     logToFile("INFO", "Framework stopped, /system/bin and /system/lib64 bind-mounted to tmpfs");
@@ -737,6 +763,37 @@ void OtaFlasher::restoreDisplayServices() {
     }
     logToFile("INFO", "Display handover: framework back, bootanim is %s",
               android::base::GetProperty("init.svc.bootanim", "?").c_str());
+}
+
+// Забрать панель себе. Порядок важен: сперва меню сворачивает свой вывод
+// через EGL, иначе оно останется держать поверхность у SurfaceFlinger; затем
+// уходят SurfaceFlinger и HAL композитора, и только тогда освобождается DRM.
+//
+// Если что-то из этого не получилось, возвращаем каркас и идём дальше без
+// картинки: без прогресса прошивка неприятна, без прошивки - бесполезна.
+void OtaFlasher::handoverDisplay() {
+    if (mDisplayHandover) {
+        logToFile("INFO", "Display handover: asking the menu to release EGL");
+        mDisplayHandover();
+    }
+    if (!releaseDisplayServices()) {
+        logToFile("WARN", "Display handover: nothing was stopped, keeping the old path");
+        return;
+    }
+    if (!mDisplay.init()) {
+        logToFile("ERROR", "Display handover: could not take the panel, restoring");
+        restoreDisplayServices();
+        return;
+    }
+    mDisplayActive = true;
+    logToFile("INFO", "Display handover: drawing progress via %s, %dx%d",
+              mDisplay.backendName(), mDisplay.width(), mDisplay.height());
+    mDisplay.drawProgress(0, "Preparing to write");
+}
+
+void OtaFlasher::drawResult(bool ok, const std::string& line1, const std::string& line2) {
+    if (!mDisplayActive) return;
+    mDisplay.drawMessage(ok ? "Update complete" : "Update failed", line1, line2);
 }
 
 void OtaFlasher::dropCaches() {

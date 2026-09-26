@@ -278,6 +278,12 @@ status_t OtaMenu::readyToRun() {
         mCurrentStatus = status;
     });
 
+    // Перед записью прошивка забирает панель себе и рисует ход напрямую через
+    // DRM. Наш вывод через EGL к этому моменту должен быть свёрнут: он держит
+    // поверхность у SurfaceFlinger, а SurfaceFlinger вместе с HAL композитора
+    // держит DRM.
+    mFlasher.setDisplayHandover([this]() { releaseDisplayForFlash(); });
+
     // If package path was set (Mode A), jump straight to confirm/flash.
     if (!mPackagePath.empty()) {
         // nano hands off a selected .zip (browse + confirm happened in the home UI). Extract it
@@ -907,6 +913,16 @@ void OtaMenu::runFlashSequence() {
         android::base::SetProperty("sys.gammaos.ota.result",
                                    "failed:flash:" + mCurrentStatus.errorMsg);
         mState = STATE_FAILED;
+        // Если панель уже за нами, показать ошибку больше некому: каркас
+        // остановлен, а вернуть его нельзя - /system/bin и /system/lib64
+        // подменены пустым tmpfs. Пишем на экран сами и уходим в перезагрузку,
+        // иначе устройство останется с чёрным экраном навсегда.
+        if (mFlasher.displayActive()) {
+            mFlasher.drawResult(false, mErrorMessage.substr(0, 60),
+                                "see /data/gammaos_ota/ota.log");
+            sleep(30);
+            mFlasher.reboot();
+        }
         return;
     }
 
@@ -919,6 +935,7 @@ void OtaMenu::runFlashSequence() {
     OtaFlasher::logToFile("INFO", "=== OTA FLASH SEQUENCE: SUCCESS ===");
     OtaFlasher::logToFile("INFO", "========================================");
     mState = STATE_SUCCESS;
+    mFlasher.drawResult(true, "the device will restart", "");
     // Wait for the 5-second countdown to complete before rebooting.
     // SurfaceFlinger is alive so the render loop shows the countdown.
     // Sync all filesystems to ensure all writes are flushed to disk.
@@ -1790,12 +1807,46 @@ void OtaMenu::renderDsi() {
     }
 }
 
+void OtaMenu::releaseDisplayForFlash() {
+    std::lock_guard<std::mutex> lock(mRenderMutex);
+    if (mDisplayHandedOver) return;
+    mDisplayHandedOver = true;
+
+    OtaFlasher::logToFile("INFO", "OtaMenu: releasing EGL, the panel goes to the flasher");
+    if (mDisplay != EGL_NO_DISPLAY) {
+        eglMakeCurrent(mDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        if (mSurface != EGL_NO_SURFACE) {
+            eglDestroySurface(mDisplay, mSurface);
+            mSurface = EGL_NO_SURFACE;
+        }
+        if (mContext != EGL_NO_CONTEXT) {
+            eglDestroyContext(mDisplay, mContext);
+            mContext = EGL_NO_CONTEXT;
+        }
+        eglTerminate(mDisplay);
+        mDisplay = EGL_NO_DISPLAY;
+    }
+    mFlingerSurface.clear();
+    mFlingerSurfaceControl.clear();
+}
+
 bool OtaMenu::threadLoop() {
     if (mExitRequested) return false;
 
-    pollInput();
-    render();
-    eglSwapBuffers(mDisplay, mSurface);
+    // Панель отдана прошивке: ввод читаем (иначе очередь событий копится), но
+    // не рисуем - рисовать нечем и некуда.
+    {
+        std::lock_guard<std::mutex> lock(mRenderMutex);
+        if (mDisplayHandedOver) {
+            pollInput();
+            usleep(100000);
+            return true;
+        }
+
+        pollInput();
+        render();
+        eglSwapBuffers(mDisplay, mSurface);
+    }
 
     // ~30fps
     usleep(33333);

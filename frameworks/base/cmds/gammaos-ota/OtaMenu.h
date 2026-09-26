@@ -84,6 +84,11 @@ public:
     };
 
 private:
+    // Отдать панель прошивке: перестать рисовать и снять всё, что держит
+    // SurfaceFlinger. Вызывается из потока прошивки, поэтому отрисовка
+    // защищена мьютексом - иначе снос поверхности пришёлся бы на середину кадра.
+    void releaseDisplayForFlash();
+
     virtual bool        threadLoop();
     virtual status_t    readyToRun();
     virtual void        onFirstRef();
@@ -163,6 +168,8 @@ private:
     // Flash thread
     void startFlashThread();
     pthread_t mFlashThread;
+    std::mutex mRenderMutex;
+    bool mDisplayHandedOver = false;
 
     // Display
     sp<SurfaceComposerClient> mSession;
