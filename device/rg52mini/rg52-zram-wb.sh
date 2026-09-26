@@ -29,15 +29,24 @@ THRESH=$(getprop persist.rg52.zram.wb_threshold_mb)
 case "$THRESH" in
     ''|*[!0-9]*) THRESH=0 ;;
 esac
+CARD=$(getprop persist.gammaos.swap.size_mb)
+case "$CARD" in
+    ''|*[!0-9]*) CARD=0 ;;
+esac
+
+# Ноль в любом из двух полей означает одно и то же: вытеснения нет. Выходим, а
+# не ждём подложку, которой не будет.
 [ "$THRESH" = 0 ] && exit 0
+[ "$CARD" = 0 ] && exit 0
 [ -e "$SYS/writeback" ] || exit 0
 
 log -p i -t "$TAG" "сторож вытеснения запущен, порог ${THRESH} МБ"
 
 while :; do
-    # Без подложки вытеснять некуда: ждём, вдруг её настроят.
+    # Подложку настраивает rg52-zram.sh, и он может ещё не отработать: обе
+    # службы поднимаются по одному и тому же изменению свойства. Ждём её.
     if [ "$(cat "$SYS/backing_dev" 2>/dev/null)" = "none" ]; then
-        sleep 10
+        sleep 5
         continue
     fi
     AVAIL=$(( $(awk '/MemAvailable/{print $2}' /proc/meminfo) / 1024 ))

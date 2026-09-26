@@ -52,6 +52,14 @@ num() {   # $1 значение, $2 запасное — всё, что не ц�
 
 ZSIZE=$(num "$(getprop persist.rg52.zram.size_mb)" 0)
 CARD=$(num "$(getprop persist.gammaos.swap.size_mb)" 0)
+WBTH=$(num "$(getprop persist.rg52.zram.wb_threshold_mb)" 0)
+
+# Подложка имеет смысл только вместе со сторожем: ядро само на неё ничего не
+# пишет, вытеснение происходит только по команде. Поэтому ноль в любом из двух
+# полей означает одно и то же — вытеснения нет, — и состояние получается
+# одинаковым: файла на карте нет, петля не занята, сторож не крутится впустую.
+BACK=$CARD
+[ "$WBTH" = 0 ] && BACK=0
 
 detach_backing_loops() {
     # Петли на наш файл, оставшиеся от прошлой настройки.
@@ -81,8 +89,8 @@ CURBACKSZ=0
 [ -f "$BACKFILE" ] && CURBACKSZ=$(( $(stat -c %s "$BACKFILE" 2>/dev/null || echo 0) / 1048576 ))
 
 # Уже настроено как надо — не трогаем: пересборка стоит возврата страниц в память.
-if [ "$CUR" = "$WANT" ] && [ "$CURBACKSZ" = "$CARD" ]; then
-    if [ "$CARD" = 0 ] || [ "$CURBACK" != "none" ]; then
+if [ "$CUR" = "$WANT" ] && [ "$CURBACKSZ" = "$BACK" ]; then
+    if [ "$BACK" = 0 ] || [ "$CURBACK" != "none" ]; then
         exit 0
     fi
 fi
@@ -97,13 +105,13 @@ echo 1 > "$SYS/reset" 2>/dev/null    # сброс отцепляет и подл
 detach_backing_loops
 
 # --- подложка ---
-if [ "$CARD" -gt 0 ]; then
+if [ "$BACK" -gt 0 ]; then
     mkdir -p "$BACKDIR" 2>/dev/null
     chmod 700 "$BACKDIR" 2>/dev/null
-    if [ ! -f "$BACKFILE" ] || [ "$CURBACKSZ" != "$CARD" ]; then
+    if [ ! -f "$BACKFILE" ] || [ "$CURBACKSZ" != "$BACK" ]; then
         rm -f "$BACKFILE" 2>/dev/null
-        if ! fallocate -l "${CARD}M" "$BACKFILE" 2>/dev/null; then
-            dd if=/dev/zero of="$BACKFILE" bs=1M count="$CARD" status=none 2>/dev/null
+        if ! fallocate -l "${BACK}M" "$BACKFILE" 2>/dev/null; then
+            dd if=/dev/zero of="$BACKFILE" bs=1M count="$BACK" status=none 2>/dev/null
         fi
         chmod 600 "$BACKFILE" 2>/dev/null
     fi
@@ -123,4 +131,4 @@ mkswap "$DEV" >/dev/null 2>&1
 # быстрый сжатый ярус.
 swapon -p 2 "$DEV" 2>/dev/null
 
-log_i "zram ${ZSIZE} МБ, подложка $(cat "$SYS/backing_dev" 2>/dev/null) на ${CARD} МБ"
+log_i "zram ${ZSIZE} МБ, подложка $(cat "$SYS/backing_dev" 2>/dev/null) на ${BACK} МБ"

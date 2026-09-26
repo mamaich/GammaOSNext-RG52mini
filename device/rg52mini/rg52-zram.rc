@@ -39,3 +39,10 @@ on property:sys.screen.state=off
 
 on property:persist.rg52.zram.wb_threshold_mb=*
     restart rg52_zram_wb
+
+# Размеры тоже меняют смысл сторожа: подложка могла появиться или исчезнуть.
+on property:persist.gammaos.swap.size_mb=*
+    restart rg52_zram_wb
+
+on property:persist.rg52.zram.size_mb=*
+    restart rg52_zram_wb
