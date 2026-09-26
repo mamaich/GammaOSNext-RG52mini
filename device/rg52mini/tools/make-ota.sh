@@ -49,6 +49,10 @@ usage() {
   -l УРОВЕНЬ    степень сжатия xz 0..9 (по умолчанию 6; 1 — быстро, для отладки)
   -T ЧИСЛО      потоков xz (по умолчанию все ядра)
   -z            дополнительно упаковать в zip для выкладки
+  -t ТЕГ        тег выпуска на гите: рядом с zip кладётся список сборок для
+                приложения обновлений, со ссылкой на вложение этого выпуска
+  -U АДРЕС      явная ссылка на zip вместо собираемой из тега
+  -D ЧИСЛО      ro.build.date.utc образа (по умолчанию читается из самого образа)
   -h            эта справка
 
 Имя раздела берётся из имени файла: system.img -> раздел system. Если файл
@@ -65,7 +69,7 @@ EOF
     exit "${1:-0}"
 }
 
-while getopts "v:c:d:o:l:T:zh" opt; do
+while getopts "v:c:d:o:l:T:t:U:D:zh" opt; do
     case "$opt" in
         v) VERSION="$OPTARG" ;;
         c) VERSION_CODE="$OPTARG" ;;
@@ -73,6 +77,9 @@ while getopts "v:c:d:o:l:T:zh" opt; do
         o) OUTDIR="$OPTARG" ;;
         l) XZ_LEVEL="$OPTARG" ;;
         T) XZ_THREADS="$OPTARG" ;;
+        t) REL_TAG="$OPTARG" ;;
+        U) UPD_URL="$OPTARG" ;;
+        D) BUILD_UTC="$OPTARG" ;;
         z) MAKE_ZIP=1 ;;
         *) usage 1 ;;
     esac
@@ -199,7 +206,66 @@ if [ "$MAKE_ZIP" = "1" ]; then
     ( cd "$OUTDIR" && zip -0 -q "$zippath" manifest.json "${FILES[@]}" )
     echo "   $(stat -c '%s' "$zippath" | awk '{printf "%.2f ГиБ", $1/1073741824}')"
     echo -n "   sha256: "
-    sha256sum "$zippath" | cut -d' ' -f1
+    zip_sha=$(sha256sum "$zippath" | cut -d' ' -f1)
+    echo "$zip_sha"
+
+    # Список сборок для штатного приложения обновлений. Формат - тот же, что у
+    # сервера LineageOS: приложение читает datetime, filename, id, romtype,
+    # size, url, version и само решает, новее ли это установленного.
+    if [ -n "$REL_TAG" ] || [ -n "$UPD_URL" ]; then
+        # Свойства берём из самого образа. Дата обязательно его, а не времени
+        # упаковки: приложение сравнивает её с ro.build.date.utc установленной
+        # прошивки, и время упаковки всегда больше - тогда после установки оно
+        # предлагало бы тот же пакет снова и снова.
+        img_prop() {
+            local key="$1" p v
+            for p in /system/build.prop /build.prop /system/system/build.prop; do
+                v=$(debugfs -R "cat $p" "${PATHS[0]}" 2>/dev/null \
+                    | grep -m1 "^$key=" | cut -d= -f2- | tr -d '\r')
+                if [ -n "$v" ]; then echo "$v"; return 0; fi
+            done
+            return 1
+        }
+
+        [ -n "$BUILD_UTC" ] || BUILD_UTC=$(img_prop ro.build.date.utc)
+        romtype=$(img_prop ro.lineage.releasetype)
+        androidver=$(img_prop ro.build.version.release)
+        variant=$(img_prop ro.gammaos.variant)
+        : "${romtype:=UNOFFICIAL}"
+        : "${androidver:=14}"
+        : "${variant:=core}"
+
+        if [ -z "$BUILD_UTC" ]; then
+            echo "   !! не удалось прочитать ro.build.date.utc из образа;" >&2
+            echo "      задайте ключом -D, иначе приложение обновлений будет" >&2
+            echo "      предлагать этот пакет и после его установки" >&2
+        else
+            if [ -z "$UPD_URL" ]; then
+                UPD_URL="https://github.com/mamaich/GammaOSNext-RG52mini/releases/download/$REL_TAG/$(basename "$zippath")"
+            fi
+            updjson="$(dirname "$zippath")/${DEVICE:-rg52mini}-$variant.json"
+            cat > "$updjson" <<ENDJSON
+{
+    "response": [
+        {
+            "datetime": $BUILD_UTC,
+            "filename": "$(basename "$zippath")",
+            "id": "$zip_sha",
+            "romtype": "$romtype",
+            "size": $(stat -c '%s' "$zippath"),
+            "url": "$UPD_URL",
+            "version": "$androidver"
+        }
+    ]
+}
+ENDJSON
+            echo
+            echo "== список сборок для приложения обновлений"
+            echo "   $updjson"
+            cat "$updjson"
+            echo "   выложить в репозиторий как ota/${DEVICE:-rg52mini}-$variant.json"
+        fi
+    fi
 fi
 
 echo

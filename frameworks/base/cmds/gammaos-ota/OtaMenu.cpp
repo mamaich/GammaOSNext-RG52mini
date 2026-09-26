@@ -1838,6 +1838,9 @@ bool OtaMenu::threadLoop() {
     {
         std::lock_guard<std::mutex> lock(mRenderMutex);
         if (mDisplayHandedOver) {
+            // Кадры хода прошивки теперь наша забота: поток прошивки занят
+            // записью и отчитывается о проценте редко.
+            mFlasher.drawTick();
             pollInput();
             usleep(100000);
             return true;

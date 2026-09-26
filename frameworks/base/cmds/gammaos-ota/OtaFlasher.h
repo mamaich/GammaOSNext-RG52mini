@@ -21,6 +21,8 @@
 #include <vector>
 #include <map>
 #include <functional>
+#include <mutex>
+#include <cstdint>
 #include <cstdio>
 
 #include "OtaManifest.h"
@@ -70,6 +72,17 @@ public:
     // подменены пустым tmpfs.
     void drawResult(bool ok, const std::string& line1, const std::string& line2);
     bool displayActive() const { return mDisplayActive; }
+
+    // Кадр по последнему известному состоянию. Поток прошивки отмечает
+    // изменения, а поток меню подрисовывает кадры между ними: отчёт о проценте
+    // приходит раз в секунду-две, а распаковка одного большого файла может
+    // молчать и дольше. Без этого экран стоит неподвижно и кажется зависшим.
+    void drawTick();
+
+    // Сухой прогон вывода: вся обстановка настоящего обновления, кроме записи
+    // раздела, и с возвратом системы на место. Проверять вывод настоящей
+    // прошивкой - это пять минут и перезапись раздела на каждую правку.
+    bool dryRunDisplay(int seconds);
 
     // Set the OTA package directory (where extracted .img.xz files live)
     void setPackageDir(const std::string& dir) { mPackageDir = dir; }
@@ -149,6 +162,19 @@ private:
     std::function<void()> mDisplayHandover;
     bool mDisplayActive = false;
     void handoverDisplay();
+
+    // В буфер панели пишут два потока - прошивки и меню, - поэтому под общим
+    // мьютексом: иначе один кадр мог бы перезаписаться посередине другим.
+    std::mutex mDrawMutex;
+    FlashPhase mLastPhase = FlashPhase::STAGING;
+    std::string mLastPartition;
+    int mLastIdx = 0;
+    int mLastCount = 0;
+    int mLastProgress = 0;
+    int64_t mLastDrawMs = 0;
+    uint64_t mDrawCount = 0;
+    int64_t mLastDrawLogSec = 0;
+    void drawStatusLocked();
     std::string mPackageDir;
     OtaDisplay mDisplay;  // Direct framebuffer/DRM display for progress during flash
 

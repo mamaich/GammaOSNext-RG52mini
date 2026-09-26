@@ -609,6 +609,21 @@ void OtaDisplay::drawProgress(int percent, const std::string& status) {
     drawCentered(barY + barH + lineH, pct, TEXT, s);
 
     drawCentered(mHeight - lineH * 3, "Do not power off the device", WARN, s);
+
+    // Бегущий огонёк. Процент может не меняться подолгу - распаковка одного
+    // большого файла отчитывается редко, - и без движения экран не отличить от
+    // зависшего. Четыре квадрата, подсвечивается по очереди.
+    mAnim++;
+    int dotS = lineH / 3;
+    if (dotS < 6) dotS = 6;
+    int dotsW = 7 * dotS;                     // 4 квадрата и 3 промежутка
+    int dotX = mWidth / 2 - dotsW / 2;
+    int dotY = barY + barH + lineH * 2 + lineH / 2;
+    for (int i = 0; i < 4; i++) {
+        fillRect(dotX + i * dotS * 2, dotY, dotS, dotS,
+                 (mAnim % 4 == i) ? BAR_FILL : BAR_BG);
+    }
+
     flip();
 }
 

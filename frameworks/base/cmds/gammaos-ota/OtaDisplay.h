@@ -97,6 +97,7 @@ private:
     int mStride = 0;       // bytes per row
     int mBpp = 0;          // bits per pixel
     int mScale = 1;        // font magnification, chosen from the panel width
+    int mAnim = 0;         // счётчик кадров, по нему бежит огонёк
     uint8_t* mBuffer = nullptr;
 
     // DRM state

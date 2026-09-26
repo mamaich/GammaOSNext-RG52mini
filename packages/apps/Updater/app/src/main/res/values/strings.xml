@@ -33,7 +33,18 @@
           {type}    - Build type (ro.lineage.releasetype)
           {incr}    - Incremental version
     -->
-    <string name="updater_server_url" translatable="false">https://ota.gammaos.sh/api/v1/{device}/{variant}</string>
+    <!-- Где искать новые сборки. Апстримовский ota.gammaos.sh про RG52 Mini не
+         знает, поэтому смотрим в наш репозиторий: {device} и {variant}
+         подставляются из ro.gammaos.device и ro.gammaos.variant, то есть
+         получается ota/rg52mini-core.json. Файл готовит
+         device/rg52mini/tools/make-ota.sh (ключ -t с тегом выпуска).
+
+         Адрес именно здесь, а не в свойстве lineage.updater.uri: значение
+         свойства в Android ограничено 92 байтами, а этот адрес длиннее -
+         init такое значение отвергает, и приложение продолжает спрашивать
+         апстрим. Свойство остаётся рабочим переопределением для проверок,
+         если уложиться в предел. -->
+    <string name="updater_server_url" translatable="false">https://raw.githubusercontent.com/mamaich/GammaOSNext-RG52mini/develop/ota/{device}-{variant}.json</string>
 
     <string name="verification_failed_notification">Verification failed</string>
     <string name="verifying_download_notification">Verifying update</string>

@@ -310,31 +310,16 @@ void OtaFlasher::notifyStatus(FlashPhase phase, const std::string& partition,
     }
 
     // Пока панель за нами, ход прошивки рисуем сами: каркас остановлен, и
-    // показать его больше некому.
+    // показать его больше некому. Здесь запоминаем состояние и рисуем кадр, а
+    // между отчётами кадры подрисовывает поток меню через drawTick().
     if (mDisplayActive) {
-        const char* what = "Working";
-        switch (phase) {
-            case FlashPhase::STAGING:             what = "Staging"; break;
-            case FlashPhase::PREFLIGHT:           what = "Checking the package"; break;
-            case FlashPhase::BACKUP:              what = "Backing up"; break;
-            case FlashPhase::STOPPING_FRAMEWORK:  what = "Stopping the framework"; break;
-            case FlashPhase::DECOMPRESSING:       what = "Unpacking"; break;
-            case FlashPhase::FLASHING_PHYSICAL:   what = "Writing"; break;
-            case FlashPhase::FLASHING_LOGICAL:    what = "Writing"; break;
-            case FlashPhase::VERIFYING:           what = "Verifying"; break;
-            case FlashPhase::COMPLETE:            what = "Done"; break;
-            case FlashPhase::FAILED:              what = "Failed"; break;
-        }
-        char line[96];
-        if (!partition.empty() && count > 1) {
-            snprintf(line, sizeof(line), "%s %s (%d of %d)", what, partition.c_str(),
-                     idx + 1, count);
-        } else if (!partition.empty()) {
-            snprintf(line, sizeof(line), "%s %s", what, partition.c_str());
-        } else {
-            snprintf(line, sizeof(line), "%s", what);
-        }
-        mDisplay.drawProgress(progress, line);
+        std::lock_guard<std::mutex> lock(mDrawMutex);
+        mLastPhase = phase;
+        mLastPartition = partition;
+        mLastIdx = idx;
+        mLastCount = count;
+        mLastProgress = progress;
+        drawStatusLocked();
     }
 
     if (mCallback) {
@@ -789,6 +774,124 @@ void OtaFlasher::handoverDisplay() {
     logToFile("INFO", "Display handover: drawing progress via %s, %dx%d",
               mDisplay.backendName(), mDisplay.width(), mDisplay.height());
     mDisplay.drawProgress(0, "Preparing to write");
+}
+
+// Снять подмену каталога /system. Обычный umount здесь регулярно отвечает
+// EBUSY: пока каркас останавливался, init успевает поднять службы, а они
+// открывают файлы уже через подменённый путь и держат монтирование. Поэтому при
+// занятости снимаем отложенно - точка отвязывается сразу, а само монтирование
+// уходит, когда его отпустит последний держатель.
+//
+// Молча пропускать ошибку нельзя. В настоящей прошивке за снятием сразу следует
+// перезагрузка, и промах не виден; но стоило прогнать то же самое без
+// перезагрузки, как система осталась с урезанным /system/bin - 476 программ
+// вместо 478 - и все службы начали падать с кодом 127, а каркас пошёл по кругу.
+static void unmountSystemMask(const char* path) {
+    if (umount(path) == 0) {
+        OtaFlasher::logToFile("INFO", "  unmounted %s", path);
+        return;
+    }
+    const int busy = errno;
+    if (umount2(path, MNT_DETACH) == 0) {
+        OtaFlasher::logToFile("INFO", "  unmounted %s lazily (was busy: %s)",
+                              path, strerror(busy));
+        return;
+    }
+    OtaFlasher::logToFile("ERROR", "  could not unmount %s: %s, lazily: %s",
+                          path, strerror(busy), strerror(errno));
+}
+
+// Монотонные миллисекунды: по ним ограничиваем частоту кадров и решаем, пора
+// ли делать отметку в журнале.
+static int64_t nowMs() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+// Один кадр по последнему известному состоянию. Вызывать под mDrawMutex.
+void OtaFlasher::drawStatusLocked() {
+    const char* what = "Working";
+    switch (mLastPhase) {
+        case FlashPhase::STAGING:             what = "Staging"; break;
+        case FlashPhase::PREFLIGHT:           what = "Checking the package"; break;
+        case FlashPhase::BACKUP:              what = "Backing up"; break;
+        case FlashPhase::STOPPING_FRAMEWORK:  what = "Stopping the framework"; break;
+        case FlashPhase::DECOMPRESSING:       what = "Unpacking"; break;
+        case FlashPhase::FLASHING_PHYSICAL:   what = "Writing"; break;
+        case FlashPhase::FLASHING_LOGICAL:    what = "Writing"; break;
+        case FlashPhase::VERIFYING:           what = "Verifying"; break;
+        case FlashPhase::COMPLETE:            what = "Done"; break;
+        case FlashPhase::FAILED:              what = "Failed"; break;
+    }
+    char line[96];
+    if (!mLastPartition.empty() && mLastCount > 1) {
+        snprintf(line, sizeof(line), "%s %s (%d of %d)", what, mLastPartition.c_str(),
+                 mLastIdx + 1, mLastCount);
+    } else if (!mLastPartition.empty()) {
+        snprintf(line, sizeof(line), "%s %s", what, mLastPartition.c_str());
+    } else {
+        snprintf(line, sizeof(line), "%s", what);
+    }
+    mDisplay.drawProgress(mLastProgress, line);
+    mDrawCount++;
+    mLastDrawMs = nowMs();
+
+    // Раз в секунду отмечаем, что кадры действительно уходят на панель. Без
+    // такой отметки после прошивки не отличить "рисовали, но не видно" от "не
+    // рисовали вовсе" - на разбор именно этой разницы ушёл целый вечер.
+    const int64_t sec = mLastDrawMs / 1000;
+    if (sec != mLastDrawLogSec) {
+        mLastDrawLogSec = sec;
+        logToFile("INFO", "display: frame %llu, %d%%, \"%s\"",
+                  (unsigned long long)mDrawCount, mLastProgress, line);
+    }
+}
+
+void OtaFlasher::drawTick() {
+    if (!mDisplayActive) return;
+    std::lock_guard<std::mutex> lock(mDrawMutex);
+    if (nowMs() - mLastDrawMs < 250) return;   // чаще незачем
+    drawStatusLocked();
+}
+
+// Сухой прогон вывода. Воспроизводит ровно ту обстановку, в которой вывод и
+// подводил: процесс переселён в tmpfs, каркас остановлен, /system/bin и
+// /system/lib64 подменены пустым tmpfs, панель забрана у композитора. Раздел не
+// пишется, в конце система возвращается на место.
+bool OtaFlasher::dryRunDisplay(int seconds) {
+    logToFile("INFO", "=== FLASH DISPLAY DRY RUN (%d s) ===", seconds);
+    stopFramework(false);
+    if (!mDisplayActive) {
+        logToFile("ERROR", "dry run: panel was not taken over, nothing to show");
+    }
+
+    // Темп отчётов берём как у настоящей прошивки: процент приходит редко, всё
+    // остальное время кадры подрисовывает drawTick().
+    const int steps = (seconds + 1) / 2;
+    for (int i = 0; i <= steps; i++) {
+        notifyStatus(FlashPhase::FLASHING_PHYSICAL, "system", 0, 1,
+                     steps > 0 ? i * 100 / steps : 100);
+        for (int t = 0; t < 8; t++) {
+            drawTick();
+            usleep(250 * 1000);
+        }
+    }
+    drawResult(true, "dry run finished", "restoring the system");
+    sleep(3);
+
+    logToFile("INFO", "dry run: restoring the system");
+    mDisplay.close();
+    mDisplayActive = false;
+    unmountSystemMask("/system/bin");
+    unmountSystemMask("/system/lib64");
+    // Анимацию загрузки мы глушили раз в секунду; снимаем запрет, иначе каркас
+    // вернётся без неё.
+    property_set("service.bootanim.exit", "0");
+    restoreDisplayServices();
+    property_set("ctl.start", "zygote");
+    logToFile("INFO", "=== FLASH DISPLAY DRY RUN DONE ===");
+    return true;
 }
 
 void OtaFlasher::drawResult(bool ok, const std::string& line1, const std::string& line2) {
@@ -1713,9 +1816,9 @@ void OtaFlasher::reboot() {
     // No fbdev rendering needed — EGL/SF handles display
 
     logToFile("INFO", "Unmounting bind-mounts...");
-    umount("/system/bin");
-    umount("/system/lib64");
-    umount("/vendor");
+    unmountSystemMask("/system/bin");
+    unmountSystemMask("/system/lib64");
+    unmountSystemMask("/vendor");
     logToFile("INFO", "Bind-mounts removed");
 
     // Close direct display

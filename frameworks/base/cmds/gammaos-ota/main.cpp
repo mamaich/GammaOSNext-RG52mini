@@ -55,6 +55,29 @@ int main(int argc, char** argv) {
 
     ALOGI("GammaOS OTA starting...");
 
+    // --test-flash-display [секунды]: сухой прогон обновления. От --test-display
+    // отличается тем, что воспроизводит всю обстановку прошивки: процесс
+    // переселяется в tmpfs, каркас останавливается, /system/bin и /system/lib64
+    // подменяются пустым tmpfs - и лишь потом забирается панель. Раздел не
+    // пишется, система в конце возвращается на место.
+    if (argc > 1 && strcmp(argv[1], "--test-flash-display") == 0) {
+        OtaFlasher::initLogFile();
+        int seconds = (argc > 2) ? atoi(argv[2]) : 40;
+        if (seconds < 6) seconds = 6;
+
+        if (!OtaFlasher::isRunningFromTmpfs()) {
+            OtaFlasher staging;
+            staging.stageToTmpfs(argc, argv);   // в норме сюда не возвращается
+            OtaFlasher::logToFile("ERROR", "dry run: staging to tmpfs failed");
+            return 1;
+        }
+
+        OtaFlasher flasher;
+        bool ok = flasher.dryRunDisplay(seconds);
+        printf("%s\n", ok ? "OK" : "FAILED");
+        return ok ? 0 : 1;
+    }
+
     // --test-display [секунды]: проверка прямого вывода на панель без всякой
     // прошивки. Нужен потому, что проверять вывод прогресса настоящим
     // обновлением - это пять минут записи и незагружаемое устройство при
