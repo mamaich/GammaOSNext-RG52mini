@@ -588,6 +588,7 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             mItems.add(0, getBrightnessAction());
             mBrightnessItemPosition = 0;
             mItems.add(getPerformanceAction());
+            mItems.add(getSwapModeAction());
             mItems.add(getMouseModeAction());
             mItems.add(getControllerAction());
             mItems.add(getUsbAction());
@@ -966,6 +967,89 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         // Style buttons white
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.WHITE);
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.WHITE);
+    }
+
+    private Action getSwapModeAction() {
+        return new SinglePressAction(R.drawable.ic_gammaos_memory,
+                R.string.gammaos_swap_mode) {
+
+            @Override
+            public void onPress() {
+                if (mDialog != null && mDialog.isShowing()) {
+                    mDialog.dismiss();
+                }
+                mHandler.post(() -> showSwapModeDialog());
+            }
+
+            @Override
+            public boolean showDuringKeyguard() {
+                return true;
+            }
+
+            @Override
+            public boolean showBeforeProvisioning() {
+                return true;
+            }
+        };
+    }
+
+    // Режимы подкачки одним выбором. Под каждым - пара свойств, которые
+    // подхватывают device/rg52mini/rg52-zram.sh и gammaos-swap.sh; перезагрузка
+    // не нужна, службы поднимаются по изменению свойства.
+    //
+    // Почему это вынесено в меню выключателя, а не осталось только в настройках:
+    // разница между режимами видна именно на тяжёлой игре, и переключать их
+    // удобнее там же, где переключается режим производительности. Замеры, из
+    // которых взяты пояснения к пунктам, - в doc/rg52mini/02-план.md.
+    private static final String SWAP_ZRAM_KEY = "persist.rg52.zram.size_mb";
+    private static final String SWAP_FILE_KEY = "persist.gammaos.swap.size_mb";
+
+    private void showSwapModeDialog() {
+        final String[][] modes = {
+            // {размер zram, размер файла подкачки}
+            {"100%", "0"},      // только zram
+            {"256",  "2048"},   // небольшой zram и файл
+            {"0",    "2048"},   // только файл
+            {"0",    "0"},      // без подкачки
+        };
+        final String[] labels = {
+            "zRAM only (all RAM, compressed)",
+            "zRAM 256 MB + swap file (2 GB)",
+            "Swap file only (2 GB)",
+            "No swap at all",
+        };
+        // Во втором режиме zram намеренно небольшой. Файл подкачки - не
+        // страховка на случай нехватки памяти, а следующий по приоритету
+        // уровень: страницы попадают в него только когда zram упёрся в свой
+        // потолок. При большом потолке этого не происходит вовсе - замер без
+        // файла показал, что убийца срабатывает, когда zram набрал лишь 969 МБ
+        // из 1,9 ГБ, - и пара "большой zram + файл" ведёт себя как zram без
+        // файла. Проверено: 512 МБ с файлом игру тоже не спасают.
+
+        String zram = SystemProperties.get(SWAP_ZRAM_KEY, "0");
+        String file = SystemProperties.get(SWAP_FILE_KEY, "0");
+        boolean zramOn = !"0".equals(zram) && !zram.isEmpty();
+        boolean fileOn = !"0".equals(file) && !file.isEmpty();
+        int checkedItem = zramOn ? (fileOn ? 1 : 0) : (fileOn ? 2 : 3);
+
+        AlertDialog dialog = new AlertDialog.Builder(mContext, android.R.style.Theme_Material_Dialog)
+                .setTitle(R.string.gammaos_swap_mode)
+                .setSingleChoiceItems(labels, checkedItem, (dlg, which) -> {
+                    final long token = Binder.clearCallingIdentity();
+                    try {
+                        SystemProperties.set(SWAP_ZRAM_KEY, modes[which][0]);
+                        SystemProperties.set(SWAP_FILE_KEY, modes[which][1]);
+                    } finally {
+                        Binder.restoreCallingIdentity(token);
+                    }
+                    dlg.dismiss();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+
+        dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_KEYGUARD_DIALOG);
+        dialog.show();
+        applyDarkDialogTheme(dialog);
     }
 
     private Action getPerformanceAction() {

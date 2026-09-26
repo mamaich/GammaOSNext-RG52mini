@@ -20,7 +20,8 @@
 # с выключенным zram, где на карту идёт всё подряд.
 #
 # Свойства:
-#   persist.rg52.zram.size_mb          размер zram в МБ, 0 — zram выключен
+#   persist.rg52.zram.size_mb          размер zram в МБ, 0 — zram выключен;
+#                                      можно долей памяти: 100%, 50%
 #   persist.rg52.zram.algo             алгоритм сжатия, пусто — как в ядре
 #   persist.rg52.zram.backing_mb       подложка zram на карте в МБ, 0 — без неё
 #   persist.rg52.zram.wb_threshold_mb  порог вытеснения, см. rg52-zram-wb.sh
@@ -136,7 +137,19 @@ if [ "$(getprop persist.sys.zram_enabled)" != 0 ]; then
     log_i "vendor-овское управление zram отключено (persist.sys.zram_enabled=0)"
 fi
 
-ZSIZE=$(num "$(getprop persist.rg52.zram.size_mb)" 0)
+# Размер принимается и долей памяти — так его задаёт меню подкачки, и так же
+# устроен заводской fstab (zramsize=100%). Считаем от MemTotal.
+ZRAW=$(getprop persist.rg52.zram.size_mb)
+case "$ZRAW" in
+    *%)
+        ZPCT=$(num "${ZRAW%\%}" 0)
+        MEMKB=$(awk '/MemTotal/{print $2}' /proc/meminfo)
+        ZSIZE=$(( MEMKB * ZPCT / 100 / 1024 ))
+        ;;
+    *)
+        ZSIZE=$(num "$ZRAW" 0)
+        ;;
+esac
 BACK=$(num "$(getprop persist.rg52.zram.backing_mb)" 0)
 # Алгоритм сжатия. Замерено на этом устройстве, игра TMNT, одинаковый отрезок:
 # zstd держит 268 МБ данных в 74 МБ памяти (3,63x), lz4 те же 268 МБ - в 105 МБ
