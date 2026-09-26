@@ -162,7 +162,7 @@ extract_archive() {
     name=${archive##*/}
     size=$(( $(stat -c %s "$archive" 2>/dev/null || echo 0) / 1048576 ))
     t0=$(date +%s)
-    step "Extracting $name (${size} MB compressed), this takes a while."
+    step "Extracting $name (${size} MB compressed)."
     retry_step "extracting $archive" extract_archive_once "$archive" || return 1
     step "Extracted $name in $(( $(date +%s) - t0 ))s."
 }
@@ -199,9 +199,7 @@ own_app_data() {
     local dir="/data/data/$1"
     [ -d "$dir" ] || return 0
     [ -n "$APP_U" ] || { step "warning: no owner captured for $1, leaving $dir as-is"; return 1; }
-    # Walks everything the payload just unpacked - for RetroArch that is tens of thousands of
-    # files, which is not instant either.
-    step "Setting ownership of $dir to $APP_U."
+    # Проходит по всему распакованному, но на устройстве это мгновенно.
     chown -R "$APP_U:$APP_G" "$dir"
 }
 
@@ -314,7 +312,6 @@ post_retroarch() {
     local u
     u=$(app_user com.retroarch.aarch64)
     if [ -n "$u" ]; then
-        step "Setting ownership of the RetroArch files on the card to $u."
         [ -d /sdcard/RetroArch ] && chown -R "$u:media_rw" /sdcard/RetroArch
         [ -d /sdcard/Android/data/com.retroarch.aarch64 ] && \
             chown -R "$u:ext_data_rw" /sdcard/Android/data/com.retroarch.aarch64
