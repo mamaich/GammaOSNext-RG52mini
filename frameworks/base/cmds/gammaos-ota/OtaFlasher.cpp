@@ -678,12 +678,22 @@ static std::vector<std::string> sDisplayServicesStopped;
 
 // Ищем HAL композитора по имени службы, а не прописываем его: у каждого vendor
 // он называется по-своему (здесь vendor.hwcomposer-2-1).
+//
+// Состояние службы при этом не смотрим, и это важно. Раньше брали только
+// "running" - и на настоящей прошивке композитор в список не попадал вовсе:
+// к моменту перебора он оказывался в переходном состоянии (init поднимает его
+// обратно по своему правилу "on property:init.svc.vendor.hwcomposer-2-1=running
+// && init.svc.vendor.gralloc-4-0=running -> start surfaceflinger"). В журнале
+// это выглядело так, будто композитор останавливать не потребовалось, а на деле
+// он продолжал держать DRM, отпускал его уже в момент нашего захвата, и панель
+// оставалась тёмной. Берём всё, что похоже на композитор, кроме заведомо
+// остановленного.
 static void collectComposerService(const char* key, const char* value, void* cookie) {
     static const char kPrefix[] = "init.svc.";
     if (strncmp(key, kPrefix, sizeof(kPrefix) - 1) != 0) return;
     const char* name = key + sizeof(kPrefix) - 1;
     if (!strstr(name, "composer")) return;
-    if (strcmp(value, "running") != 0) return;
+    if (strcmp(value, "stopped") == 0) return;
     ((std::vector<std::string>*)cookie)->push_back(name);
 }
 
@@ -753,11 +763,30 @@ bool OtaFlasher::releaseDisplayServices() {
         logToFile("INFO", "Display handover: stopping %s", svc.c_str());
         property_set("ctl.stop", svc.c_str());
         bool gone = waitForSvcState(svc, "stopped", 50);
+
+        // Повторяем, пока служба не признается остановленной.
+        //
+        // При настоящей прошивке SurfaceFlinger остаётся в состоянии
+        // "restarting": меню прямо перед этим сносит из-под него свою
+        // поверхность через EGL, он на этом падает, init видит смерть раньше
+        // нашей команды и ставит перезапуск. Вернувшийся композитор забирает
+        // панель обратно - мы продолжаем рисовать в свой буфер, а на экране
+        // пусто. В сухом прогоне меню нет, SurfaceFlinger уходит с первого раза,
+        // и потому проверка показывала работающий вывод, а обновление - чёрный
+        // экран.
+        for (int tries = 0; !gone && tries < 5; tries++) {
+            logToFile("WARN", "Display handover: %s is %s, stopping again",
+                      svc.c_str(), android::base::GetProperty(prop, "?").c_str());
+            property_set("ctl.stop", svc.c_str());
+            gone = waitForSvcState(svc, "stopped", 50);
+        }
+
         logToFile("INFO", "Display handover: %s is %s", svc.c_str(),
                   android::base::GetProperty(prop, "?").c_str());
         sDisplayServicesStopped.push_back(svc);
         if (!gone) {
-            logToFile("WARN", "Display handover: %s did not stop in 5s", svc.c_str());
+            logToFile("ERROR", "Display handover: %s would not stop, panel stays with it",
+                      svc.c_str());
         }
     }
     if (sDisplayServicesStopped.empty()) {

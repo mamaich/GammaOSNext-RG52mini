@@ -27,6 +27,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <cutils/properties.h>
 #include <unistd.h>
 #include <vector>
 
@@ -357,6 +358,34 @@ bool OtaDisplay::drmMakeBuffer() {
         }
     }
 
+    // Гасим панель сами и выдерживаем паузу.
+    //
+    // Замерено на устройстве. Ручной цикл питания экрана, который панель
+    // оживляет, выдерживает между выключением и включением около четырёх
+    // секунд. Наш захват укладывался в сотню миллисекунд - и панель оставалась
+    // тёмной при полностью исправном виде: мы мастер DRM, наш буфер на
+    // развёртке, DSI поднят, подсветка горит. Подстраиваться под то, когда
+    // композитор отпустит DRM, оказалось бесполезно: момент выключения от нас
+    // не зависит. Поэтому выключаем сами и ждём столько, сколько нужно панели.
+    //
+    // Пауза настраивается свойством: на другой панели может хватить меньшего.
+    struct drm_mode_crtc off;
+    memset(&off, 0, sizeof(off));
+    off.crtc_id = mDrmCrtcId;
+    if (ioctl(mDrmFd, DRM_IOCTL_MODE_SETCRTC, &off) < 0) {
+        OtaFlasher::logToFile("WARN", "OtaDisplay: SETCRTC(off): %s", strerror(errno));
+    }
+    unsigned pause = 4;
+    {
+        char v[PROPERTY_VALUE_MAX] = {0};
+        if (property_get("persist.gammaos.ota.panel_off_s", v, "") > 0) {
+            int n = atoi(v);
+            if (n >= 0) pause = (unsigned)n;
+        }
+    }
+    OtaFlasher::logToFile("INFO", "OtaDisplay: panel off, waiting %u s", pause);
+    sleep(pause);
+
     return drmApplyCrtc();
 }
 
@@ -594,8 +623,33 @@ void OtaDisplay::drawCentered(int y, const char* str, uint32_t color, int scale)
 }
 
 void OtaDisplay::flip() {
-    // DRM: рисуем прямо в буфер, который сканирует VOP, так что ничего
-    // переключать не нужно. fbdev: буфер один, панорамировать тоже нечего.
+    // DRM: рисуем прямо в буфер, который сканирует VOP, так что переключать
+    // ничего не нужно. Написанное процессором должно дойти до памяти: если
+    // отображение буфера с отложенной записью, записи могут задержаться в
+    // буфере процессора, и VOP будет читать старое содержимое. Барьер стоит
+    // ничего и снимает этот вопрос.
+    if (mBuffer) {
+        __sync_synchronize();
+        msync(mBuffer, mDrmSize ? mDrmSize : (size_t)(mStride * mPanelH), MS_SYNC);
+    }
+
+    // Раз в секунду читаем обратно то, что только что нарисовали. Это
+    // единственный способ отличить "рисуем не туда" от "рисуем, но не видно":
+    // состояние DRM в обоих случаях выглядит одинаково исправным.
+    static int64_t lastLog = 0;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    const int64_t now = ts.tv_sec;
+    if (mBuffer && now != lastLog) {
+        lastLog = now;
+        const uint32_t* px = (const uint32_t*)mBuffer;
+        const size_t words = (mStride / 4);
+        OtaFlasher::logToFile("INFO",
+                              "readback: [0]=%08x [center]=%08x [last]=%08x",
+                              px[0],
+                              px[(words * (size_t)(mPanelH / 2)) + words / 2],
+                              px[(words * (size_t)(mPanelH - 1)) + words - 1]);
+    }
 }
 
 void OtaDisplay::drawProgress(int percent, const std::string& status) {
