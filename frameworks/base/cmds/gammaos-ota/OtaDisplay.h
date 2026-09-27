@@ -103,7 +103,10 @@ private:
     int mBpp = 0;          // bits per pixel
     int mScale = 1;        // font magnification, chosen from the panel width
     int mAnim = 0;         // счётчик кадров, по нему бежит огонёк
-    uint8_t* mBuffer = nullptr;
+    uint8_t* mBuffer = nullptr;   // куда рисуем (теневой буфер)
+    uint8_t* mScanout = nullptr;  // что сканирует развёртка
+    uint8_t* mShadow = nullptr;   // сам теневой буфер, для освобождения
+    size_t mFrameBytes = 0;
 
     // DRM state
     int mDrmFd = -1;

@@ -343,8 +343,23 @@ bool OtaDisplay::drmMakeBuffer() {
         return false;
     }
     mDrmMap = (uint8_t*)map;
-    mBuffer = mDrmMap;
-    memset(mBuffer, 0, mDrmSize);
+    // Рисуем не прямо в развёртку, а в теневой буфер.
+    //
+    // Каждый кадр начинается с заливки всего экрана фоном, и если делать это в
+    // буфере, который в этот момент сканирует VOP, изображение заметно мигает:
+    // развёртка успевает показать наполовину стёртый кадр. Владелец так это и
+    // описал - "картинка моргает при каждом обновлении, будто экран сперва
+    // затирается чёрным".
+    //
+    // Теневой буфер стоит три с половиной мегабайта и одно копирование на кадр
+    // (несколько миллисекунд против сотни на отрисовку) - зато на экран
+    // попадает только готовый кадр.
+    mScanout = mDrmMap;
+    mFrameBytes = mDrmSize;
+    mShadow = (uint8_t*)malloc(mDrmSize);
+    mBuffer = mShadow ? mShadow : mDrmMap;
+    memset(mScanout, 0, mDrmSize);
+    if (mShadow) memset(mShadow, 0, mDrmSize);
 
     // Прежнее состояние CRTC запоминаем, чтобы вернуть его, если прошивка
     // сорвётся и мы отдадим панель обратно композитору.
@@ -469,6 +484,13 @@ void OtaDisplay::drmDpmsOn() {
 }
 
 void OtaDisplay::closeDrm() {
+    if (mShadow) {
+        free(mShadow);
+        mShadow = nullptr;
+    }
+    mScanout = nullptr;
+    mFrameBytes = 0;
+
     if (mDrmFd >= 0 && mDrmSavedCrtc) {
         ioctl(mDrmFd, DRM_IOCTL_MODE_SETCRTC, mDrmSavedCrtc);
     }
@@ -543,7 +565,10 @@ bool OtaDisplay::initFbdev() {
         return false;
     }
     mFbMmap = (uint8_t*)map;
-    mBuffer = mFbMmap;
+    mScanout = mFbMmap;
+    mFrameBytes = mFbMmapSize;
+    mShadow = (uint8_t*)malloc(mFbMmapSize);
+    mBuffer = mShadow ? mShadow : mFbMmap;
     ioctl(mFbFd, FBIOBLANK, FB_BLANK_UNBLANK);
     return true;
 }
@@ -623,6 +648,10 @@ void OtaDisplay::drawCentered(int y, const char* str, uint32_t color, int scale)
 }
 
 void OtaDisplay::flip() {
+    // Готовый кадр целиком - в буфер развёртки.
+    if (mShadow && mScanout && mFrameBytes) {
+        memcpy(mScanout, mShadow, mFrameBytes);
+    }
     // DRM: рисуем прямо в буфер, который сканирует VOP, так что переключать
     // ничего не нужно. Написанное процессором должно дойти до памяти: если
     // отображение буфера с отложенной записью, записи могут задержаться в
@@ -640,9 +669,11 @@ void OtaDisplay::flip() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     const int64_t now = ts.tv_sec;
-    if (mBuffer && now != lastLog) {
+    // Читаем именно буфер развёртки, а не теневой: интересно, что дошло до
+    // экрана, а не что мы нарисовали.
+    if (mScanout && now != lastLog) {
         lastLog = now;
-        const uint32_t* px = (const uint32_t*)mBuffer;
+        const uint32_t* px = (const uint32_t*)mScanout;
         const size_t words = (mStride / 4);
         OtaFlasher::logToFile("INFO",
                               "readback: [0]=%08x [center]=%08x [last]=%08x",
