@@ -575,8 +575,27 @@ public class PackageManagerService implements PackageSender, TestUtilityService 
      * target sdk apps as malware can target older sdk versions to avoid
      * the enforcement of new API behavior.
      */
+    // RG52 Mini: величина берётся из ro.build.version.min_supported_target_sdk,
+    // а заводское значение AOSP остаётся запасным.
+    //
+    // Здесь легко ошибиться, и я ошибся: сперва порог был снижен в системе
+    // сборки (PLATFORM_MIN_SUPPORTED_TARGET_SDK_VERSION), свойство честно стало
+    // нулём - а установка по-прежнему отвергалась, потому что проверку делает
+    // вот эта константа, к свойству никак не привязанная. В сообщении об ошибке
+    // это и видно: "must target at least SDK version 23" при пороге 28 в
+    // свойстве.
+    //
+    // Зачем снижать. На телефоне порог разумен: вредоносное нарочно собирают под
+    // старый SDK, чтобы обойти современные ограничения. На ретро-консоли он
+    // отсекает ровно то, ради чего её берут - порты и игры десятилетней
+    // давности собраны под SDK 19-22. Через adb проверка и так обходилась ключом
+    // --bypass-low-target-sdk-block, то есть защиты от осознанной установки не
+    // было, только неудобство: графический установщик отказывал, причём с
+    // сообщением про несовместимость с ТВ, которое уводит в сторону.
     public static final int MIN_INSTALLABLE_TARGET_SDK =
-            Flags.minTargetSdk24() ? Build.VERSION_CODES.N : Build.VERSION_CODES.M;
+            android.os.SystemProperties.getInt(
+                    "ro.build.version.min_supported_target_sdk",
+                    Flags.minTargetSdk24() ? Build.VERSION_CODES.N : Build.VERSION_CODES.M);
 
     // Compilation reasons.
     // TODO(b/260124949): Clean this up with the legacy dexopt code.
