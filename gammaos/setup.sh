@@ -299,8 +299,10 @@ post_daijisho() {
         | grep -oE 'com\.magneticchen\.daijishou/[A-Za-z0-9_.]+' | head -n1)
     [ -z "$dj_home" ] && dj_home=com.magneticchen.daijishou/.ui.activities.BootstrapActivity
     step "Setting Daijisho home activity: $dj_home"
+    # Один вызов, а не два: pm set-home-activity - обёртка над тем же самым
+    # cmd package, и второй вызов только печатал ещё один "Success" на первой
+    # загрузке. Во втором к тому же была опечатка в ключах: "-user --user 0".
     run cmd package set-home-activity "$dj_home"
-    run pm set-home-activity "$dj_home" -user --user 0
 }
 
 post_retroarch() {
