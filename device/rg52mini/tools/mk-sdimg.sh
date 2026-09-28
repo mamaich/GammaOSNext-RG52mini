@@ -371,9 +371,31 @@ EOF
 sync
 echo "== содержимое загрузочного раздела"
 ls -la /mnt/imgboot | head -8
+# --- режим перезагрузки "с eMMC" ---
+# reboot emmc: загрузчик берёт ядро, дерево и корень с внутренней памяти, как
+# если бы карты не было. Он узнаёт об этом по флагу 0x5242c315 в регистре
+# PMU GRF (offset 0x220) - через тот же регистр работает reboot recovery.
+# Флаг ставит ядро, а имя режима оно берёт из дерева: узел reboot-mode, запись
+# mode-emmc. Без неё команда молча уходит в обычную перезагрузку.
+#
+# Правим готовое дерево, а не собираем своё. Дерево здесь - из эталонного
+# образа, и именно пара "новое ядро + эталонное дерево" проверена на
+# устройстве; собранное из наших исходников отличалось бы куда шире, чем на
+# одну запись. fdtput добавляет ровно её - проверено сравнением dtc -I dtb -O
+# dts до и после: разница в одну строку.
+DTB=/mnt/imgboot/rk3562-rg52mini.dtb
+if command -v fdtput >/dev/null 2>&1 && [ -f "$DTB" ]; then
+    if sudo fdtput -t x "$DTB" /syscon@ff010000/reboot-mode mode-emmc 0x5242c315; then
+        echo "   режим reboot emmc: mode-emmc = $(fdtget -t x "$DTB" /syscon@ff010000/reboot-mode mode-emmc)"
+    else
+        echo "   !! не удалось добавить mode-emmc в дерево"
+    fi
+else
+    echo "   !! нет fdtput (пакет device-tree-compiler) — reboot emmc работать не будет"
+fi
+sync
+
 # --- ядро из своей сборки ---
-# dtb намеренно оставляем из эталона: dts мы не меняли, а именно эта пара
-# (новое ядро + прежний dtb) и проверена на устройстве.
 if [ -f "$KERNELDIR/Image" ]; then
     sudo cp "$KERNELDIR/Image" /mnt/imgboot/Image
     echo "   ядро из своей сборки: $(stat -c %s "$KERNELDIR/Image") байт"
