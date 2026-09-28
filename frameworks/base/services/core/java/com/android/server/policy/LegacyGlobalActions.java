@@ -1073,15 +1073,15 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             {"100%", "0"},      // только zram
             {"256",  "2048"},   // небольшой zram и файл
             {"0",    "2048"},   // только файл
-            {"0",    "0"},      // без подкачки
             null,               // своё - не трогаем ничего
+            {"0",    "0"},      // без подкачки
         };
         final String[] labels = {
             "zRAM only (all RAM, compressed)",
             "zRAM 256 MB + swap file (2 GB)",
             "Swap file only (2 GB)",
+            "Custom (tune it in GammaOS Toolbox)",
             "No swap at all",
-            "Custom — tune it in GammaOS Toolbox",
         };
         // Во втором режиме zram намеренно небольшой. Файл подкачки - не
         // страховка на случай нехватки памяти, а следующий по приоритету
@@ -1100,9 +1100,17 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         String file = SystemProperties.get(SWAP_FILE_KEY, "0");
         if (zram.isEmpty()) zram = "0";
         if (file.isEmpty()) file = "0";
-        int checkedItem = modes.length - 1;
-        for (int i = 0; i < modes.length - 1; i++) {
-            if (modes[i][0].equals(zram) && modes[i][1].equals(file)) {
+        int customItem = 0;
+        for (int i = 0; i < modes.length; i++) {
+            if (modes[i] == null) {
+                customItem = i;
+                break;
+            }
+        }
+        int checkedItem = customItem;
+        for (int i = 0; i < modes.length; i++) {
+            if (modes[i] != null
+                    && modes[i][0].equals(zram) && modes[i][1].equals(file)) {
                 checkedItem = i;
                 break;
             }
