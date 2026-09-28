@@ -1026,15 +1026,25 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
                 .setTitle(R.string.gammaos_reboot_emmc)
                 .setMessage(R.string.gammaos_reboot_emmc_confirm)
                 .setPositiveButton(android.R.string.ok, (dlg, which) -> {
-                    final long token = Binder.clearCallingIdentity();
-                    try {
-                        PowerManager pm = mContext.getSystemService(PowerManager.class);
-                        if (pm != null) {
-                            pm.reboot("emmc");
+                    dlg.dismiss();
+                    // Отдельный поток обязателен. PowerManager.reboot() не
+                    // возвращается до самой перезагрузки, а гасит систему
+                    // ShutdownThread, которому нужен главный поток - тот самый,
+                    // из которого пришёл этот щелчок. Вызов прямо отсюда вешал
+                    // меню на экране: запрос до PowerManagerService доходил
+                    // (в журнале виден ShutdownCheckPoints), но дальше поток
+                    // ждал сам себя.
+                    new Thread(() -> {
+                        final long token = Binder.clearCallingIdentity();
+                        try {
+                            PowerManager pm = mContext.getSystemService(PowerManager.class);
+                            if (pm != null) {
+                                pm.reboot("emmc");
+                            }
+                        } finally {
+                            Binder.restoreCallingIdentity(token);
                         }
-                    } finally {
-                        Binder.restoreCallingIdentity(token);
-                    }
+                    }, "reboot-emmc").start();
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .create();
