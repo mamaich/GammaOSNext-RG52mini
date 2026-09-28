@@ -651,7 +651,7 @@ void NanoMenu::buildSettingsTree() {
         // Normal, со вставленной зарядкой Max Performance). Поставлена -
         // восстанавливается тот, что был выбран последним.
         b.toggle("perf_remember_mode", "Remember Performance Mode",
-                 SettingSource::kProp, "persist.rg52.perf.remember_mode", "0");
+                 SettingSource::kProp, "persist.rg52.perf.remember_mode", "1");
         b.text("qs_override_tiles", "QS Override Default Tiles",
                SettingSource::kProp, "persist.gammaos.qs.override_default_tiles", "");
       b.endCategory();

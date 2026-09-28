@@ -403,7 +403,8 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.rg52.zram.algo=zstd \
     persist.rg52.zram.backing_mb=0 \
     persist.rg52.zram.wb_threshold_mb=300 \
-    persist.gammaos.swap.size_mb=0
+    persist.gammaos.swap.size_mb=0 \
+    persist.rg52.perf.remember_mode=1
 
 # Сборщик мусора ART с уплотнением (userfaultfd CMC) здесь не включается —
 # у GammaOS для этого свой рычаг, и он снаружи.

@@ -78,7 +78,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
     private static final Map<String, String> DEFAULTS = new HashMap<>();
     static {
         // Display
-        DEFAULTS.put("persist.rg52.perf.remember_mode", "0");
+        DEFAULTS.put("persist.rg52.perf.remember_mode", "1");
         DEFAULTS.put("persist.rg52.zram.size_mb", "0");
         DEFAULTS.put("persist.rg52.zram.algo", "zstd");
         DEFAULTS.put("persist.rg52.zram.backing_mb", "0");
