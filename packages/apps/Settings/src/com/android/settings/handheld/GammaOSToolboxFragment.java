@@ -83,6 +83,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         DEFAULTS.put("persist.rg52.zram.algo", "zstd");
         DEFAULTS.put("persist.rg52.zram.backing_mb", "0");
         DEFAULTS.put("persist.rg52.zram.wb_threshold_mb", "300");
+        DEFAULTS.put("persist.rg52.reboot_emmc", "0");
         DEFAULTS.put("persist.gammaos.immersive", "0");
         DEFAULTS.put("persist.gammaos.refresh.lock", "false");
         DEFAULTS.put("persist.gammaos.refresh.rate", "0");

@@ -38,6 +38,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.RemoteException;
 import android.os.ServiceManager;
+import android.os.PowerManager;
 import android.os.SystemProperties;
 import android.os.UserHandle;
 import android.os.UserManager;
@@ -592,6 +593,12 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             mItems.add(getMouseModeAction());
             mItems.add(getControllerAction());
             mItems.add(getUsbAction());
+            // Загрузка с eMMC по умолчанию в меню не показывается: на
+            // внутренней памяти стоит другая система, и попасть туда
+            // случайным нажатием неприятно. Включается в GammaOS Toolbox.
+            if (SystemProperties.getBoolean(REBOOT_EMMC_KEY, false)) {
+                mItems.add(getRebootEmmcAction());
+            }
         } else {
             mBrightnessItemPosition = -1;
         }
@@ -969,6 +976,62 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.WHITE);
     }
 
+    // Перезагрузка в систему на внутренней памяти. Флаг одноразовый:
+    // загрузчик его сам обнуляет, и следующая обычная перезагрузка снова уходит
+    // на карту. Имя режима ядро берёт из дерева - запись mode-emmc в узле
+    // reboot-mode, см. doc/rg52mini/03-сборка.md.
+    private static final String REBOOT_EMMC_KEY = "persist.rg52.reboot_emmc";
+
+    private Action getRebootEmmcAction() {
+        return new SinglePressAction(R.drawable.ic_restart,
+                R.string.gammaos_reboot_emmc) {
+
+            @Override
+            public void onPress() {
+                if (mDialog != null && mDialog.isShowing()) {
+                    mDialog.dismiss();
+                }
+                mHandler.post(() -> showRebootEmmcDialog());
+            }
+
+            @Override
+            public boolean showDuringKeyguard() {
+                return true;
+            }
+
+            @Override
+            public boolean showBeforeProvisioning() {
+                return true;
+            }
+        };
+    }
+
+    // Спрашиваем подтверждение, в отличие от остальных пунктов: это не просто
+    // перезагрузка, а уход в другую систему, и обратно она сама не вернётся -
+    // нужна ещё одна перезагрузка.
+    private void showRebootEmmcDialog() {
+        AlertDialog dialog = new AlertDialog.Builder(mContext, android.R.style.Theme_Material_Dialog)
+                .setTitle(R.string.gammaos_reboot_emmc)
+                .setMessage(R.string.gammaos_reboot_emmc_confirm)
+                .setPositiveButton(android.R.string.ok, (dlg, which) -> {
+                    final long token = Binder.clearCallingIdentity();
+                    try {
+                        PowerManager pm = mContext.getSystemService(PowerManager.class);
+                        if (pm != null) {
+                            pm.reboot("emmc");
+                        }
+                    } finally {
+                        Binder.restoreCallingIdentity(token);
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+
+        dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_KEYGUARD_DIALOG);
+        dialog.show();
+        applyDarkDialogTheme(dialog);
+    }
+
     private Action getSwapModeAction() {
         return new SinglePressAction(R.drawable.ic_gammaos_memory,
                 R.string.gammaos_swap_mode) {
@@ -1011,12 +1074,14 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             {"256",  "2048"},   // небольшой zram и файл
             {"0",    "2048"},   // только файл
             {"0",    "0"},      // без подкачки
+            null,               // своё - не трогаем ничего
         };
         final String[] labels = {
             "zRAM only (all RAM, compressed)",
             "zRAM 256 MB + swap file (2 GB)",
             "Swap file only (2 GB)",
             "No swap at all",
+            "Custom — tune it in GammaOS Toolbox",
         };
         // Во втором режиме zram намеренно небольшой. Файл подкачки - не
         // страховка на случай нехватки памяти, а следующий по приоритету
@@ -1026,21 +1091,37 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         // из 1,9 ГБ, - и пара "большой zram + файл" ведёт себя как zram без
         // файла. Проверено: 512 МБ с файлом игру тоже не спасают.
 
+        // Отмечаем тот режим, которому размеры отвечают в точности. Если не
+        // отвечают ни одному - значит настроено руками (другой размер zram,
+        // другой файл), и тогда отмечается "Custom". Раньше такое состояние
+        // округлялось до ближайшего режима, и первый же заход в меню стирал
+        // ручную настройку, даже если пользователь ничего не выбирал заново.
         String zram = SystemProperties.get(SWAP_ZRAM_KEY, "0");
         String file = SystemProperties.get(SWAP_FILE_KEY, "0");
-        boolean zramOn = !"0".equals(zram) && !zram.isEmpty();
-        boolean fileOn = !"0".equals(file) && !file.isEmpty();
-        int checkedItem = zramOn ? (fileOn ? 1 : 0) : (fileOn ? 2 : 3);
+        if (zram.isEmpty()) zram = "0";
+        if (file.isEmpty()) file = "0";
+        int checkedItem = modes.length - 1;
+        for (int i = 0; i < modes.length - 1; i++) {
+            if (modes[i][0].equals(zram) && modes[i][1].equals(file)) {
+                checkedItem = i;
+                break;
+            }
+        }
 
         AlertDialog dialog = new AlertDialog.Builder(mContext, android.R.style.Theme_Material_Dialog)
                 .setTitle(R.string.gammaos_swap_mode)
                 .setSingleChoiceItems(labels, checkedItem, (dlg, which) -> {
-                    final long token = Binder.clearCallingIdentity();
-                    try {
-                        SystemProperties.set(SWAP_ZRAM_KEY, modes[which][0]);
-                        SystemProperties.set(SWAP_FILE_KEY, modes[which][1]);
-                    } finally {
-                        Binder.restoreCallingIdentity(token);
+                    // "Custom" ничего не пишет: он существует, чтобы показать
+                    // текущее состояние и дать закрыть меню, не затирая
+                    // настроенное в Toolbox.
+                    if (modes[which] != null) {
+                        final long token = Binder.clearCallingIdentity();
+                        try {
+                            SystemProperties.set(SWAP_ZRAM_KEY, modes[which][0]);
+                            SystemProperties.set(SWAP_FILE_KEY, modes[which][1]);
+                        } finally {
+                            Binder.restoreCallingIdentity(token);
+                        }
                     }
                     dlg.dismiss();
                 })

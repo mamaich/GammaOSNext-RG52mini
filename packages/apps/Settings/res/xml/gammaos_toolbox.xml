@@ -1139,6 +1139,12 @@
             android:summary="@string/gammaos_toolbox_zram_backing_summary"
             android:defaultValue="0" />
 
+        <SwitchPreference
+            android:key="persist.rg52.reboot_emmc"
+            android:title="@string/gammaos_toolbox_reboot_emmc_title"
+            android:summary="@string/gammaos_toolbox_reboot_emmc_summary"
+            android:defaultValue="0" />
+
         <EditTextPreference
             android:key="persist.rg52.zram.wb_threshold_mb"
             android:title="@string/gammaos_toolbox_zram_wb_title"

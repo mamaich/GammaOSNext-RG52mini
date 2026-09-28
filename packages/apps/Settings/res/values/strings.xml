@@ -13616,6 +13616,8 @@
     <string name="gammaos_toolbox_launch_guard_targets_summary">Comma-separated list of package names that callers should be blocked from launching.</string>
 
     <!-- GammaOS Toolbox: System -->
+    <string name="gammaos_toolbox_reboot_emmc_title">Allow reboot to eMMC</string>
+    <string name="gammaos_toolbox_reboot_emmc_summary">Adds a “Reboot to eMMC” entry to the power menu. The device then boots the system from the internal memory instead of the card; the next ordinary reboot returns to the card. Off by default.</string>
     <string name="gammaos_toolbox_category_system">System</string>
     <string name="gammaos_toolbox_category_system_description">Miscellaneous system-level overrides including Quick Settings tile visibility, background process limits, wake gesture filtering, and performance mode selection.</string>
     <string name="gammaos_toolbox_drm_force_l3_title">Widevine L3 compatibility mode</string>

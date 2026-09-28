@@ -6342,6 +6342,8 @@ ul.</string>
     <!-- Title for preference of the GammaOS Performance Mode. [CHAR LIMIT=50]-->
     <string name="gammaos_performance_mode">Performance Mode</string>
     <string name="gammaos_swap_mode">Swap Mode</string>
+    <string name="gammaos_reboot_emmc">Reboot to eMMC</string>
+    <string name="gammaos_reboot_emmc_confirm">Boot the system from the internal eMMC this once. The bootloader still comes from the card; only the kernel and the system are taken from eMMC. The next ordinary reboot returns to the card.</string>
 
     <!-- Title for preference of the GammaOS Brightness Settings. [CHAR LIMIT=50]-->
     <string name="gammaos_brightness_settings">Screen Brightness</string>
