@@ -142,6 +142,13 @@ if [ "$BOOTING" = 1 ] && [ "$MODE" = overclock ]; then
     setprop persist.gammaos.performance_mode max
     log -t rg52-perf "boot: overclock is not kept across reboots, mode max"
 fi
+# То же для режима, запаркованного drastic-nano на время игры с собственным режимом
+# (persist.gammaos.drastic.perf_restore): после перезагрузки посреди такой игры оболочка
+# вернула бы запаркованный overclock.
+if [ "$BOOTING" = 1 ] && [ "$(getprop persist.gammaos.drastic.perf_restore)" = overclock ]; then
+    setprop persist.gammaos.drastic.perf_restore max
+    log -t rg52-perf "boot: parked overclock replaced with max"
+fi
 
 # Замок на применение. При загрузке оно запускается несколько раз подряд: init
 # срабатывает по триггеру на восстановленное persist-свойство, плюс служба
