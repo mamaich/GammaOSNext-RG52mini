@@ -596,8 +596,20 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             // Загрузка с eMMC по умолчанию в меню не показывается: на
             // внутренней памяти стоит другая система, и попасть туда
             // случайным нажатием неприятно. Включается в GammaOS Toolbox.
+            //
+            // Место - сразу за "Restart", чтобы обе перезагрузки читались
+            // подряд. Ищем сам пункт, а не его номер: порядок списка задаётся
+            // конфигурацией (config_globalActionsList), и жёсткий индекс
+            // сломался бы от любой её правки.
             if (SystemProperties.getBoolean(REBOOT_EMMC_KEY, false)) {
-                mItems.add(getRebootEmmcAction());
+                int at = mItems.size();
+                for (int i = 0; i < mItems.size(); i++) {
+                    if (mItems.get(i) instanceof RestartAction) {
+                        at = i + 1;
+                        break;
+                    }
+                }
+                mItems.add(at, getRebootEmmcAction());
             }
         } else {
             mBrightnessItemPosition = -1;
