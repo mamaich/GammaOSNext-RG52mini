@@ -187,7 +187,12 @@ if [ "$ZSIZE" = 0 ]; then
     exit 0
 fi
 
-WANT=$((ZSIZE * 1024 * 1024))
+# Считаем через awk, а не арифметикой оболочки: /system/bin/sh на этом
+# устройстве считает в 32 битах, и 2934*1024*1024 даёт -1218445312. Размер
+# больше 2047 МБ из-за этого записывался отрицательным числом, ядро запись
+# отвергало, и устройство оставалось вовсе без подкачки - молча, потому что
+# ошибка записи уходила в /dev/null.
+WANT=$(awk -v m="$ZSIZE" 'BEGIN{printf "%.0f", m * 1048576}')
 CUR=$(cat "$SYS/disksize" 2>/dev/null)
 CURBACK=$(cat "$SYS/backing_dev" 2>/dev/null)
 CURBACKSZ=0
@@ -238,7 +243,10 @@ else
     rm -f "$BACKFILE" 2>/dev/null
 fi
 
-echo "$WANT" > "$SYS/disksize" 2>/dev/null
+if ! echo "$WANT" > "$SYS/disksize" 2>/dev/null; then
+    log_i "ядро не приняло размер zram $ZSIZE МБ ($WANT байт), подкачки не будет"
+    exit 1
+fi
 mkswap "$DEV" >/dev/null 2>&1
 # Приоритет выше, чем у обычного файла подкачки, если тот вдруг есть: сперва
 # быстрый сжатый ярус.
