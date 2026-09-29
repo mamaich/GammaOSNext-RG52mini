@@ -198,6 +198,7 @@ bool OtaDisplay::initDrm() {
 
         if (drmTakeOutput() && drmMakeBuffer()) {
             drmDpmsOn();
+            fbUnblank();
             return true;
         }
 
@@ -442,7 +443,43 @@ void OtaDisplay::reassert() {
     if (mBackend != DRM) return;
     if (drmApplyCrtc()) {
         drmDpmsOn();
+        fbUnblank();
         OtaFlasher::logToFile("INFO", "OtaDisplay: panel re-taken");
+    }
+}
+
+// Подсветку держит погашенной не DRM, а гашение fb0.
+//
+// Композитор Rockchip, выключая экран, шлёт FBIOBLANK(POWERDOWN) через
+// /dev/graphics/fb0, и ядро запоминает это в самой подсветке (props.fb_blank).
+// Драйвер панели при включении этот признак не сбрасывает - только power и
+// BL_CORE_FBBLANK, - а pwm_bl гасит подсветку, пока он стоит. Так что после
+// такого гашения наш SETCRTC зажигает панель, на развёртке наш буфер, а ШИМ
+// подсветки выключен: картинка есть, но её не видно. Сбрасывает признак только
+// обратное событие, FB_BLANK_UNBLANK. Композитор шлёт его при каждом включении
+// экрана, теперь шлём и мы.
+//
+// Гашение перед прошивкой - гонка, а не правило. Мы останавливаем zygote, а
+// SurfaceFlinger, потеряв system_server, переинициализирует дисплеи: сперва
+// выключает все, потом включает. Судя по журналу ядра, останавливаем мы его
+// как раз посередине - развёртка гаснет через 44 мс после его остановки. В
+// --test-display system_server жив, гонки нет, и картинку там видно.
+// Замерено на устройстве: во время записи /sys/kernel/debug/pwm показывал у
+// подсветки duty 0 при brightness=113 и bl_power=0.
+//
+// Развёртку это событие не трогает: fbdev пробует включить свой режим, только
+// став мастером DRM, а мастер сейчас мы.
+void OtaDisplay::fbUnblank() {
+    const char* paths[] = {"/dev/graphics/fb0", "/dev/fb0", nullptr};
+    for (const char** p = paths; *p; p++) {
+        int fd = open(*p, O_RDWR | O_CLOEXEC);
+        if (fd < 0) continue;
+        if (ioctl(fd, FBIOBLANK, FB_BLANK_UNBLANK) < 0) {
+            OtaFlasher::logToFile("WARN", "OtaDisplay: FBIOBLANK(unblank) on %s: %s",
+                                  *p, strerror(errno));
+        }
+        ::close(fd);
+        return;
     }
 }
 

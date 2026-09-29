@@ -74,6 +74,7 @@ private:
     bool drmMakeBuffer();     // dumb buffer -> fb -> mmap -> setcrtc
     bool drmApplyCrtc();      // выставить наш буфер на развёртку
     void drmDpmsOn();
+    void fbUnblank();         // снять гашение fb0, которое держит подсветку
 
     // Поворот: панель у этого устройства портретная, а картинка на ней
     // горизонтальная. Рисуем в логических координатах, plotPixel переводит их
