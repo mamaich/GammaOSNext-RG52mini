@@ -278,9 +278,31 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 # в /system/product/overlay), а не вкомпилируется в framework-res.
 PRODUCT_PACKAGE_OVERLAYS += device/rg52mini/overlay
 
+# Пределы низкопамятного убийцы подобраны под zram без файла подкачки -
+# заводской режим этого устройства. Замерено на TMNT (нужно около 2 ГБ
+# при 1,95 ГБ памяти), одинаковые отрезки, zram 100 % на zstd:
+#
+#   как было (swap_util_max=95, thrashing_limit=80)   игра живёт 154 с
+#   swap_util_max=100                                 169 с
+#   swap_util_max=100 + thrashing_limit=200           217-225 с
+#
+# Почему снимается проверка swap_util. Вопреки названию это не «сколько
+# занято в подкачке», а доля вытесненного среди всей вытесняемой памяти:
+#   swap_used / (active_anon + inactive_anon + shmem + swap_used)
+# При zram без файла она упирается в потолок всегда - вытеснять больше
+# некуда, - и убийца срабатывает на здоровом, по сути, состоянии.
+#
+# Порог «трэшинга» поднят с 80 до 200 по той же причине: 80 рассчитано на
+# подкачку на диске, где возврат страницы стоит миллисекунды. Из zram она
+# возвращается за микросекунды, и терпеть такой обмен можно дольше.
+#
+# Разбор и остальные замеры (в том числе почему рекомендации Arch для
+# настольных машин здесь вредят) - в doc/rg52mini/02-план.md.
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.sf.lcd_density=213 \
     ro.config.low_ram=false \
+    ro.lmk.swap_util_max=100 \
+    ro.lmk.thrashing_limit=200 \
     persist.gammaos.lazy32=0
 
 # Про persist.gammaos.lazy32=0 выше — из-за него не работал WebView.
