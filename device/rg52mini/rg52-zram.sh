@@ -96,7 +96,37 @@ setup_zswap() {
 }
 setup_zswap
 
-[ -e "$SYS/disksize" ] || { log_i "zram в этом ядре нет"; exit 0; }
+# Служба oneshot: пока она работает, повторный триггер init ничего не запускает.
+# А настройки меняют пачкой - и приложение настроек, и меню выключателя пишут по
+# нескольку свойств подряд, - так что поздние изменения попадали в уже
+# запущенный экземпляр и терялись молча. Ловится это только по результату:
+# свойство выставлено, а состояние прежнее.
+#
+# Поэтому в конце работы сверяем, не изменились ли свойства с начала, и если
+# изменились - проходим ещё раз. Счётчик от бесконечной петли на случай, если
+# кто-то меняет свойства непрерывно.
+props_signature() {
+    getprop persist.rg52.zram.size_mb
+    getprop persist.rg52.zram.algo
+    getprop persist.rg52.zram.backing_mb
+    getprop persist.rg52.zram.wb_threshold_mb
+    getprop persist.rg52.zswap.enabled
+    getprop persist.rg52.zswap.algo
+    getprop persist.rg52.zswap.max_pool_percent
+}
+SIG_START=$(props_signature)
+PASS=${RG52_ZRAM_PASS:-1}
+
+recheck_and_exit() {
+    if [ "$PASS" -lt 4 ] && [ "$(props_signature)" != "$SIG_START" ]; then
+        log_i "свойства сменились по ходу настройки, прохожу ещё раз"
+        export RG52_ZRAM_PASS=$((PASS + 1))
+        exec "$0" "$@"
+    fi
+    exit "${1:-0}"
+}
+
+[ -e "$SYS/disksize" ] || { log_i "zram в этом ядре нет"; recheck_and_exit 0; }
 
 # Отбираем zram у vendor, иначе им управляют двое и оба мешают.
 #
@@ -184,7 +214,7 @@ if [ "$ZSIZE" = 0 ]; then
     detach_backing_loops
     rm -f "$BACKFILE" 2>/dev/null
     log_i "zram выключен, подкачка идёт в обычный файл"
-    exit 0
+    recheck_and_exit 0
 fi
 
 # Считаем через awk, а не арифметикой оболочки: /system/bin/sh на этом
@@ -259,3 +289,5 @@ if [ "$(cat "$ZSWAP_DIR/enabled" 2>/dev/null)" = "Y" ]; then
 fi
 
 log_i "zram ${ZSIZE} МБ ($(sed -n 's/.*\[\([^]]*\)\].*/\1/p' "$SYS/comp_algorithm" 2>/dev/null)), подложка $(cat "$SYS/backing_dev" 2>/dev/null) на ${BACK} МБ"
+
+recheck_and_exit 0
