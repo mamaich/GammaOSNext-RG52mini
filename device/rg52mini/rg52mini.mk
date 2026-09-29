@@ -176,6 +176,14 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-mouseflash.sh:system/bin/rg52-mouseflash.sh \
     device/rg52mini/rg52-mouseflash.rc:system/etc/init/rg52-mouseflash.rc
 
+# Загрузочная анимация GammaOS с кадром 480x480 вместо 2880x2880: на экране он
+# всё равно 480x480, а исходный занимал 32 МиБ памяти GPU и перечитывался с
+# шестикратным уменьшением 60 раз в секунду - пока анимация держит экран до
+# лаунчера, рядом с его запуском. Картинка та же, линии без лесенки. Собирается
+# из vendor/lineage/bootanimation скриптом tools/bootanim-480.py; переменную
+# читает vendor/lineage/bootanimation/Android.mk.
+TARGET_BOOTANIMATION := device/rg52mini/bootanimation.zip
+
 # Кнопки HOME и BACK корпуса. Драйвер play_joystick отдаёт их как коды
 # геймпада: BTN_MODE (316) для HOME и BTN_TRIGGER_HAPPY1 (704) для BACK.
 #
