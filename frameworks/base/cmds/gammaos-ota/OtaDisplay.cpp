@@ -20,6 +20,7 @@
 #include "OtaFlasher.h"
 #include "OtaFont.h"
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -198,7 +199,8 @@ bool OtaDisplay::initDrm() {
 
         if (drmTakeOutput() && drmMakeBuffer()) {
             drmDpmsOn();
-            fbUnblank();
+            mBackend = DRM;   // keepBacklightOn() работает только для DRM
+            keepBacklightOn();
             return true;
         }
 
@@ -443,9 +445,66 @@ void OtaDisplay::reassert() {
     if (mBackend != DRM) return;
     if (drmApplyCrtc()) {
         drmDpmsOn();
-        fbUnblank();
+        keepBacklightOn();
         OtaFlasher::logToFile("INFO", "OtaDisplay: panel re-taken");
     }
+}
+
+static int readIntFile(const std::string& path, int fallback) {
+    int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return fallback;
+    char buf[32] = {0};
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    ::close(fd);
+    return n > 0 ? atoi(buf) : fallback;
+}
+
+// Подсветка должна гореть, пока экран у нас. На прошивках 29.09.2026 её гасили
+// двумя разными способами:
+//  - событием гашения fb0 (props.fb_blank, см. fbUnblank), если перед
+//    прошивкой композитор успел выключить экран;
+//  - нулевой яркостью. Переселение в tmpfs может идти минутами (при занятой
+//    игрой памяти - около четырёх), экран за это время гаснет по таймауту,
+//    Android обнуляет brightness, а после остановки каркаса вернуть её некому.
+// Поэтому проверяем не только при захвате панели, но и раз в секунду, пока
+// рисуем. Повторное UNBLANK ничего не меняет, а яркость трогаем, только если
+// она 0: ставим ту, что видели при захвате, иначе 45 % - на загрузке Android
+// всё равно выставит свою.
+void OtaDisplay::keepBacklightOn() {
+    if (mBackend != DRM) return;
+    fbUnblank();
+
+    DIR* dir = opendir("/sys/class/backlight");
+    if (!dir) return;
+    while (struct dirent* e = readdir(dir)) {
+        if (e->d_name[0] == '.') continue;
+        const std::string base = std::string("/sys/class/backlight/") + e->d_name;
+        const int cur = readIntFile(base + "/brightness", -1);
+        if (cur > 0) {
+            if (mSavedBrightness <= 0) mSavedBrightness = cur;
+            continue;
+        }
+        if (cur < 0) continue;
+
+        const int max = readIntFile(base + "/max_brightness", 255);
+        int want = mSavedBrightness > 0 ? mSavedBrightness : max * 45 / 100;
+        if (want > max) want = max;
+        if (want < 1) want = 1;
+        int fd = open((base + "/brightness").c_str(), O_WRONLY | O_CLOEXEC);
+        if (fd >= 0) {
+            char v[16];
+            int len = snprintf(v, sizeof(v), "%d", want);
+            if (write(fd, v, len) != len) {
+                OtaFlasher::logToFile("WARN", "OtaDisplay: %s brightness: %s",
+                                      e->d_name, strerror(errno));
+            } else {
+                OtaFlasher::logToFile("INFO", "OtaDisplay: %s brightness was 0, set to %d",
+                                      e->d_name, want);
+            }
+            ::close(fd);
+        }
+    }
+    closedir(dir);
 }
 
 // Подсветку держит погашенной не DRM, а гашение fb0.
@@ -710,6 +769,7 @@ void OtaDisplay::flip() {
     // экрана, а не что мы нарисовали.
     if (mScanout && now != lastLog) {
         lastLog = now;
+        keepBacklightOn();
         const uint32_t* px = (const uint32_t*)mScanout;
         const size_t words = (mStride / 4);
         OtaFlasher::logToFile("INFO",
