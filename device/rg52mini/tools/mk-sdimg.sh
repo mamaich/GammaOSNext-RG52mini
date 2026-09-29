@@ -403,6 +403,18 @@ else
 fi
 sync
 
+# --- логотип u-boot: 22 КБ вместо 2,7 МБ ---
+# Эталонный logo.bmp - 24 бита, 2,7 МБ, и u-boot читает его с FAT 1,4-1,5 с.
+# Наш - тот же рисунок в 8 битах с RLE8 и палитрой из 16 ступеней
+# (device/rg52mini/tools/logo-rle8.py): 15 мс, загрузка на 1,4 с короче.
+LOGO="$(dirname "$0")/../logo.bmp"
+if [ -f "$LOGO" ]; then
+    sudo cp "$LOGO" /mnt/imgboot/logo.bmp
+    echo "   логотип u-boot: $(stat -c %s "$LOGO") байт"
+else
+    echo "   !! нет $LOGO - в образе останется логотип из эталона"
+fi
+
 # --- ядро из своей сборки ---
 if [ -f "$KERNELDIR/Image" ]; then
     sudo cp "$KERNELDIR/Image" /mnt/imgboot/Image
