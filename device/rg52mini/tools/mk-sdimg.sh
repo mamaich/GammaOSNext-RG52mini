@@ -353,6 +353,14 @@ sync
 # console=ttyFIQ0 и никакого console=tty1: тогда /dev/console — это uart0
 # (узел fiq-debugger, rockchip,serial-id = 0, 1500000), и init сам поднимает на
 # нём root-shell, а служба rg52logcat_con льёт туда же logcat.
+#
+# rodata=on вместо умолчательного full: линейное отображение памяти строится
+# блоками по 2 МиБ, а не страницами по 4 КиБ, и не нужны ~4 МиБ таблиц страниц.
+# Код и данные самого ядра защищены так же; без защиты остаются только копии
+# модулей и BPF в линейном отображении. Хэш-таблицы dentry и inode вдвое меньше
+# расчётных по объёму памяти: элементов в них 50-60 тысяч, на ячейку всё равно
+# меньше одного, а память это ещё 1,5 МиБ. Всё вместе - MemTotal +5,4 МиБ,
+# замерено на устройстве.
 echo "== правлю extlinux.conf"
 sudo mkdir -p /mnt/imgboot && sudo mount "${LOOP}p3" /mnt/imgboot
 sudo cp /mnt/imgboot/extlinux/extlinux.conf "$OUTDIR/extlinux.conf.orig" 2>/dev/null || true
@@ -366,7 +374,7 @@ LABEL GammaOS
     LINUX /Image
     FDT /rk3562-rg52mini.dtb
     INITRD /initrd.gz
-    APPEND console=ttyFIQ0 firmware_class.path=/vendor/lib/firmware init=/init rootwait ro loop.max_part=7 8250.nr_uarts=10 storagemedia=sd androidboot.hardware=rk30board androidboot.boot_devices=ff880000.mmc androidboot.storagemedia=sd androidboot.mode=normal androidboot.force_normal_boot=1 androidboot.veritymode=disabled printk.devkmsg=on loglevel=7 fbcon=rotate:1 androidboot.selinux=permissive
+    APPEND console=ttyFIQ0 firmware_class.path=/vendor/lib/firmware init=/init rootwait ro loop.max_part=7 8250.nr_uarts=10 storagemedia=sd androidboot.hardware=rk30board androidboot.boot_devices=ff880000.mmc androidboot.storagemedia=sd androidboot.mode=normal androidboot.force_normal_boot=1 androidboot.veritymode=disabled printk.devkmsg=on loglevel=7 fbcon=rotate:1 androidboot.selinux=permissive rodata=on dhash_entries=131072 ihash_entries=65536
 EOF
 sync
 echo "== содержимое загрузочного раздела"
