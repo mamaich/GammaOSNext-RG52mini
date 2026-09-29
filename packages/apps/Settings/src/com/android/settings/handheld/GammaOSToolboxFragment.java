@@ -84,6 +84,8 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         DEFAULTS.put("persist.rg52.zram.backing_mb", "0");
         DEFAULTS.put("persist.rg52.zram.wb_threshold_mb", "300");
         DEFAULTS.put("persist.rg52.reboot_emmc", "0");
+        // Matches the build default in device/rg52mini/rg52mini.mk.
+        DEFAULTS.put("persist.rg52.fixed_rotation", "1");
         DEFAULTS.put("persist.gammaos.immersive", "0");
         DEFAULTS.put("persist.gammaos.refresh.lock", "false");
         DEFAULTS.put("persist.gammaos.refresh.rate", "0");

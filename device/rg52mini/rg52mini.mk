@@ -237,6 +237,16 @@ PRODUCT_COPY_FILES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.surface_flinger.primary_display_orientation=ORIENTATION_90
 
+# Приложения не поворачивают экран. Консоль держат только горизонтально, а
+# idTech4A++, например, запрашивал портрет и разворачивал экран боком. Android
+# в таком режиме («ориентация закреплена за пользователем») показывает
+# портретное приложение вертикальной полосой по центру, как на планшете; для
+# TV, автомобилей и ПК он включён у него сам. Свойство читает
+# DisplayRotation.isFixedToUserRotation, переключается оно в GammaOS Toolbox,
+# раздел «Дисплей». Явный `wm fixed-to-user-rotation` главнее.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.rg52.fixed_rotation=1
+
 # Оболочка GammaOS Nano (пункт «Boot nano» в меню выключателя) рисует напрямую
 # через DRM/KMS, мимо SurfaceFlinger. Поворот установки она берёт из свойства
 # выше и учитывает его правильно, но зеркальность сканирования панели строкой

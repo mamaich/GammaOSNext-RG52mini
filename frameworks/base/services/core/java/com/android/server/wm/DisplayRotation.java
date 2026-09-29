@@ -1044,7 +1044,16 @@ public class DisplayRotation {
             case IWindowManager.FIXED_TO_USER_ROTATION_IF_NO_AUTO_ROTATION:
                 return false;
             default:
-                return mDefaultFixedToUserRotation;
+                // RG52 Mini: консоль держат только горизонтально, а приложение,
+                // запросившее портрет (idTech4A++, например), поворачивало экран
+                // боком. Этот режим Android сам включает для TV, автомобилей и
+                // ПК; здесь его включает persist.rg52.fixed_rotation -
+                // переключатель в GammaOS Toolbox, по умолчанию 1. Портретное
+                // приложение тогда показывается вертикальной полосой по центру,
+                // как на планшете. Явный `wm fixed-to-user-rotation` главнее.
+                return mDefaultFixedToUserRotation
+                        || (isDefaultDisplay
+                                && SystemProperties.getBoolean("persist.rg52.fixed_rotation", false));
         }
     }
 

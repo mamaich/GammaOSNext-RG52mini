@@ -13335,6 +13335,8 @@
     <string name="gammaos_toolbox_force_client_comp_summary">Force all layers to use GPU (client) composition instead of hardware overlays. Useful when HWComposer causes visual artifacts.</string>
     <string name="gammaos_toolbox_rotation_cooldown_title">Rotation cooldown (ms)</string>
     <string name="gammaos_toolbox_rotation_cooldown_summary">Minimum time in milliseconds between display rotation changes. Prevents rapid rotation flicker. Set to 0 to disable.</string>
+    <string name="gammaos_toolbox_fixed_rotation_title">Keep the screen in landscape</string>
+    <string name="gammaos_toolbox_fixed_rotation_summary">Apps cannot rotate the display. An app that insists on portrait is shown as a vertical window in the middle instead of turning the screen sideways.</string>
     <string name="gammaos_toolbox_desktop_fullscreen_title">Desktop mode fullscreen</string>
     <string name="gammaos_toolbox_desktop_fullscreen_summary">Force apps in desktop mode to launch fullscreen instead of windowed. Useful for devices without pointer input.</string>
     <string name="gammaos_toolbox_display_unique_names_title">Unique display names</string>
