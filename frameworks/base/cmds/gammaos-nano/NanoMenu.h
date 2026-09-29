@@ -3038,6 +3038,8 @@ private:
     std::vector<std::string> mountedShareNames() const;
     void gsFolderSelect(const std::string& path); // add a folder as a rawpath scan source
     void drasticDataFolderSelect(const std::string& path); // #90: set persist.gammaos.drastic.data_dir (folder-picker target 5)
+    void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
+    int64_t mMouseGuardMs = 0;                 // its once-a-second throttle (uptime)
     void gsRemoveScanSource(int srcIdx);       // drop a scan source from the edited system
     void gsDisableDefaultFolder(const std::string& alias);  // remove a default scan folder (alias) from the edited system
     void gsEnableDefaultFolder(const std::string& alias);   // restore a previously-removed default scan folder
