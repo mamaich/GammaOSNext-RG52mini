@@ -1200,6 +1200,8 @@ class ActivityMetricsLogger {
                 TimeUnit.NANOSECONDS.toMillis(info.timestampNs));
     }
 
+    private static boolean sRg52HomeDrawn;
+
     private void logAppDisplayed(TransitionInfoSnapshot info) {
         EventLog.writeEvent(WM_ACTIVITY_LAUNCH_TIME,
                 info.userId, info.activityRecordIdHashCode, info.launchedActivityShortComponentName,
@@ -1214,6 +1216,18 @@ class ActivityMetricsLogger {
         sb.append(": ");
         TimeUtils.formatDuration(info.windowsDrawnDelayMs, sb);
         Log.i(TAG, sb.toString());
+
+        // RG52 Mini: первое показанное окно после загрузки отпускает анимацию
+        // загрузки, которая держала экран вместо чёрного (см.
+        // BootAnimation::checkExit). FallbackHome - как раз та чёрная заглушка,
+        // её пропускаем.
+        if (!sRg52HomeDrawn && info.launchedActivityShortComponentName != null
+                && !info.launchedActivityShortComponentName.endsWith("FallbackHome")) {
+            sRg52HomeDrawn = true;
+            android.os.SystemProperties.set("sys.rg52.home_drawn", "1");
+            Log.i(TAG, "RG52: first screen drawn ("
+                    + info.launchedActivityShortComponentName + "), releasing boot animation");
+        }
 
         // GammaOS Nano: signal that the user-facing game activity has
         // drawn its first frame. NanoMenu's Quick-Resume preview loops watch

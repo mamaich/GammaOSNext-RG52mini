@@ -2404,6 +2404,10 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     }
 
     void showGlobalActionsInternal() {
+        // RG52 Mini: загрузочная анимация может ещё держать экран до первого
+        // окна лаунчера (BootAnimation::checkExit) и закрыла бы собой меню, а
+        // нажатия до меню доходят. Раз меню открывают, анимацию отпускаем.
+        SystemProperties.set("sys.rg52.home_drawn", "1");
         if (mGlobalActions == null) {
             mGlobalActions = mGlobalActionsFactory.get();
         }

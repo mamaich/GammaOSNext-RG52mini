@@ -687,6 +687,10 @@ status_t NanoMenu::readyToRun() {
     // blank screen the moment the overlay service starts. The overlay is not the
     // boot-animation owner, so it must leave this flag alone.
     if (!mOverlayMode) {
+        // RG52 Mini: анимация теперь держит экран до первого показанного окна
+        // (BootAnimation::checkExit). В режиме Nano экран - сам Nano, поэтому
+        // отпускаем её сразу, иначе она висела бы поверх меню до 20 с.
+        property_set("sys.rg52.home_drawn", "1");
         property_set("service.bootanim.exit", "1");
     }
 

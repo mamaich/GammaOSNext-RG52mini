@@ -4004,7 +4004,13 @@ public class WindowManagerService extends IWindowManager.Stub
     }
 
     private boolean checkBootAnimationCompleteLocked() {
-        if (SystemService.isRunning(BOOT_ANIMATION_SERVICE)) {
+        // RG52 Mini: после просьбы выйти анимация может ещё держать экран, пока
+        // не нарисуется лаунчер (см. BootAnimation::checkExit). Для загрузки она
+        // в этот момент закончена. Иначе экран для окон включился бы только после
+        // её ухода, а без ro.gammaos.lean_boot от конца анимации зависят ещё и
+        // разблокировка пользователя, и запуск лаунчера, которого она ждёт.
+        if (SystemService.isRunning(BOOT_ANIMATION_SERVICE)
+                && !"1".equals(SystemProperties.get("sys.rg52.bootanim.holding"))) {
             mH.removeMessages(H.CHECK_IF_BOOT_ANIMATION_FINISHED);
             mH.sendEmptyMessageDelayed(H.CHECK_IF_BOOT_ANIMATION_FINISHED,
                     BOOT_ANIMATION_POLL_INTERVAL);

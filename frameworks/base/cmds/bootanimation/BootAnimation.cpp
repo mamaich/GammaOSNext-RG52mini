@@ -972,13 +972,66 @@ bool BootAnimation::android() {
     return false;
 }
 
+// RG52 Mini: анимация держится до первого настоящего экрана.
+//
+// Выход анимации система просит сразу после готовности ActivityManager
+// (ro.gammaos.lean_boot), а лаунчер к этому времени ещё и не начал
+// запускаться: разблокировка пользователя, потом холодный старт Daijisho на
+// 5-6 с. Итого около 8 с чёрного экрана между анимацией и экраном загрузки
+// оболочки.
+//
+// Поэтому, получив просьбу выйти, анимация продолжает рисоваться, пока
+// ActivityMetricsLogger не отметит первое показанное окно
+// (sys.rg52.home_drawn=1), но не дольше 20 с. Раньше её отпускают Nano,
+// у которого экран свой, и меню питания, которое иначе оказалось бы под ней.
+// На время удержания она ставит sys.rg52.bootanim.holding=1: по нему
+// WindowManager считает анимацию законченной и включает экран для окон, не
+// дожидаясь её ухода, - иначе он ждал бы анимацию, а она ждала бы окно.
+// Выключается persist.rg52.bootanim.hold=0.
+static const char HOME_DRAWN_PROP_NAME[] = "sys.rg52.home_drawn";
+static const char HOLDING_PROP_NAME[] = "sys.rg52.bootanim.holding";
+static constexpr nsecs_t kHomeHoldTimeout = s2ns(20);
+static nsecs_t sHomeHoldStart = 0;
+
+static bool holdForHome() {
+    // checkExit() зовётся на каждом кадре, в том числе ещё около секунды, пока
+    // анимация гаснет после requestExit(): решение, принятое по таймеру,
+    // запоминаем, чтобы не повторять его и сообщение о нём.
+    static bool sHoldExpired = false;
+    if (sHoldExpired) return false;
+    if (!property_get_bool("persist.rg52.bootanim.hold", true)) return false;
+    if (property_get_bool(HOME_DRAWN_PROP_NAME, false)) return false;
+    const nsecs_t now = systemTime();
+    if (sHomeHoldStart == 0) {
+        sHomeHoldStart = now;
+        property_set(HOLDING_PROP_NAME, "1");
+        ALOGI("RG52: holding the boot animation until the first screen is drawn");
+    }
+    if (now - sHomeHoldStart > kHomeHoldTimeout) {
+        sHoldExpired = true;
+        ALOGW("RG52: nothing drawn in 20 s, releasing the boot animation");
+        return false;
+    }
+    return true;
+}
+
 void BootAnimation::checkExit() {
     ATRACE_CALL();
     // Allow surface flinger to gracefully request shutdown
     char value[PROPERTY_VALUE_MAX];
     property_get(EXIT_PROP_NAME, value, "0");
     int exitnow = atoi(value);
-    if (exitnow) {
+    if (exitnow && !holdForHome()) {
+        static bool sHoldReleased = false;
+        if (sHomeHoldStart != 0 && !sHoldReleased) {
+            sHoldReleased = true;
+            // Флаг удержания живёт только пока держим. Анимацию, которую
+            // SurfaceFlinger запустит заново после перезапуска system_server,
+            // новый WindowManager иначе счёл бы законченной с первой проверки.
+            property_set(HOLDING_PROP_NAME, "0");
+            ALOGI("RG52: boot animation held for %lld ms",
+                  (long long)ns2ms(systemTime() - sHomeHoldStart));
+        }
         requestExit();
     }
 }
