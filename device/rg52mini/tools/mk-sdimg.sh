@@ -401,6 +401,30 @@ if command -v fdtput >/dev/null 2>&1 && [ -f "$DTB" ]; then
 else
     echo "   !! нет fdtput (пакет device-tree-compiler) — reboot emmc работать не будет"
 fi
+
+# --- UART1 для подсветки стиков ---
+# Подсветкой управляет отдельный микроконтроллер: процессор шлёт ему команды
+# по UART1 (serial@ff670000, /dev/ttyS1), только передача, вывод GPIO1_D2 -
+# см. device/rg52mini/ledd. В эталонном дереве UART1 выключен, а его группа
+# выводов uart1m0-xfer держит ещё и RX (GPIO1_D1), который на этой плате -
+# ШИМ вентилятора (pwm4m1): включи UART как есть - и выводы бы столкнулись.
+# Поэтому, как в стоковом дереве ревизии 1.4, в группе оставляем только TX с
+# подтяжкой вверх. Номера phandle берём из самого дерева: в другом эталоне
+# они могут отличаться.
+if command -v fdtput >/dev/null 2>&1 && [ -f "$DTB" ]; then
+    U1=$(fdtget -t x "$DTB" /pinctrl/uart1/uart1m0-xfer phandle 2>/dev/null || true)
+    PU=$(fdtget -t x "$DTB" /pinctrl/pcfg-pull-up phandle 2>/dev/null || true)
+    if [ -n "$U1" ] && [ -n "$PU" ] &&
+       sudo fdtput -t x "$DTB" /pinctrl/uart1/uart1m0-xfer rockchip,pins 1 1a 1 "$PU" &&
+       sudo fdtput -t s "$DTB" /serial@ff670000 pinctrl-names default &&
+       sudo fdtput -t x "$DTB" /serial@ff670000 pinctrl-0 "$U1" &&
+       sudo fdtput -t s "$DTB" /serial@ff670000 status okay; then
+        echo "   UART1 для подсветки: $(fdtget "$DTB" /serial@ff670000 status)," \
+             "выводы $(fdtget -t x "$DTB" /pinctrl/uart1/uart1m0-xfer rockchip,pins)"
+    else
+        echo "   !! не удалось включить UART1 в дереве - подсветки стиков не будет"
+    fi
+fi
 sync
 
 # --- логотип u-boot: 22 КБ вместо 2,7 МБ ---

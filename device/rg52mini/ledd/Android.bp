@@ -1,0 +1,15 @@
+// Подсветка стиков RG52 Mini по настройкам GammaOS, см. rg52-ledd.c.
+cc_binary {
+    name: "rg52-ledd",
+    srcs: [
+        "rg52-ledd.c",
+        "ledmap.c",
+    ],
+    shared_libs: ["liblog"],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+    ],
+    init_rc: ["rg52-ledd.rc"],
+}

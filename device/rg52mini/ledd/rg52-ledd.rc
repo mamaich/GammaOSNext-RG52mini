@@ -1,0 +1,21 @@
+# Подсветка стиков: rg52-ledd связывает настройки GammaOS (раздел RGB в
+# GammaOS Toolbox, плитка и выбор цвета, Nano) с микроконтроллером
+# подсветки на /dev/ttyS1.
+#
+# Одна служба на всё время работы: включает и гасит подсветку сама, по
+# persist.gammargb.control, persist.gammaos.rgb.enable и sys.screen.state, -
+# а не запуском и остановкой по свойствам, как у vendor-ов Anbernic.
+# gentle_kill: stop у init сначала шлёт SIGTERM и лишь через 200 мс SIGKILL,
+# и по SIGTERM служба успевает погасить подсветку и снять питание.
+#
+# root - ради файла питания в debugfs; домен shell, как у rg52-perf, - из-за
+# permissive-SELinux этой сборки своего домена у службы нет.
+service rg52_ledd /system/bin/rg52-ledd
+    user root
+    group root system
+    disabled
+    gentle_kill
+    seclabel u:r:shell:s0
+
+on property:sys.boot_completed=1
+    start rg52_ledd

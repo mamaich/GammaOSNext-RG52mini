@@ -469,3 +469,41 @@ PRODUCT_COPY_FILES += \
 
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.rg52.tv_only=false
+
+# Подсветка стиков. GammaOS рассчитывает на vendor-службу gammargb, которой в
+# нашем vendor нет, - её место занимает rg52-ledd (device/rg52mini/ledd): она
+# читает те же свойства и шлёт команды микроконтроллеру подсветки по UART1.
+# UART1 включается в дереве устройства (tools/mk-sdimg.sh).
+PRODUCT_PACKAGES += \
+    rg52-ledd
+
+# Свойства GammaOS для такой подсветки. Контроллер знает 7 цветов и несколько
+# уровней яркости, отдельно левым и правым стиком не управляет:
+#   split=0, color_split=0  - раздельных цветов нет;
+#   effect1..3.supported    - эффект 1 «бегущий огонь» (заводской режим
+#                             стоковой прошивки), 2 - дыхание, 3 - дыхание
+#                             своим цветом; 4 и 5 не предлагаются;
+#   effect=1                - по умолчанию как в стоковой прошивке;
+#   enable=1                - поток сэмплера SurfaceFlinger создаётся только
+#                             если свойство включено к его старту;
+#   use_hwc=0, use_re_readback=1 - источник сэмплера, как у всех vendor GammaOS;
+#   fade.enable=false, fps=4 - в режиме «цвет по экрану» сэмплер пишет
+#                             persist-свойство на каждый шаг, а это запись на
+#                             карту; плавности контроллер всё равно не умеет.
+# Цвет - без решётки: при разборе продукта значение не раз проходит через
+# eval, и решётка там начинает комментарий, даже экранированная. Все, кто
+# читает это свойство, понимают цвет и без неё.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.gammaos.rgb.enable=1 \
+    persist.gammaos.rgb.use_hwc=0 \
+    persist.gammaos.rgb.use_re_readback=1 \
+    persist.gammaos.rgb.fade.enable=false \
+    persist.gammaos.rgb.fps=4 \
+    persist.gammaos.rgb.split=0 \
+    persist.gammaos.rgb.color_split=0 \
+    persist.gammaos.rgb.scale_with_brightness=1 \
+    persist.gammaos.rgb.effect1.supported=1 \
+    persist.gammaos.rgb.effect2.supported=1 \
+    persist.gammaos.rgb.effect3.supported=1 \
+    persist.gammaos.rgb.effect=1 \
+    persist.gammaos.primary.rgb_hex_custom=FF0000
