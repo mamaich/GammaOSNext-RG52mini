@@ -54,6 +54,7 @@ extern "C" uint32_t __system_property_serial(const prop_info* __pi);
 
 #include "NanoBacklight.h"
 #include "NanoMenu.h"
+#include "NanoScreenCal.h"
 #include "NanoMenuSettingsTree.h"
 #include "NanoMenuDrm.h"
 #include "NanoMenuShaders.h"
@@ -1333,6 +1334,9 @@ bool NanoMenu::enterDrmSleep() {
             if (strcmp(ss, "on") == 0) {
                 ALOGI("NanoMenu: framework awake (screen on) after %lldms",
                       (long long)(android::uptimeMillis() - waitStart));
+                // The composer re-applies baseparameter's BCSH on screen-on; put the stored
+                // Screen Calibration back on top so a change not yet mirrored is not lost.
+                screencal::applyFromProps();
                 break;
             }
             int64_t elapsed = android::uptimeMillis() - waitStart;
@@ -1728,6 +1732,7 @@ void NanoMenu::ndsSidePanelTouch() {
             if (v < mPs3DlgSldMin) v = mPs3DlgSldMin; if (v > mPs3DlgSldMax) v = mPs3DlgSldMax;
             if (v != mPs3DlgSldVal) {
                 mPs3DlgSldVal = v; mDisplayDirty = true;
+                screenCalSliderPreview();
                 if (mShaderParamEdit >= 0 && mShaderParamEdit < (int)mShaderParams.size()) {
                     mShaderParams[mShaderParamEdit].cur = v; shaderApplyParamLive(mShaderParamEdit);
                 }
