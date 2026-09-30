@@ -243,7 +243,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 # портретное приложение вертикальной полосой по центру, как на планшете; для
 # TV, автомобилей и ПК он включён у него сам. Свойство читает
 # DisplayRotation.isFixedToUserRotation, переключается оно в GammaOS Toolbox,
-# раздел «Дисплей». Явный `wm fixed-to-user-rotation` главнее.
+# раздел Screen Rotation. Явный `wm fixed-to-user-rotation` главнее.
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.rg52.fixed_rotation=1
 

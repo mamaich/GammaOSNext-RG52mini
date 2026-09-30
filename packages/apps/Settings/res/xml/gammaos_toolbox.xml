@@ -39,12 +39,6 @@
             android:summary="@string/gammaos_toolbox_category_display_description" />
 
         <SwitchPreference
-            android:key="persist.rg52.fixed_rotation"
-            android:title="@string/gammaos_toolbox_fixed_rotation_title"
-            android:summary="@string/gammaos_toolbox_fixed_rotation_summary"
-            android:defaultValue="1" />
-
-        <SwitchPreference
             android:key="persist.gammaos.immersive"
             android:title="@string/gammaos_toolbox_immersive_title"
             android:summary="@string/gammaos_toolbox_immersive_summary"
@@ -126,6 +120,14 @@
     <PreferenceCategory
         android:key="category_rotate"
         android:title="@string/gammaos_toolbox_category_rotate">
+
+        <!-- RG52: first, before the description - that one is about the
+             hardware rotation key, this switch is about apps. -->
+        <SwitchPreference
+            android:key="persist.rg52.fixed_rotation"
+            android:title="@string/gammaos_toolbox_fixed_rotation_title"
+            android:summary="@string/gammaos_toolbox_fixed_rotation_summary"
+            android:defaultValue="1" />
 
         <Preference
             android:key="category_rotate_description"
