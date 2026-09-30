@@ -21,9 +21,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include <binder/Binder.h>
 #include <binder/IPCThreadState.h>
-#include <binder/Parcel.h>
 #include <binder/ProcessState.h>
 #include <binder/IServiceManager.h>
 #include <cutils/properties.h>
@@ -52,58 +50,6 @@ static void waitForSurfaceFlinger() {
     }
 }
 
-// Экран не должен гаснуть, пока каркас ещё жив.
-//
-// Пока прошивальщик переселяется в tmpfs и проверяет контрольные суммы, Android
-// продолжает отсчитывать время до гашения экрана. Переселение идёт от минуты до
-// четырёх (дольше, когда память занята игрой), и 29.09.2026 экран погас по
-// таймауту прямо на проверке файла: меню рисовало в погашенный экран, а
-// Android вдобавок обнулил яркость. Держим обычную блокировку яркого экрана,
-// как у приложения с keepScreenOn.
-//
-// Отпускать её не нужно: она живёт, пока жив наш процесс и system_server, и
-// снимается сама - при переходе в tmpfs (exec) и при остановке zygote. Второй
-// процесс берёт её заново. ON_AFTER_RELEASE на этом стыке продлевает время до
-// гашения, иначе при давно истёкшем таймауте экран погас бы сразу. Дальше
-// экран - наш, и подсветку держит OtaDisplay::keepBacklightOn().
-//
-// Интерфейс Java-шный (android.os.IPowerManager), готовой обёртки для C++ нет,
-// поэтому транзакция собирается руками по IPowerManager.aidl этого дерева:
-// acquireWakeLock(IBinder lock, int flags, String tag, String packageName,
-// in WorkSource ws, String historyTag, int displayId, IWakeLockCallback) -
-// первый метод, то есть FIRST_CALL_TRANSACTION.
-static void keepScreenOn() {
-    static sp<IBinder> sLock;   // жетон блокировки: пока он жив, жива и она
-    if (sLock) return;
-    sp<IBinder> power = defaultServiceManager()->checkService(String16("power"));
-    if (!power) {
-        OtaFlasher::logToFile("WARN", "keepScreenOn: no power service");
-        return;
-    }
-    sp<IBinder> lock = sp<BBinder>::make();
-    Parcel data, reply;
-    data.writeInterfaceToken(String16("android.os.IPowerManager"));
-    data.writeStrongBinder(lock);
-    data.writeInt32(0x0000000a      // SCREEN_BRIGHT_WAKE_LOCK
-                    | 0x10000000    // ACQUIRE_CAUSES_WAKEUP
-                    | 0x20000000);  // ON_AFTER_RELEASE
-    data.writeString16(String16("GammaOSOta"));   // tag
-    data.writeString16(String16("android"));      // packageName
-    data.writeInt32(0);                            // WorkSource: null
-    data.writeString16(String16("GammaOSOta"));   // historyTag
-    data.writeInt32(-1);                           // displayId: INVALID_DISPLAY, как у newWakeLock()
-    data.writeStrongBinder(nullptr);               // callback
-    status_t st = power->transact(IBinder::FIRST_CALL_TRANSACTION, data, &reply);
-    int32_t ex = (st == OK) ? reply.readExceptionCode() : 0;
-    if (st != OK || ex != 0) {
-        OtaFlasher::logToFile("WARN", "keepScreenOn: acquireWakeLock failed (status %d, exception %d)",
-                              st, ex);
-        return;
-    }
-    sLock = lock;
-    OtaFlasher::logToFile("INFO", "keepScreenOn: screen wake lock held");
-}
-
 int main(int argc, char** argv) {
     setpriority(PRIO_PROCESS, 0, ANDROID_PRIORITY_DISPLAY);
 
@@ -121,7 +67,7 @@ int main(int argc, char** argv) {
 
         // Экран держим так же, как при настоящей прошивке: иначе сухой прогон
         // проверял бы не ту обстановку.
-        keepScreenOn();
+        OtaFlasher::keepScreenOn();
         if (!OtaFlasher::isRunningFromTmpfs()) {
             OtaFlasher staging;
             staging.stageToTmpfs(argc, argv);   // в норме сюда не возвращается
@@ -175,7 +121,7 @@ int main(int argc, char** argv) {
     if (!OtaFlasher::isRunningFromTmpfs()) {
         ALOGI("Not yet staged to tmpfs — staging now...");
         OtaFlasher::initLogFile();
-        keepScreenOn();
+        OtaFlasher::keepScreenOn();
         OtaFlasher flasher;
         // stageToTmpfs will re-exec. If it returns, staging failed.
         if (!flasher.stageToTmpfs(argc, argv)) {
@@ -221,7 +167,7 @@ int main(int argc, char** argv) {
 
     sp<ProcessState> proc(ProcessState::self());
     ProcessState::self()->startThreadPool();
-    keepScreenOn();
+    OtaFlasher::keepScreenOn();
 
     // OtaMenu runs as a Thread, matching NanoMenu pattern
     sp<OtaMenu> menu(new OtaMenu());

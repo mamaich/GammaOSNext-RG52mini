@@ -93,6 +93,10 @@ public:
 
     // Check if we're already running from tmpfs
     static bool isRunningFromTmpfs();
+    // Блокировка яркого экрана, пока жив каркас, и отметка активности
+    // пользователя перед exec; см. OtaFlasher.cpp.
+    static void keepScreenOn();
+    static void pokeUserActivity();
 
     // Run pre-flight checks. Returns empty string on success, error message on failure.
     std::string preflight(const OtaManifest& manifest);

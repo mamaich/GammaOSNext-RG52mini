@@ -47,6 +47,10 @@
 #include <cutils/properties.h>
 #include <utils/Log.h>
 #include <gui/SurfaceComposerClient.h>
+#include <binder/Binder.h>
+#include <binder/IServiceManager.h>
+#include <binder/Parcel.h>
+#include <utils/SystemClock.h>
 
 namespace android {
 
@@ -119,6 +123,82 @@ void OtaFlasher::logToFile(const char* level, const char* fmt, ...) {
     vfprintf(sLogFile, fmt, args);
     va_end(args);
     fprintf(sLogFile, "\n");
+}
+
+// Экран не должен гаснуть, пока каркас ещё жив.
+//
+// Пока прошивальщик переселяется в tmpfs и проверяет контрольные суммы, Android
+// продолжает отсчитывать время до гашения экрана. Переселение идёт от минуты до
+// четырёх (дольше, когда память занята игрой), и 29.09.2026 экран погас по
+// таймауту прямо на проверке файла: меню рисовало в погашенный экран, а
+// Android вдобавок обнулил яркость. Держим обычную блокировку яркого экрана,
+// как у приложения с keepScreenOn.
+//
+// Отпускать её не нужно: она живёт, пока жив наш процесс и system_server, и
+// снимается сама - при переходе в tmpfs (exec) и при остановке zygote. Второй
+// процесс берёт её заново. На этом стыке экран гас почти на секунду:
+// таймаут к тому времени давно истёк, и ON_AFTER_RELEASE не спасал. Поэтому
+// перед exec отмечаем активность пользователя (pokeUserActivity) - таймаут
+// начинается заново. Дальше экран - наш, и подсветку держит
+// OtaDisplay::keepBacklightOn().
+//
+// Интерфейс Java-шный (android.os.IPowerManager), готовой обёртки для C++ нет,
+// поэтому транзакция собирается руками по IPowerManager.aidl этого дерева:
+// acquireWakeLock(IBinder lock, int flags, String tag, String packageName,
+// in WorkSource ws, String historyTag, int displayId, IWakeLockCallback) -
+// первый метод, то есть FIRST_CALL_TRANSACTION.
+void OtaFlasher::keepScreenOn() {
+    static sp<IBinder> sLock;   // жетон блокировки: пока он жив, жива и она
+    if (sLock) return;
+    sp<IBinder> power = defaultServiceManager()->checkService(String16("power"));
+    if (!power) {
+        logToFile("WARN", "keepScreenOn: no power service");
+        return;
+    }
+    sp<IBinder> lock = sp<BBinder>::make();
+    Parcel data, reply;
+    data.writeInterfaceToken(String16("android.os.IPowerManager"));
+    data.writeStrongBinder(lock);
+    data.writeInt32(0x0000000a      // SCREEN_BRIGHT_WAKE_LOCK
+                    | 0x10000000    // ACQUIRE_CAUSES_WAKEUP
+                    | 0x20000000);  // ON_AFTER_RELEASE
+    data.writeString16(String16("GammaOSOta"));   // tag
+    data.writeString16(String16("android"));      // packageName
+    data.writeInt32(0);                            // WorkSource: null
+    data.writeString16(String16("GammaOSOta"));   // historyTag
+    data.writeInt32(-1);                           // displayId: INVALID_DISPLAY, как у newWakeLock()
+    data.writeStrongBinder(nullptr);               // callback
+    status_t st = power->transact(IBinder::FIRST_CALL_TRANSACTION, data, &reply);
+    int32_t ex = (st == OK) ? reply.readExceptionCode() : 0;
+    if (st != OK || ex != 0) {
+        logToFile("WARN", "keepScreenOn: acquireWakeLock failed (status %d, exception %d)",
+                              st, ex);
+        return;
+    }
+    sLock = lock;
+    logToFile("INFO", "keepScreenOn: screen wake lock held");
+}
+
+
+// Отметить активность пользователя: таймаут экрана начинается заново.
+// IPowerManager.userActivity(int displayId, long time, int event, int flags) -
+// одиннадцатый метод AIDL этого дерева, FIRST_CALL_TRANSACTION + 10. Время -
+// uptimeMillis, тот же отсчёт, что у PowerManagerService; из будущего он его
+// не примет. Права: DEVICE_POWER, у root оно есть.
+void OtaFlasher::pokeUserActivity() {
+    sp<IBinder> power = defaultServiceManager()->checkService(String16("power"));
+    if (!power) return;
+    Parcel data, reply;
+    data.writeInterfaceToken(String16("android.os.IPowerManager"));
+    data.writeInt32(0);                   // displayId: DEFAULT_DISPLAY
+    data.writeInt64(uptimeMillis());      // time
+    data.writeInt32(0);                   // event: USER_ACTIVITY_EVENT_OTHER
+    data.writeInt32(0);                   // flags
+    status_t st = power->transact(IBinder::FIRST_CALL_TRANSACTION + 10, data, &reply);
+    int32_t ex = (st == OK) ? reply.readExceptionCode() : 0;
+    if (st != OK || ex != 0) {
+        logToFile("WARN", "pokeUserActivity: userActivity failed (status %d, exception %d)", st, ex);
+    }
 }
 
 bool OtaFlasher::isRunningFromTmpfs() {
@@ -263,6 +343,11 @@ bool OtaFlasher::stageToTmpfs(int argc, char** argv) {
     setenv("LD_LIBRARY_PATH", ldPath.c_str(), 1);
     setenv("GAMMAOS_OTA_STAGED", "1", 1);
     setenv("GAMMAOS_OTA_FONT_DIR", fontDir.c_str(), 1);
+
+    // Блокировка экрана умрёт вместе с этим образом процесса; чтобы экран
+    // не погас на стыке, пока новый образ не возьмёт её заново, таймаут
+    // начинаем заново (см. keepScreenOn).
+    pokeUserActivity();
 
     // Re-exec from tmpfs
     execv(newExe.c_str(), newArgv.data());
