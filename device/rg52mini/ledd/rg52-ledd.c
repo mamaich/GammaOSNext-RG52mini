@@ -27,7 +27,9 @@
  * UART1 (GPIO1_D1) отдан ШИМ вентилятора, и открытый порт мог бы ловить с
  * него помехи. Bluetooth этот порт не нужен, хотя vendor-овский
  * bt_vendor.conf и называет его своим: наш libbt-vendor (btvendor) работает
- * через HCI-сокет.
+ * через HCI-сокет. Ответов контроллера стоковая прошивка не читает; есть ли
+ * они вообще, показывает ручная команда listen - на устройстве без
+ * вентилятора и с деревом, где приём UART1 включён вместо его ШИМ.
  *
  * UART1 включается в дереве устройства (tools/mk-sdimg.sh). Без него
  * /dev/ttyS1 нет, и служба только ждёт.
@@ -46,6 +48,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -112,9 +115,9 @@ static void nap_ms(int ms) {
 }
 
 /* O_NONBLOCK - как у стоковой mcu_led: ни открытие, ни запись не должны
- * повиснуть. */
-static int tty_open(void) {
-    const int fd = open(TTY_PATH, O_WRONLY | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+ * повиснуть. access - O_WRONLY, для опытов с приёмом - O_RDONLY. */
+static int tty_open(int access) {
+    const int fd = open(TTY_PATH, access | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) return -1;
     struct termios t;
     if (tcgetattr(fd, &t) == 0) {
@@ -176,7 +179,7 @@ static bool put_command(int fd, int cmd, int repeat, int byte_ms) {
 
 /* Посылка: команды по очереди, после каждой - пауза gap_ms. */
 static bool mcu_send(const int *cmd, int n, int repeat, int byte_ms, int gap_ms) {
-    const int fd = tty_open();
+    const int fd = tty_open(O_WRONLY);
     if (fd < 0) return false;
     bool ok = true;
     for (int i = 0; ok && i < n; i++) {
@@ -256,7 +259,7 @@ static void wake_write(const char *path, const char *s) {
 static void on_signal(int sig) {
     (void)sig;
     wake_write(WAKE_LOCK_PATH, WAKE_LOCK_TIMED);
-    const int fd = tty_open();
+    const int fd = tty_open(O_WRONLY);
     if (fd >= 0) {
         const int repeat = g_repeat < DEFAULT_REPEAT ? g_repeat : DEFAULT_REPEAT;
         const int byte_ms = g_byte_ms < DEFAULT_BYTE_MS ? g_byte_ms : DEFAULT_BYTE_MS;
@@ -305,7 +308,7 @@ static void read_config(config *c) {
     prop("sys.rg52.ledd.bri_table", v);
     c->nbri = ledmap_parse_bri_table(v, c->bri, LEDMAP_MAX_LEVELS);
     if (c->nbri == 0) {
-        if (v[0]) ALOGW("sys.rg52.ledd.bri_table=\"%s\" не разобрать, беру %s", v, DEFAULT_BRI_TABLE);
+        if (v[0]) ALOGW("sys.rg52.ledd.bri_table=\"%s\" is invalid, using %s", v, DEFAULT_BRI_TABLE);
         c->nbri = ledmap_parse_bri_table(DEFAULT_BRI_TABLE, c->bri, LEDMAP_MAX_LEVELS);
     }
     g_repeat = c->repeat;
@@ -345,7 +348,7 @@ static void let_sleep(void) {
 static bool power_up(const config *c, const ledmap_target *t) {
     hold_awake(c->settle_ms + burst_ms(c, 3));
     if (rail_get() != 1) {
-        if (rail_on() != 1) ALOGW("питание подсветки не включилось (%s)", RAIL_PATH);
+        if (rail_on() != 1) ALOGW("LED power did not come on (%s)", RAIL_PATH);
         nap_ms(c->settle_ms);
     }
     const int cmd[3] = { c->init, c->bri[t->level], t->mode };
@@ -382,11 +385,11 @@ __attribute__((format(printf, 1, 2))) static void failed(const char *fmt, ...) {
     va_start(ap, fmt);
     vsnprintf(msg, sizeof(msg), fmt, ap);
     va_end(ap);
-    ALOGW("%s; повторяю раз в %d с", msg, RETRY_MS / 1000);
+    ALOGW("%s; retrying every %d s", msg, RETRY_MS / 1000);
 }
 
 static void succeeded(void) {
-    if (g_fails > 0) ALOGI("подсветка снова слушается (неудач подряд было %d)", g_fails);
+    if (g_fails > 0) ALOGI("LEDs respond again (after %d failures in a row)", g_fails);
     g_fails = 0;
 }
 
@@ -413,8 +416,8 @@ static int daemon_main(void) {
     const int rail = rail_get();
     ledmap_sent sent = { .on = false, .rail_leftover = rail == 1, .mode = -1, .level = -1,
                          .last_send_ms = 0 };
-    ALOGI("запущена; питание подсветки %s",
-          rail == 1 ? "включено" : (rail == 0 ? "выключено" : "недоступно (" RAIL_PATH ")"));
+    ALOGI("started; LED power is %s",
+          rail == 1 ? "on" : (rail == 0 ? "off" : "unavailable (" RAIL_PATH ")"));
 
     ledmap_state st = LEDMAP_STATE_INIT;
     char prev_control[PROP_VALUE_MAX];
@@ -447,13 +450,13 @@ static int daemon_main(void) {
         prop("persist.gammaos.rgb.min_led_brightness", mbri);
 
         if (ledmap_reenable(prev_control, control, enable)) {
-            ALOGI("подсветку включили (persist.gammargb.control=%s) - возвращаю "
-                  "persist.gammaos.rgb.enable=1",
+            ALOGI("LEDs switched on (persist.gammargb.control=%s), "
+                  "restoring persist.gammaos.rgb.enable=1",
                   control);
             if (__system_property_set("persist.gammaos.rgb.enable", "1") == 0) {
                 strcpy(enable, "1");
             } else {
-                ALOGW("не удалось записать persist.gammaos.rgb.enable");
+                ALOGW("cannot set persist.gammaos.rgb.enable");
             }
         }
         memcpy(prev_control, control, sizeof(prev_control));
@@ -478,10 +481,10 @@ static int daemon_main(void) {
                 sent.mode = sent.level = -1;
                 sent.rail_leftover = !ok;
                 if (ok) {
-                    ALOGI("подсветка погашена");
+                    ALOGI("LEDs off");
                     succeeded();
                 } else {
-                    failed("гашение подсветки: питание не снимается (%s)", RAIL_PATH);
+                    failed("LED power-down: power stays on (%s)", RAIL_PATH);
                     down_retry_at = now_ms() + RETRY_MS;
                     wait_ms = RETRY_MS;
                 }
@@ -492,8 +495,8 @@ static int daemon_main(void) {
             } else if (a.power_up) {
                 if (access(TTY_PATH, F_OK) != 0) {
                     if (!tty_warned) {
-                        ALOGW("нет %s: UART1 не включён в дереве устройства "
-                              "(tools/mk-sdimg.sh), подсветка не работает",
+                        ALOGW("no %s: UART1 is not enabled in the device tree "
+                              "(tools/mk-sdimg.sh), LEDs unavailable",
                               TTY_PATH);
                         tty_warned = true;
                     }
@@ -506,11 +509,11 @@ static int daemon_main(void) {
                     if (power_up(&cfg, &t)) {
                         sent = (ledmap_sent){ .on = true, .rail_leftover = false, .mode = t.mode,
                                               .level = t.level, .last_send_ms = now };
-                        ALOGI("подсветка включена: init 0x%02x, яркость %d, режим %d", cfg.init,
+                        ALOGI("LEDs on: init 0x%02x, brightness %d, mode %d", cfg.init,
                               cfg.bri[t.level], t.mode);
                         succeeded();
                     } else {
-                        failed("включение подсветки: %s", strerror(errno));
+                        failed("LED power-up: %s", strerror(errno));
                         sent.rail_leftover = rail_get() == 1;
                         up_retry_at = now_ms() + RETRY_MS;
                         wait_ms = RETRY_MS;
@@ -524,10 +527,10 @@ static int daemon_main(void) {
                     sent.mode = t.mode;
                     sent.level = t.level;
                     sent.last_send_ms = now;
-                    if (!t.follow) ALOGI("режим %d, яркость %d", t.mode, cfg.bri[t.level]);
+                    if (!t.follow) ALOGI("mode %d, brightness %d", t.mode, cfg.bri[t.level]);
                     succeeded();
                 } else {
-                    failed("смена режима подсветки: %s", strerror(errno));
+                    failed("LED mode change: %s", strerror(errno));
                     /* Что дошло - неизвестно: в следующий раз включим заново. */
                     sent.on = false;
                     sent.mode = sent.level = -1;
@@ -556,20 +559,24 @@ static int daemon_main(void) {
 /* ---- Ручные команды ----------------------------------------------------- */
 
 static int usage(void) {
-    fputs("Подсветка стиков RG52 Mini. Без аргументов - служба (её запускает init).\n"
-          "Ручные команды, для опытов:\n"
-          "  rg52-ledd send BYTE [N]       послать байт 0..255 N раз (1..50, по умолчанию 6)\n"
-          "  rg52-ledd rail on|off|state   питание подсветки; печатает, горит ли оно (1/0)\n"
-          "  rg52-ledd on [MODE [BRI]]     включить порядком службы: питание, пауза, init,\n"
-          "                                яркость, режим\n"
-          "  rg52-ledd stock [MODE [BRI]]  включить порядком стоковой прошивки: init,\n"
-          "                                яркость, питание, режим\n"
-          "  rg52-ledd off                 погасить: режим 9, затем снять питание\n"
-          "MODE - байт режима (по умолчанию 3, красный), BRI - байт яркости (по умолчанию 49).\n"
-          "Код выхода: 0 - готово, 1 - ошибка порта или питания, 2 - неверные аргументы,\n"
-          "3 - байты ушли, но питание подсветки не включено.\n"
-          "Настройки sys.rg52.ledd.* действуют и здесь. Службу перед опытами лучше\n"
-          "остановить: stop rg52_ledd (она при этом гасит подсветку), вернуть - start rg52_ledd.\n",
+    fputs("RG52 Mini stick LEDs. Without arguments: the service (started by init).\n"
+          "Manual commands, for experiments:\n"
+          "  rg52-ledd send BYTE [N]       send byte 0..255 N times (1..50, default 6)\n"
+          "  rg52-ledd rail on|off|state   LED power; prints whether it is on (1/0)\n"
+          "  rg52-ledd on [MODE [BRI]]     switch on in the service's order: power, pause,\n"
+          "                                init, brightness, mode\n"
+          "  rg52-ledd stock [MODE [BRI]]  switch on in the stock firmware's order: init,\n"
+          "                                brightness, power, mode\n"
+          "  rg52-ledd off                 switch off: mode 9, then power off\n"
+          "  rg52-ledd listen [SEC]        print bytes received on the port for SEC seconds\n"
+          "                                (1..3600, default 5); needs UART1 RX in the\n"
+          "                                device tree, which the fan PWM normally uses\n"
+          "MODE is the mode byte (default 3, red), BRI the brightness byte (default 49).\n"
+          "Exit code: 0 done, 1 port or power error, 2 bad arguments,\n"
+          "3 bytes sent but LED power is not on.\n"
+          "The sys.rg52.ledd.* settings apply here too. Stop the service before\n"
+          "experimenting: stop rg52_ledd (this switches the LEDs off); start rg52_ledd\n"
+          "brings it back.\n",
           stderr);
     return 2;
 }
@@ -587,6 +594,40 @@ static bool parse_num(const char *s, int lo, int hi, int *out) {
     return true;
 }
 
+/* Что приходит с порта, sec секунд: байты в hex со временем от начала.
+ * Порт открыт всё это время, так что посылки из другого процесса (send,
+ * on) видны целиком. Ошибки кадра n_tty отдаёт нулевыми байтами. */
+static int listen_port(int sec) {
+    const int fd = tty_open(O_RDONLY);
+    if (fd < 0) {
+        fprintf(stderr, "%s: %s\n", TTY_PATH, strerror(errno));
+        return 1;
+    }
+    tcflush(fd, TCIFLUSH);
+    const long long start = now_ms(), end = start + sec * 1000LL;
+    int total = 0;
+    for (;;) {
+        const long long left = end - now_ms();
+        if (left <= 0) break;
+        struct pollfd pfd = { .fd = fd, .events = POLLIN, .revents = 0 };
+        const int r = poll(&pfd, 1, (int)left);
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) break;
+        unsigned char buf[64];
+        const ssize_t n = read(fd, buf, sizeof(buf));
+        if (n < 0 && (errno == EAGAIN || errno == EINTR)) continue;
+        if (n <= 0) break;
+        printf("%6lld ms:", now_ms() - start);
+        for (ssize_t i = 0; i < n; i++) printf(" %02x", buf[i]);
+        printf("\n");
+        fflush(stdout);
+        total += (int)n;
+    }
+    printf("received %d byte(s)\n", total);
+    close(fd);
+    return 0;
+}
+
 static int tool_main(int argc, char **argv) {
     const char *cmd = argv[1];
     if (!strcmp(cmd, "help") || !strcmp(cmd, "-h") || !strcmp(cmd, "--help")) {
@@ -597,8 +638,10 @@ static int tool_main(int argc, char **argv) {
     read_config(&cfg);
     char svc[PROP_VALUE_MAX];
     prop("init.svc.rg52_ledd", svc);
-    if (!strcmp(svc, "running") && !(argc == 3 && !strcmp(argv[2], "state"))) {
-        fputs("служба rg52_ledd работает и может перебить команду (stop rg52_ledd)\n", stderr);
+    if (!strcmp(svc, "running") && strcmp(cmd, "listen") != 0 &&
+        !(argc == 3 && !strcmp(argv[2], "state"))) {
+        fputs("service rg52_ledd is running and may override this command (stop rg52_ledd)\n",
+              stderr);
     }
 
     if (!strcmp(cmd, "send")) {
@@ -626,7 +669,7 @@ static int tool_main(int argc, char **argv) {
             return usage();
         }
         if (r < 0) {
-            fprintf(stderr, "%s недоступен\n", RAIL_PATH);
+            fprintf(stderr, "%s is not available\n", RAIL_PATH);
             return 1;
         }
         printf("%d\n", r);
@@ -641,7 +684,7 @@ static int tool_main(int argc, char **argv) {
         bool ok;
         if (!strcmp(cmd, "on")) {
             if (rail_get() != 1) {
-                if (rail_on() != 1) fprintf(stderr, "питание не включилось (%s)\n", RAIL_PATH);
+                if (rail_on() != 1) fprintf(stderr, "LED power did not come on (%s)\n", RAIL_PATH);
                 nap_ms(cfg.settle_ms);
             }
             const int seq[3] = { cfg.init, bri, mode };
@@ -650,13 +693,13 @@ static int tool_main(int argc, char **argv) {
             /* Как mcu_led_ctrl.sh init: init и яркость, затем питание, если
              * оно выключено, затем режим - без паузы. */
             if (rail_get() == 1) {
-                fputs("питание уже включено - стоковый порядок не воспроизводится; "
-                      "сначала rg52-ledd rail off\n",
+                fputs("LED power is already on, so this is not the stock order; "
+                      "run 'rg52-ledd rail off' first\n",
                       stderr);
             }
             const int seq[2] = { cfg.init, bri };
             ok = mcu_send(seq, 2, cfg.repeat, cfg.byte_ms, cfg.gap_ms);
-            if (rail_on() != 1) fprintf(stderr, "питание не включилось (%s)\n", RAIL_PATH);
+            if (rail_on() != 1) fprintf(stderr, "LED power did not come on (%s)\n", RAIL_PATH);
             ok = mcu_send(&mode, 1, cfg.repeat, cfg.byte_ms, cfg.gap_ms) && ok;
         }
         if (!ok) {
@@ -666,6 +709,12 @@ static int tool_main(int argc, char **argv) {
         return rail_get() == 1 ? 0 : 3;
     }
 
+    if (!strcmp(cmd, "listen")) {
+        int sec = 5;
+        if (argc > 3 || (argc == 3 && !parse_num(argv[2], 1, 3600, &sec))) return usage();
+        return listen_port(sec);
+    }
+
     if (!strcmp(cmd, "off")) {
         if (argc != 2) return usage();
         const int off = MCU_MODE_OFF;
@@ -673,8 +722,8 @@ static int tool_main(int argc, char **argv) {
         const int err = errno;
         const int r = rail_off();
         if (!ok) fprintf(stderr, "%s: %s\n", TTY_PATH, strerror(err));
-        if (r == 1) fprintf(stderr, "питание не снимается (%s)\n", RAIL_PATH);
-        if (r < 0) fprintf(stderr, "%s недоступен\n", RAIL_PATH);
+        if (r == 1) fprintf(stderr, "LED power stays on (%s)\n", RAIL_PATH);
+        if (r < 0) fprintf(stderr, "%s is not available\n", RAIL_PATH);
         return ok && r == 0 ? 0 : 1;
     }
 
