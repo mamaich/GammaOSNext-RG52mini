@@ -32,9 +32,9 @@
  * UART1 (GPIO1_D1) отдан ШИМ вентилятора, и открытый порт мог бы ловить с
  * него помехи. Bluetooth этот порт не нужен, хотя vendor-овский
  * bt_vendor.conf и называет его своим: наш libbt-vendor (btvendor) работает
- * через HCI-сокет. Ответов контроллера стоковая прошивка не читает; на
- * устройстве v1.4 без вентилятора, с приёмом UART1 вместо его ШИМ, ручная
- * команда listen тоже ничего не приняла ни при одной команде.
+ * через HCI-сокет. Ответов контроллера стоковая прошивка не читает, и их нет:
+ * на v1.4 без вентилятора, с приёмом UART1 вместо его ШИМ, на GPIO1_D1 не
+ * пришло ни байта ни на одну команду.
  *
  * UART1 включается в дереве устройства (tools/mk-sdimg.sh). Без него
  * /dev/ttyS1 нет, и служба только ждёт.
@@ -53,7 +53,6 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -120,9 +119,9 @@ static void nap_ms(int ms) {
 }
 
 /* O_NONBLOCK - как у стоковой mcu_led: ни открытие, ни запись не должны
- * повиснуть. access - O_WRONLY, для опытов с приёмом - O_RDONLY. */
-static int tty_open(int access) {
-    const int fd = open(TTY_PATH, access | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
+ * повиснуть. */
+static int tty_open(void) {
+    const int fd = open(TTY_PATH, O_WRONLY | O_NOCTTY | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) return -1;
     struct termios t;
     if (tcgetattr(fd, &t) == 0) {
@@ -184,7 +183,7 @@ static bool put_command(int fd, int cmd, int repeat, int byte_ms) {
 
 /* Посылка: команды по очереди, после каждой - пауза gap_ms. */
 static bool mcu_send(const int *cmd, int n, int repeat, int byte_ms, int gap_ms) {
-    const int fd = tty_open(O_WRONLY);
+    const int fd = tty_open();
     if (fd < 0) return false;
     bool ok = true;
     for (int i = 0; ok && i < n; i++) {
@@ -264,7 +263,7 @@ static void wake_write(const char *path, const char *s) {
 static void on_signal(int sig) {
     (void)sig;
     wake_write(WAKE_LOCK_PATH, WAKE_LOCK_TIMED);
-    const int fd = tty_open(O_WRONLY);
+    const int fd = tty_open();
     if (fd >= 0) {
         const int repeat = g_repeat < DEFAULT_REPEAT ? g_repeat : DEFAULT_REPEAT;
         const int byte_ms = g_byte_ms < DEFAULT_BYTE_MS ? g_byte_ms : DEFAULT_BYTE_MS;
@@ -573,9 +572,6 @@ static int usage(void) {
           "  rg52-ledd stock [MODE [BRI]]  switch on in the stock firmware's order: init,\n"
           "                                brightness, power, mode\n"
           "  rg52-ledd off                 switch off: mode 9, then power off\n"
-          "  rg52-ledd listen [SEC]        print bytes received on the port for SEC seconds\n"
-          "                                (1..3600, default 5); needs UART1 RX in the\n"
-          "                                device tree, which the fan PWM normally uses\n"
           "MODE is the mode byte (default 3, red), BRI the brightness byte (default 49).\n"
           "Exit code: 0 done, 1 port or power error, 2 bad arguments,\n"
           "3 bytes sent but LED power is not on.\n"
@@ -599,40 +595,6 @@ static bool parse_num(const char *s, int lo, int hi, int *out) {
     return true;
 }
 
-/* Что приходит с порта, sec секунд: байты в hex со временем от начала.
- * Порт открыт всё это время, так что посылки из другого процесса (send,
- * on) видны целиком. Ошибки кадра n_tty отдаёт нулевыми байтами. */
-static int listen_port(int sec) {
-    const int fd = tty_open(O_RDONLY);
-    if (fd < 0) {
-        fprintf(stderr, "%s: %s\n", TTY_PATH, strerror(errno));
-        return 1;
-    }
-    tcflush(fd, TCIFLUSH);
-    const long long start = now_ms(), end = start + sec * 1000LL;
-    int total = 0;
-    for (;;) {
-        const long long left = end - now_ms();
-        if (left <= 0) break;
-        struct pollfd pfd = { .fd = fd, .events = POLLIN, .revents = 0 };
-        const int r = poll(&pfd, 1, (int)left);
-        if (r < 0 && errno == EINTR) continue;
-        if (r <= 0) break;
-        unsigned char buf[64];
-        const ssize_t n = read(fd, buf, sizeof(buf));
-        if (n < 0 && (errno == EAGAIN || errno == EINTR)) continue;
-        if (n <= 0) break;
-        printf("%6lld ms:", now_ms() - start);
-        for (ssize_t i = 0; i < n; i++) printf(" %02x", buf[i]);
-        printf("\n");
-        fflush(stdout);
-        total += (int)n;
-    }
-    printf("received %d byte(s)\n", total);
-    close(fd);
-    return 0;
-}
-
 static int tool_main(int argc, char **argv) {
     const char *cmd = argv[1];
     if (!strcmp(cmd, "help") || !strcmp(cmd, "-h") || !strcmp(cmd, "--help")) {
@@ -643,8 +605,7 @@ static int tool_main(int argc, char **argv) {
     read_config(&cfg);
     char svc[PROP_VALUE_MAX];
     prop("init.svc.rg52_ledd", svc);
-    if (!strcmp(svc, "running") && strcmp(cmd, "listen") != 0 &&
-        !(argc == 3 && !strcmp(argv[2], "state"))) {
+    if (!strcmp(svc, "running") && !(argc == 3 && !strcmp(argv[2], "state"))) {
         fputs("service rg52_ledd is running and may override this command (stop rg52_ledd)\n",
               stderr);
     }
@@ -712,12 +673,6 @@ static int tool_main(int argc, char **argv) {
             return 1;
         }
         return rail_get() == 1 ? 0 : 3;
-    }
-
-    if (!strcmp(cmd, "listen")) {
-        int sec = 5;
-        if (argc > 3 || (argc == 3 && !parse_num(argv[2], 1, 3600, &sec))) return usage();
-        return listen_port(sec);
     }
 
     if (!strcmp(cmd, "off")) {
