@@ -316,6 +316,61 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         bindSwapSize();
         // Launch target is a two-level app -> activity picker, not a free-text field.
         bindLaunchTarget();
+        // RG52: HDMI output mode; its key is outside the GammaOS namespace, so
+        // the generic binder skipped it.
+        bindHdmiMode();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // The TV may have been plugged in while the page was in the background.
+        populateHdmiModes();
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  RG52: HDMI output mode (vendor HWC, see HdmiModes)                */
+    /* ------------------------------------------------------------------ */
+
+    private void bindHdmiMode() {
+        ListPreference lp = (ListPreference) findPreference(HdmiModes.PROP_MODE);
+        if (lp == null) return;
+        populateHdmiModes();
+        lp.setOnPreferenceChangeListener((p, newValue) -> {
+            String val = (String) newValue;
+            HdmiModes.apply(val);
+            updateListSummary(lp, val);
+            return true;
+        });
+    }
+
+    /**
+     * Entries: "Auto" (empty value), then the modes from the TV's EDID plus the
+     * forced 640x480/1024x768/1280x720/1920x1080, sorted by height and width.
+     * A stored value that is not in the list (set by hand) stays selectable.
+     */
+    private void populateHdmiModes() {
+        ListPreference lp = (ListPreference) findPreference(HdmiModes.PROP_MODE);
+        if (lp == null) return;
+        String current = HdmiModes.current();
+
+        List<CharSequence> entries = new ArrayList<>();
+        List<CharSequence> values = new ArrayList<>();
+        entries.add(getString(R.string.gammaos_toolbox_hdmi_mode_auto));
+        values.add("");
+        for (HdmiModes.Mode m : HdmiModes.list()) {
+            entries.add(m.label());
+            values.add(m.value);
+        }
+        if (!values.contains(current)) {
+            entries.add(getString(R.string.gammaos_toolbox_hdmi_mode_custom, current));
+            values.add(current);
+        }
+
+        lp.setEntries(entries.toArray(new CharSequence[0]));
+        lp.setEntryValues(values.toArray(new CharSequence[0]));
+        lp.setValue(current);
+        updateListSummary(lp, current);
     }
 
     /* ------------------------------------------------------------------ */
