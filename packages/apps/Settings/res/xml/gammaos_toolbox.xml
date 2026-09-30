@@ -751,6 +751,13 @@
             android:selectable="false"
             android:summary="@string/gammaos_toolbox_category_external_description" />
 
+        <!-- RG52: HDMI output mode for the vendor HWC; entries are filled at
+             runtime from the TV's EDID (HdmiModes). -->
+        <ListPreference
+            android:key="persist.vendor.resolution.aux"
+            android:title="@string/gammaos_toolbox_hdmi_mode_title"
+            android:dialogTitle="@string/gammaos_toolbox_hdmi_mode_title" />
+
         <SwitchPreference
             android:key="persist.gammaos.ext.primary"
             android:title="@string/gammaos_toolbox_ext_primary_title"

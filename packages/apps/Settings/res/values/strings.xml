@@ -13475,6 +13475,9 @@
 
     <!-- GammaOS Toolbox: External Display -->
     <string name="gammaos_toolbox_category_external">External Display</string>
+    <string name="gammaos_toolbox_hdmi_mode_title">HDMI output mode</string>
+    <string name="gammaos_toolbox_hdmi_mode_auto">Auto (the TV\'s preferred mode)</string>
+    <string name="gammaos_toolbox_hdmi_mode_custom">Custom: %1$s</string>
     <string name="gammaos_toolbox_category_external_description">Controls how external displays (HDMI, USB-C, DisplayPort) are handled. Includes options for making an external display primary, forcing mirror mode, routing specific apps, and resolution adjustments.</string>
     <string name="gammaos_toolbox_ext_primary_title">External as primary</string>
     <string name="gammaos_toolbox_ext_primary_summary">Treat the external display as the primary display. The built-in screen becomes secondary.</string>
