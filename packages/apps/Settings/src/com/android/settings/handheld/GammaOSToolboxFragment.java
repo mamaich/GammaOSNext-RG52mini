@@ -79,7 +79,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
     static {
         // Display
         DEFAULTS.put("persist.rg52.perf.remember_mode", "1");
-        DEFAULTS.put("persist.rg52.zram.size_mb", "0");
+        DEFAULTS.put("persist.rg52.zram.size_pct", "100");
         DEFAULTS.put("persist.rg52.zram.algo", "zstd");
         DEFAULTS.put("persist.rg52.zram.backing_mb", "0");
         DEFAULTS.put("persist.rg52.zram.wb_threshold_mb", "300");
@@ -865,7 +865,8 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         // Поля размеров - однострочные и цифровые. В многострочном поле кнопка
         // ввода добавляет перевод строки вместо подтверждения, и на устройстве
         // без сенсорного экрана из такого поля неудобно выбираться.
-        if (key.endsWith("_mb") || key.endsWith("_ms") || key.endsWith("_ns")) {
+        if (key.endsWith("_mb") || key.endsWith("_ms") || key.endsWith("_ns")
+                || key.endsWith("_pct")) {
             etp.setOnBindEditTextListener(editText -> {
                 editText.setInputType(InputType.TYPE_CLASS_NUMBER);
                 editText.setSingleLine(true);

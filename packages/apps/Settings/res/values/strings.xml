@@ -13636,14 +13636,14 @@
     <string name="gammaos_toolbox_performance_mode_title">Performance mode</string>
     <string name="gammaos_toolbox_performance_mode_summary">Performance profile for CPU/GPU/memory governor tuning. Options: stock, max, powersave, 3d_game.</string>
     <string name="gammaos_toolbox_perf_remember_title">Remember performance mode across reboots</string>
-    <string name="gammaos_toolbox_zram_size_title">zRAM size (MB)</string>
+    <string name="gammaos_toolbox_zram_size_title">zRAM size (% of RAM)</string>
     <string name="gammaos_toolbox_zram_algo_title">zRAM compression</string>
     <string name="gammaos_toolbox_zram_algo_summary">How zRAM packs pages. zstd fits more into the same RAM, lz4 costs less CPU per page. Measured here on a heavy game: zstd held 268 MB in 74 MB of RAM, lz4 needed 105 MB for the same data, and the card took 17% fewer writes with zstd. Changing this rebuilds zRAM, which briefly pulls its pages back into RAM.</string>
     <string name="gammaos_toolbox_zram_wb_title">zRAM writeback threshold (MB)</string>
     <string name="gammaos_toolbox_zram_wb_summary">When free memory drops below this, zRAM contents are pushed out to the backing store on the card. 0 never pushes, which also means no backing store is kept - the same as setting the backing size to 0. Runs while the screen is on.</string>
     <string name="gammaos_toolbox_zram_backing_title">zRAM backing store (MB)</string>
     <string name="gammaos_toolbox_zram_backing_summary">Space on the card for pushing zRAM contents out of RAM, which frees real memory and lets a heavy game use more than the device has. Needs a writeback threshold above 0 as well. 0 means no backing store - zRAM then only compresses in place. Note: with a backing store the separate swap file is dropped, since the card space is already given to paging here.</string>
-    <string name="gammaos_toolbox_zram_size_summary">Compressed swap kept in RAM: a fast tier in front of the swap file on the card. It is compression, not extra memory - compressed pages still sit in RAM - so a small size is usually best; large values just squeeze out the memory apps could have used. 0 turns zRAM off. Applies immediately.</string>
+    <string name="gammaos_toolbox_zram_size_summary">Compressed swap kept in RAM: a fast tier in front of the swap file on the card. It is compression, not extra memory - compressed pages still sit in RAM - so a small size is usually best; large values just squeeze out the memory apps could have used. Percent of RAM, 0 to 100: 0 turns zRAM off, larger numbers count as 100. Applies immediately.</string>
     <string name="gammaos_toolbox_perf_remember_summary">On: the device restores the performance mode you selected last. Off: the mode is chosen at every boot from the power source - Normal on battery, Max Performance with a charger connected.</string>
 
     <!-- GammaOS Toolbox: CRT Shader Sub-Parameters -->

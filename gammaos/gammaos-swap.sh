@@ -32,7 +32,9 @@ log_i() { log -p i -t "$TAG" "$1"; }
 # когда у него есть своя подложка на карте (persist.rg52.zram.backing_mb) - там
 # место на карте действительно занято под вытеснение, и второй файл был бы его
 # потерей.
-zram_mb=$(getprop persist.rg52.zram.size_mb)
+# Размер zram - в процентах памяти, со знаком % или без (rg52-zram.sh).
+zram_mb=$(getprop persist.rg52.zram.size_pct)
+zram_mb=${zram_mb%\%}
 case "$zram_mb" in ''|*[!0-9]*) zram_mb=0 ;; esac
 back_mb=$(getprop persist.rg52.zram.backing_mb)
 case "$back_mb" in ''|*[!0-9]*) back_mb=0 ;; esac

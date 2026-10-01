@@ -1086,21 +1086,36 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
     // разница между режимами видна именно на тяжёлой игре, и переключать их
     // удобнее там же, где переключается режим производительности. Замеры, из
     // которых взяты пояснения к пунктам, - в doc/rg52mini/02-план.md.
-    private static final String SWAP_ZRAM_KEY = "persist.rg52.zram.size_mb";
+    // Размер zram - в процентах памяти (rg52-zram.sh).
+    private static final String SWAP_ZRAM_KEY = "persist.rg52.zram.size_pct";
     private static final String SWAP_FILE_KEY = "persist.gammaos.swap.size_mb";
+
+    private static String normalizeZramPct(String raw) {
+        String s = raw == null ? "" : raw.trim();
+        if (s.endsWith("%")) s = s.substring(0, s.length() - 1);
+        int v;
+        try {
+            v = Integer.parseInt(s);
+        } catch (NumberFormatException e) {
+            v = 0;
+        }
+        if (v < 0) v = 0;
+        if (v > 100) v = 100;
+        return Integer.toString(v);
+    }
 
     private void showSwapModeDialog() {
         final String[][] modes = {
             // {размер zram, размер файла подкачки}
-            {"100%", "0"},      // только zram
-            {"256",  "2048"},   // небольшой zram и файл
+            {"100",  "0"},      // только zram
+            {"13",   "2048"},   // небольшой zram (13 % - около 256 МБ) и файл
             {"0",    "2048"},   // только файл
             null,               // своё - не трогаем ничего
             {"0",    "0"},      // без подкачки
         };
         final String[] labels = {
             "zRAM only (all RAM, compressed)",
-            "zRAM 256 MB + swap file (2 GB)",
+            "zRAM 13% (~256 MB) + swap file (2 GB)",
             "Swap file only (2 GB)",
             "Custom (tune it in GammaOS Toolbox)",
             "No swap at all",
@@ -1118,9 +1133,10 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         // другой файл), и тогда отмечается "Custom". Раньше такое состояние
         // округлялось до ближайшего режима, и первый же заход в меню стирал
         // ручную настройку, даже если пользователь ничего не выбирал заново.
-        String zram = SystemProperties.get(SWAP_ZRAM_KEY, "0");
+        // Размер zram сравниваем так, как его прочтёт rg52-zram.sh: "100%" и
+        // "100" - одно и то же, больше 100 - 100, не число - 0.
+        String zram = normalizeZramPct(SystemProperties.get(SWAP_ZRAM_KEY, "0"));
         String file = SystemProperties.get(SWAP_FILE_KEY, "0");
-        if (zram.isEmpty()) zram = "0";
         if (file.isEmpty()) file = "0";
         int customItem = 0;
         for (int i = 0; i < modes.length; i++) {

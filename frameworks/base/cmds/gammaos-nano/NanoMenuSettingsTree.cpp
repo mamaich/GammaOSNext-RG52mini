@@ -665,8 +665,8 @@ void NanoMenu::buildSettingsTree() {
         // Подкачка. Три настройки независимы: zram - быстрый сжатый ярус в
         // памяти, «Virtual memory» - обычный файл подкачки на карте, а подложка
         // нужна только тем, кто хочет вытеснять содержимое zram на карту.
-        b.text("zram_size", "zRAM Size (MB)",
-               SettingSource::kProp, "persist.rg52.zram.size_mb", "0");
+        b.text("zram_size", "zRAM Size (% of RAM)",
+               SettingSource::kProp, "persist.rg52.zram.size_pct", "100");
         b.text("zram_algo", "zRAM Compression (zstd/lz4/lzo-rle)",
                SettingSource::kProp, "persist.rg52.zram.algo", "zstd");
         b.text("zram_back", "zRAM Backing Store (MB)",
