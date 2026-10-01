@@ -425,6 +425,31 @@ if command -v fdtput >/dev/null 2>&1 && [ -f "$DTB" ]; then
         echo "   !! не удалось включить UART1 в дереве - подсветки стиков не будет"
     fi
 fi
+
+# --- звук по HDMI ---
+# Звуковая карта моста rk628 (rk628-sound, "rockchip,hdmi-rk628") берёт звук из
+# sai@ff810000. В эталонном дереве этот SAI выключен, и карта навсегда остаётся
+# в отложенной инициализации: звук при HDMI идёт в динамики. Мало того, его
+# pinctrl указывает на i2s1m0 (GPIO3_C5..C8) - а эти выводы заняты шиной
+# rgb666, по которой картинка идёт в тот же rk628. Как в стоковом дереве
+# ревизии 1.4: выводы i2s1m1 (GPIO3_B2..B5: mclk, sclk, lrck, sdo0) и
+# status = okay. Проверено на устройстве: карта появилась, шина RGB цела.
+if command -v fdtput >/dev/null 2>&1 && [ -f "$DTB" ]; then
+    SAIP=""
+    for g in i2s1m1-mclk i2s1m1-sclk i2s1m1-lrck i2s1m1-sdo0; do
+        p=$(fdtget -t x "$DTB" /pinctrl/i2s1/$g phandle 2>/dev/null || true)
+        [ -n "$p" ] && SAIP="$SAIP $p"
+    done
+    # shellcheck disable=SC2086 - четыре phandle должны уйти отдельными словами
+    if [ "$(echo $SAIP | wc -w)" = 4 ] &&
+       sudo fdtput -t x "$DTB" /sai@ff810000 pinctrl-0 $SAIP &&
+       sudo fdtput -t s "$DTB" /sai@ff810000 status okay; then
+        echo "   звук HDMI: sai@ff810000 $(fdtget "$DTB" /sai@ff810000 status)," \
+             "выводы i2s1m1"
+    else
+        echo "   !! не удалось включить SAI для HDMI - звук по HDMI не пойдёт"
+    fi
+fi
 sync
 
 # --- логотип u-boot: 22 КБ вместо 2,7 МБ ---
