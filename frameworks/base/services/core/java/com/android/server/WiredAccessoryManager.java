@@ -119,7 +119,7 @@ final class WiredAccessoryManager implements WiredAccessoryCallbacks {
 
         mExtconObserver = new WiredAccessoryExtconObserver();
         mHdmiExtconObserver = new WiredAccessoryExtconObserver(
-                new String[] {ExtconInfo.EXTCON_HDMI});
+                new String[] {ExtconUEventObserver.ExtconInfo.EXTCON_HDMI});
         mObserver = new WiredAccessoryObserver();
     }
 
