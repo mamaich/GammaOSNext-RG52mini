@@ -101,6 +101,8 @@ final class WiredAccessoryManager implements WiredAccessoryCallbacks {
 
     private final WiredAccessoryObserver mObserver;
     private final WiredAccessoryExtconObserver mExtconObserver;
+    // RG52: только кабель HDMI, см. onSystemReady.
+    private final WiredAccessoryExtconObserver mHdmiExtconObserver;
     private final InputManagerService mInputManager;
 
     private final boolean mUseDevInputEventForAudioJack;
@@ -116,6 +118,8 @@ final class WiredAccessoryManager implements WiredAccessoryCallbacks {
                 context.getResources().getBoolean(R.bool.config_useDevInputEventForAudioJack);
 
         mExtconObserver = new WiredAccessoryExtconObserver();
+        mHdmiExtconObserver = new WiredAccessoryExtconObserver(
+                new String[] {ExtconInfo.EXTCON_HDMI});
         mObserver = new WiredAccessoryObserver();
     }
 
@@ -146,6 +150,16 @@ final class WiredAccessoryManager implements WiredAccessoryCallbacks {
             mExtconObserver.init();
         } else {
             mObserver.init();
+            // RG52: путь через extcon здесь выключен целиком (&& false выше), и
+            // о HDMI Android узнаёт только через старый /sys/class/switch/hdmi,
+            // которого в ядрах с extcon нет: мост rk628 сообщает о кабеле через
+            // extcon (кабель HDMI), и звук при HDMI оставался в динамиках.
+            // Следим через extcon только за HDMI - наушники остаются на прежнем
+            // пути, двойной обработки нет.
+            if (ExtconUEventObserver.extconExists()
+                    && mHdmiExtconObserver.uEventCount() > 0) {
+                mHdmiExtconObserver.init();
+            }
         }
     }
 
@@ -772,12 +786,16 @@ final class WiredAccessoryManager implements WiredAccessoryCallbacks {
         private final List<ExtconInfo> mExtconInfos;
 
         WiredAccessoryExtconObserver() {
-            mExtconInfos = ExtconInfo.getExtconInfoForTypes(new String[] {
+            this(new String[] {
                     ExtconInfo.EXTCON_HEADPHONE,
                     ExtconInfo.EXTCON_MICROPHONE,
                     ExtconInfo.EXTCON_HDMI,
                     ExtconInfo.EXTCON_LINE_OUT,
             });
+        }
+
+        WiredAccessoryExtconObserver(String[] types) {
+            mExtconInfos = ExtconInfo.getExtconInfoForTypes(types);
         }
 
         private void init() {
