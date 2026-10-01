@@ -247,6 +247,15 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.rg52.fixed_rotation=1
 
+# HDMI по умолчанию показывает копию всего экрана (Force mirror mode в GammaOS
+# Toolbox). Видеоконтроллер у RK3562 здесь один: при подключении HDMI
+# встроенный экран всё равно гаснет, так что заводской режим GammaOS -
+# отдельный дисплей с одним приложением - на этом устройстве почти бесполезен.
+# С ним же SystemUI не задаёт вопрос о зеркалировании, который рисовался бы на
+# погасшем экране (ConnectingDisplayViewModel). Подробности - 05-hdmi.md.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.gammaos.ext.force_mirror=true
+
 # Оболочка GammaOS Nano (пункт «Boot nano» в меню выключателя) рисует напрямую
 # через DRM/KMS, мимо SurfaceFlinger. Поворот установки она берёт из свойства
 # выше и учитывает его правильно, но зеркальность сканирования панели строкой
