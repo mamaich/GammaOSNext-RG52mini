@@ -56,7 +56,7 @@ Flycast, DraStic, mupen64plus, Daijishō, и вырезана телефония
 | **Собрать самому** | [doc/rg52mini/03-сборка.md](doc/rg52mini/03-сборка.md) |
 | **Поднять частоту памяти до 928 МГц** — необязательная правка на свой страх | [doc/rg52mini/04-частота-памяти.md](doc/rg52mini/04-частота-памяти.md) |
 | **HDMI**: режимы, зеркалирование, «док-станция», диагностика | [doc/rg52mini/05-hdmi.md](doc/rg52mini/05-hdmi.md) |
-| **EmuELEC на eMMC рядом с GammaOS**: общая папка ромов, восстановление после перепрошивки | [doc/rg52mini/06-emuelec-на-emmc.md](doc/rg52mini/06-emuelec-на-emmc.md) |
+| **Сосуществование EmuELEC/RGBox с GammaOS Next**: переключение между системами, общая папка ромов | [doc/rg52mini/06-emuelec-на-emmc.md](doc/rg52mini/06-emuelec-на-emmc.md) |
 | **Наши настройки**: меню выключателя, GammaOS Toolbox, настройки Android TV | [doc/rg52mini/07-настройки.md](doc/rg52mini/07-настройки.md) |
 
 ## Состояние
