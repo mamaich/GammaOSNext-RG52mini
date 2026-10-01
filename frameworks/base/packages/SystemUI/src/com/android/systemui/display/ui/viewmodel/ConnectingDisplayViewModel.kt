@@ -81,7 +81,13 @@ constructor(
     private fun showDialog(pendingDisplay: PendingDisplay, concurrentDisplaysInProgess: Boolean) {
         hideDialog()
 
-        if (SystemProperties.getBoolean(DISABLE_MIRRORING_CONFIRMATION_DIALOG, false)) {
+        // GammaOS: with Force mirror or External as primary the answer is always "mirror"
+        // (DisplayManagerService mirrors the display itself), so do not ask. Besides, the
+        // RG52 Mini has a single video port: plugging HDMI blanks the built-in screen, and the
+        // dialog drawn there was invisible until the power key was pressed twice.
+        if (SystemProperties.getBoolean(DISABLE_MIRRORING_CONFIRMATION_DIALOG, false) ||
+                SystemProperties.getBoolean(GAMMAOS_EXT_FORCE_MIRROR, false) ||
+                SystemProperties.getBoolean(GAMMAOS_EXT_PRIMARY, false)) {
             scope.launch(bgDispatcher) { pendingDisplay.enable() }
             return
         }
@@ -120,5 +126,7 @@ constructor(
     companion object {
         private const val DISABLE_MIRRORING_CONFIRMATION_DIALOG =
             "persist.sysui.disable_mirroring_confirmation_dialog"
+        private const val GAMMAOS_EXT_FORCE_MIRROR = "persist.gammaos.ext.force_mirror"
+        private const val GAMMAOS_EXT_PRIMARY = "persist.gammaos.ext.primary"
     }
 }
