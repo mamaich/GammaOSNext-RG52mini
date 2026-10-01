@@ -1,0 +1,251 @@
+#!/bin/sh
+# install-ddr928.sh - частота памяти RG52 Mini 928 МГц вместо 798, одним файлом.
+#
+# Запускается прямо на устройстве под root, в Android (adb shell) и в обычном
+# Linux (EmuELEC, dArkOS, AURKNIX...): sh install-ddr928.sh [--check|--yes|
+# --uninstall|--restore ФАЙЛ]. UART не нужен. Подробности, риски и откат -
+# doc/rg52mini/04-частота-памяти.md; читать до запуска.
+#
+# Что пишется. Загрузчик памяти живёт во внутренней eMMC, в idblock - две копии,
+# сектора 64..1087 и 1088..2111. Только их скрипт и перезаписывает. Дальше в той же
+# области перед первым разделом (с сектора 7168) лежит хранилище vendor от Rockchip:
+# серийный номер, MAC-адреса - у каждого устройства своё, его не трогаем.
+#
+# Ставим только поверх того самого стокового idblock, из которого сделан разгон
+# (сравнение по SHA-256). Другая версия загрузчика памяти или SPL - отказ: запись
+# откатила бы их на старые. Для неё есть device/rg52mini/tools/set-ddr-freq.py,
+# он правит частоту в имеющемся загрузчике.
+#
+# Файл собирается device/rg52mini/tools/mk-ddr928-installer.sh; в конце - оба
+# idblock (наш и стоковый), gzip + base64. Всё, что печатается, - по-английски:
+# в консоли устройства кириллица может не читаться.
+
+set -u
+
+SECTOR_START=64        # первая копия idblock
+SECTOR_COUNT=2048      # обе копии, 1 МиБ
+BACKUP_COUNT=16320     # для резервной копии - вся область до первого раздела
+PATCHED_SHA=@PATCHED_SHA@
+STOCK_SHA=@STOCK_SHA@
+FREQ_STOCK_MAX=798000000
+FREQ_PATCHED_MAX=928000000
+
+SELF=$0
+MODE=install
+ASSUME_YES=0
+RESTORE_FILE=
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+info() { echo "$*"; }
+
+usage() {
+    cat <<'EOF'
+RG52 Mini: LPDDR3 at 928 MHz instead of 798 (eMMC idblock), root only.
+  sh install-ddr928.sh            check the device and install (asks for "yes")
+  sh install-ddr928.sh --yes      same, without asking
+  sh install-ddr928.sh --check    only check and report, write nothing
+  sh install-ddr928.sh --uninstall   put the stock 798 MHz loader back
+  sh install-ddr928.sh --restore FILE  write back a backup made by this script
+Read the memory clock document in doc/rg52mini (04-*.md) first: if the
+device does not boot afterwards, recovery needs MaskROM mode.
+EOF
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --check) MODE=check ;;
+        --yes|-y) ASSUME_YES=1 ;;
+        --uninstall) MODE=uninstall ;;
+        --restore) MODE=restore; shift; RESTORE_FILE=${1:-} ;;
+        -h|--help) usage; exit 0 ;;
+        *) usage; exit 2 ;;
+    esac
+    shift
+done
+
+[ "$(id -u)" = 0 ] || die "run as root"
+
+for t in dd base64 gzip sha256sum grep sed head tr cut wc; do
+    command -v "$t" >/dev/null 2>&1 || die "missing tool: $t"
+done
+
+# Рабочий каталог для временных файлов.
+TMP=
+for d in "${TMPDIR:-}" /data/local/tmp /tmp /run /dev/shm; do
+    [ -n "$d" ] && [ -d "$d" ] && [ -w "$d" ] && { TMP=$d; break; }
+done
+[ -n "$TMP" ] || die "no writable temp directory"
+WORK=$TMP/ddr928.$$
+mkdir -p "$WORK" || die "cannot create $WORK"
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
+# ---- 1. Это RK3562? -----------------------------------------------------------
+COMPAT=$(tr '\000' ' ' < /proc/device-tree/compatible 2>/dev/null)
+MODEL=$(tr -d '\000' < /proc/device-tree/model 2>/dev/null)
+info "Device: ${MODEL:-unknown} [${COMPAT:-no compatible}]"
+case "$COMPAT" in
+    *rockchip,rk3562*) ;;
+    *) die "not an RK3562 device" ;;
+esac
+
+# ---- 2. eMMC: по типу в sysfs, не по имени ---------------------------------------
+EMMC=; EMMC_SYS=
+for b in /sys/block/mmcblk*; do
+    [ -e "$b/device/type" ] || continue
+    [ "$(cat "$b/device/type")" = MMC ] || continue
+    n=${b##*/}
+    for d in "/dev/block/$n" "/dev/$n"; do [ -b "$d" ] && EMMC=$d; done
+    EMMC_SYS=$b
+done
+[ -n "$EMMC" ] || die "internal eMMC not found"
+info "eMMC: $EMMC, $(cat "$EMMC_SYS/size") sectors, chip $(cat "$EMMC_SYS/device/name" 2>/dev/null)"
+
+P1=$(cat "$EMMC_SYS"/*p1/start 2>/dev/null | head -n 1)
+[ -n "$P1" ] || die "cannot read the eMMC partition table"
+[ "$P1" -ge $((SECTOR_START + SECTOR_COUNT)) ] ||
+    die "first eMMC partition starts at sector $P1, inside the loader area"
+
+if [ "$(cat "$EMMC_SYS/ro" 2>/dev/null)" = 1 ]; then
+    command -v blockdev >/dev/null 2>&1 && blockdev --setrw "$EMMC" 2>/dev/null
+    [ "$(cat "$EMMC_SYS/ro" 2>/dev/null)" = 1 ] && die "$EMMC is read-only"
+fi
+
+read_area() {   # $1 - файл, $2 - секторов
+    dd if="$EMMC" of="$1" bs=512 skip=$SECTOR_START count="$2" 2>/dev/null ||
+        die "cannot read $EMMC"
+}
+
+sha_of() { sha256sum < "$1" | cut -d' ' -f1; }
+
+MAGIC=$(dd if="$EMMC" bs=512 skip=$SECTOR_START count=1 2>/dev/null | head -c 4)
+[ "$MAGIC" = RKNS ] || die "no Rockchip loader (RKNS) at sector $SECTOR_START of $EMMC"
+
+# ---- 3. Что за загрузчик стоит сейчас -------------------------------------------
+read_area "$WORK/cur.bin" $SECTOR_COUNT
+CUR_SHA=$(sha_of "$WORK/cur.bin")
+DDR_VER=$(LC_ALL=C grep -a -o -m 1 'DDR [0-9a-f]* kwin.chen[^,]*,fwver: v[0-9.]*' "$WORK/cur.bin" | head -n 1)
+SPL_VER=$(LC_ALL=C grep -a -o -m 1 'U-Boot SPL 20[^)]*)' "$WORK/cur.bin" | head -n 1)
+info "DDR blob: ${DDR_VER:-not found}"
+info "SPL:      ${SPL_VER:-not found}"
+
+if [ "$CUR_SHA" = "$PATCHED_SHA" ]; then
+    STATE=patched; info "Loader on eMMC: 928 MHz version from this script"
+elif [ "$CUR_SHA" = "$STOCK_SHA" ]; then
+    STATE=stock; info "Loader on eMMC: stock 798 MHz version this patch was made from"
+else
+    STATE=unknown; info "Loader on eMMC: unknown version (sha256 $CUR_SHA)"
+fi
+
+# ---- 4. С какой частотой память работает сейчас ------------------------------------
+FREQS=$(cat /sys/class/devfreq/dmc/available_frequencies 2>/dev/null)
+if [ -n "$FREQS" ]; then
+    info "DMC frequencies now: $FREQS"
+    case " $FREQS " in
+        *" $FREQ_PATCHED_MAX "*) RUN=928 ;;
+        *" $FREQ_STOCK_MAX "*) RUN=798 ;;
+        *) RUN=other ;;
+    esac
+    case "$STATE:$RUN" in
+        patched:928|stock:798) ;;
+        patched:798) info "Note: installed, but the device has not been rebooted since" ;;
+        stock:928) info "Note: memory runs at 928 MHz, but the eMMC already has the stock loader" ;;
+        *:other) info "Note: unexpected memory frequency table" ;;
+    esac
+else
+    info "DMC frequencies: not available (no /sys/class/devfreq/dmc)"
+fi
+
+# ---- Встроенные образы ------------------------------------------------------------
+extract() {   # $1 - имя блока, $2 - файл, $3 - ожидаемый sha256
+    sed -n "/^__${1}_BEGIN__\$/,/^__${1}_END__\$/p" "$SELF" | sed '1d;$d' |
+        base64 -d 2>/dev/null | gzip -dc > "$2" 2>/dev/null
+    [ "$(sha_of "$2")" = "$3" ] || die "embedded $1 image is damaged (re-download the script)"
+}
+
+confirm() {
+    [ "$ASSUME_YES" = 1 ] && return 0
+    printf '%s\nType "yes" to continue: ' "$1"
+    read -r ans || ans=
+    [ "$ans" = yes ] || die "cancelled"
+}
+
+backup() {
+    BK_DIR=
+    for d in /sdcard /storage/emulated/0 "$(dirname "$SELF")" /root "${HOME:-}" "$TMP"; do
+        [ -n "$d" ] && [ -d "$d" ] && [ -w "$d" ] && { BK_DIR=$d; break; }
+    done
+    BK=$BK_DIR/emmc-idb-backup-$(date +%Y%m%d-%H%M%S).bin
+    read_area "$BK" $BACKUP_COUNT
+    sync
+    info "Backup of the whole loader area: $BK"
+    info "  sha256 $(sha_of "$BK")"
+    info "  Copy it OFF the device (adb pull / to a PC) before rebooting."
+}
+
+write_loader() {   # $1 - образ на SECTOR_COUNT секторов
+    [ "$(wc -c < "$1")" -eq $((SECTOR_COUNT * 512)) ] || die "image has a wrong size"
+    WANT=$(sha_of "$1")
+    for try in 1 2; do
+        dd if="$1" of="$EMMC" bs=512 seek=$SECTOR_START count=$SECTOR_COUNT conv=fsync 2>/dev/null ||
+            dd if="$1" of="$EMMC" bs=512 seek=$SECTOR_START count=$SECTOR_COUNT 2>/dev/null ||
+            die "write to $EMMC failed - do NOT reboot, run --restore with the backup"
+        sync
+        command -v blockdev >/dev/null 2>&1 && blockdev --flushbufs "$EMMC" 2>/dev/null
+        echo 3 > /proc/sys/vm/drop_caches 2>/dev/null
+        read_area "$WORK/check.bin" $SECTOR_COUNT
+        if [ "$(sha_of "$WORK/check.bin")" = "$WANT" ]; then
+            info "Written and verified by reading back."
+            return 0
+        fi
+        info "Read-back mismatch (attempt $try)"
+    done
+    die "verification failed - do NOT reboot; run --restore with the backup"
+}
+
+case "$MODE" in
+check)
+    case "$STATE" in
+        patched) info "Result: 928 MHz is installed." ;;
+        stock) info "Result: can be installed (run without --check)." ;;
+        *) info "Result: will NOT install over an unknown loader. Use set-ddr-freq.py on a backup instead." ;;
+    esac
+    exit 0
+    ;;
+install)
+    case "$STATE" in
+        patched) info "Nothing to do: 928 MHz is already installed."; exit 0 ;;
+        unknown) die "refusing to replace an unknown loader (other stock version?). Use set-ddr-freq.py on a backup of this one." ;;
+    esac
+    extract PATCHED "$WORK/new.bin" "$PATCHED_SHA"
+    confirm "About to raise the memory clock to 928 MHz. If the device does not boot afterwards, recovery needs MaskROM mode (opening the back cover). Make sure the stock-firmware tools are ready."
+    backup
+    write_loader "$WORK/new.bin"
+    info "Done. Reboot, then check:"
+    info "  cat /sys/class/devfreq/dmc/available_frequencies   -> 324000000 528000000 780000000 928000000"
+    info "and run a memory test (stressapptest) - see the documentation."
+    ;;
+uninstall)
+    case "$STATE" in
+        stock) info "Nothing to do: the stock loader is already there."; exit 0 ;;
+        unknown) die "refusing to replace an unknown loader" ;;
+    esac
+    extract STOCK "$WORK/stock.bin" "$STOCK_SHA"
+    confirm "About to put the stock 798 MHz memory loader back."
+    backup
+    write_loader "$WORK/stock.bin"
+    info "Done. After a reboot the memory runs at 798 MHz."
+    ;;
+restore)
+    [ -n "$RESTORE_FILE" ] && [ -f "$RESTORE_FILE" ] || die "--restore needs a backup file"
+    SZ=$(wc -c < "$RESTORE_FILE")
+    [ "$SZ" -ge $((SECTOR_COUNT * 512)) ] || die "backup is too small ($SZ bytes)"
+    head -c $((SECTOR_COUNT * 512)) "$RESTORE_FILE" > "$WORK/restore.bin"
+    [ "$(head -c 4 "$WORK/restore.bin")" = RKNS ] || die "not a loader backup (no RKNS)"
+    confirm "About to write the loader from $RESTORE_FILE (only the two loader copies)."
+    write_loader "$WORK/restore.bin"
+    info "Done."
+    ;;
+esac
+exit 0
+
+# Ниже - данные, не код.
