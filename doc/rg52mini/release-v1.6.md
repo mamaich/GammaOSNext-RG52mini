@@ -1,0 +1,83 @@
+# Выпуск v1.6
+
+*Заготовка: выпуск ещё не собран, здесь копится то, что уже попало во внутренний
+тестовый образ. Эта строка убирается при публикации.*
+
+GammaOS Next (LineageOS 21 / Android 14) для карманной консоли **AISLPC RG52 Mini**
+на Rockchip RK3562. Здесь перечислено то, что изменилось после
+[v1.5](release-v1.5.md).
+
+## Что нового
+
+*(пока пусто)*
+
+<!--
+План на v1.6 (решено 02.10.2026): взять ВСЕ правки апстрима
+TheGammaSqueeze/GammaOSNextDistribution-14 после 26.09, кроме перечисленного
+ниже. Пробное наложение 02.10 на develop (e15e5c35c57) во временном дереве:
+
+Ложатся сами (по порядку, git cherry-pick -x):
+  9f7187f6d4d  nano: NDS boot intro dismisses silently before the setup wizard
+  bfc24ff28f6  nano: DS banner icons before storage is up; DocumentsUI gentle on low RAM
+  8fa6fc380a0  nano: open DS list keeps the right titles
+  d19495380fc  nano: keep the console icons while the overlay is parked
+  031e11edb42  syncthing: Web Interface toggle opens the GUI to the network
+  1ceb521683c  nano: home returns to the system a game was launched from
+  0c2635fcc19  nano: DS Icons On Tiles option, Titles From ROM row
+  6b853a0fb54  nano: setup wizard continues by itself 10 s after setup.sh
+  7ab911be0c9  nano: setup wizard and boot intro at 60 fps again
+  c9354e4886d  nano: Quick Resume toggle, off by default (1 файл drastic-nano)
+  4918eba9832  nano: Boxart Folder on the SD card, per-system Clear Boxart
+  97544cb8904  nano: Control Center rings against the hardware ceiling
+  9e1e9e59d10  wm: gammapad's mouse mode devices do not count towards the
+               display configuration  <- владелец ловил этот баг, обязательно
+  30388795cc1  nano: Syncthing folders can be picked again, OSK prompts
+  6247840630a  nano: lightning bolt on the battery icon while charging
+  675612019af  nano: global search no longer drops games
+  9df37bcb2be  nano: vertical arcade folders as Arcade (Vertical)
+  a121f16bf38  nano: System Update check explains itself
+  e1fe09824d7  nano: face-button rings as one smooth stroke
+  7b2707206cb  sharefs: network shares connect, write and report errors
+  2d678fb876b  nano: PICO-8 carts listed with cart image artwork
+  8c98ad85fd5  nano: leaving an app keeps it running with a foreground service
+  5033f5ff7a0  nano: PICO-8 cart labels as boxart and system icon
+
+Конфликтуют, править руками:
+  9552db413ec  nano: screen stays on while artwork is scraped (NanoMenuInput.cpp)
+  95269818c0b  nano: mouse mode off whenever the home is foreground
+               (NanoMenu.cpp, NanoMenu.h)
+  db56671bdc8, 07d16321521, c840177c5f1 - калибровка экрана RG DS / RG DS Plus
+               и слайдер DSi; нам не нужны, брать только если без них не
+               собираются последующие.
+
+Не брать:
+  - drastic-nano (эмулятор DS, ~50 коммитов) - как и раньше, отдельное решение;
+  - de0cc5d3ef  Bluetooth выключен по умолчанию - владелец: текущее поведение
+    устраивает, не трогать;
+  - 53a0649566  gen_ota_package.sh - пакеты собираем своим make-ota.sh;
+  - Version 1.4.3 / 1.4.4 (main_version.mk) и сборка speex для HAL Rockchip
+    (87302ccfa0) - номер апстрима без его изменений ввёл бы в заблуждение.
+  - ac07375e, 82007946 - уже взяты 27.09 (в v1.4).
+
+Своё (запрос владельца 02.10): GammaOS Toolbox -> переключатель Allow reboot
+to eMMC. При каждом включении спрашивать, настроить ли EmuELEC во внутренней
+памяти для работы рядом с картой GammaOS (restore-emmc.sh из
+device/rg52mini/tools/emmc-restore); «да» - запустить скрипт и показать итог,
+«нет» - не запускать. Пункт меню включается в обоих случаях. Скрипт можно
+запускать повторно, он ничего не ломает. Скрипт должен попасть в system.
+
+Перед сборкой - снова проверить апстрим (behind_by), там могло прибавиться.
+Проверять на устройстве: мастер первой настройки (на новой карте), оболочку
+nano (перезагрузка в неё из меню выключателя), режим мыши, сетевые папки
+GammaShares, Syncthing.
+
+Возможная отдельная работа: аудио-HAL Rockchip из исходников KickPi
+(kickpi/hardware/rockchip/audio) с исправленной гонкой эквалайзера - тогда
+эквалайзер динамика можно вернуть (в v1.5 он отключён, см. 05-hdmi.md).
+-->
+
+## Подробности
+
+Разбор решений, замеры и найденные подводные камни — в
+[02-план.md](02-план.md). Как собрать самому, включая образ карты — в
+[03-сборка.md](03-сборка.md).
