@@ -1,0 +1,2 @@
+initrd.gz filter=lfs diff=lfs merge=lfs -text
+vendor.img.xz filter=lfs diff=lfs merge=lfs -text

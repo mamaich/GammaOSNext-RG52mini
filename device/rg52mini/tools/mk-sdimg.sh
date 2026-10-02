@@ -6,12 +6,25 @@
 # По умолчанию берёт свежий system.img из out/home/build-output и кладёт
 # результат в /home/mamaich/rg52/gamma/out/.
 #
-# Что откуда:
-#   сектора 0..237567   — побайтно из рабочего образа SyachOS: защитный MBR,
-#                         GPT, idbloader (RKNS с сектора 64), u-boot, resource
-#                         и загрузочный FAT с ядром, DTB, initrd и extlinux
+# Образ собирается с нуля, только из репозитория и своих сборок. Раньше голова
+# (секторы 0..237567) и vendor брались побайтно из рабочего образа SyachOS
+# (SyachOS-RG52Mini-V1.0.317m6.3.img); всё, что оттуда было нужно, теперь
+# лежит в device/rg52mini/boot и ddr, а скрипт раскладывает это так же:
+#
+#   GPT                 — sgdisk; у p1..p3 те же границы, имена, GUID и флаг
+#                         загрузочности p3 (по нему u-boot ищет extlinux), что
+#                         в эталоне; имя dArkOS_Fat оставлено намеренно
+#   сектор 64..2111     — idbloader: SPL и блоб DDR, ddr/emmc-idblock-stock.bin
+#                         (побайтно тот же, что был в эталоне)
+#   сектор 7168..7679   — хранилище vendor Rockchip, boot/vendor-storage.bin:
+#                         серийный номер и прочее из образа SyachOS, как было
+#   uboot   (p1)        — своя сборка u-boot
+#   resource (p2)       — нули, в эталоне он тоже был пуст
+#   dArkOS_Fat (p3)     — FAT32: своё ядро и логотип, своя extlinux.conf,
+#                         дерево, initrd и картинки заряда из boot/
 #   system  (p4)        — собранный GSI
-#   vendor  (p5)        — побайтно из того же образа SyachOS
+#   vendor  (p5)        — boot/vendor.img.xz (vendor Android 13 из эталона),
+#                         с правками ниже
 #   cache, metadata     — пустые ext4
 #   misc                — нули
 #   userdata            — оставлен пустым: init сам отформатирует его с теми
@@ -19,11 +32,10 @@
 #                         rg52-resize растянет раздел на всю карту
 #
 # Разделы обязаны называться ровно так же, как в оригинале: fstab обращается
-# к ним через /dev/block/by-name.
+# к ним через /dev/block/by-name, а обновление по воздуху пишет разделы по
+# имени - на уже установленных картах они называются так.
 
 set -euo pipefail
-
-SRC=${SRC:-/mnt/t/Dump/RG52Mini/android/SyachOS-RG52Mini-V1.0.317m6.3.img}
 
 # Ядро и модули aic8800 берём из своей сборки, а не из эталонного образа.
 # Эталон даёт загрузочный FAT и vendor побайтно, и там лежит ядро прошлого
@@ -38,7 +50,8 @@ SRC=${SRC:-/mnt/t/Dump/RG52Mini/android/SyachOS-RG52Mini-V1.0.317m6.3.img}
 # новым ядром просто не загрузятся. На свежей установке это означает отсутствие
 # Wi-Fi и Bluetooth.
 #
-# Пусто или файлов нет — берём что было в эталоне и громко об этом говорим.
+# Ядра нет - образ не собирается (подменить нечем). Модулей нет - в vendor
+# остаются модули из эталона, и скрипт громко об этом говорит.
 KERNELDIR=${KERNELDIR:-/home/mamaich/rg52/out-kernel-uffd}
 
 # Пользовательская часть драйвера Mali. В vendor от Android 13 лежит
@@ -67,18 +80,17 @@ KERNELDIR=${KERNELDIR:-/home/mamaich/rg52/out-kernel-uffd}
 # Поэтому ниже в /vendor/build.prop дописывается device/rg52mini/mali-g25p0.prop.
 MALIDIR=${MALIDIR:-/home/mamaich/rg52/out-mali-g25p0}
 
-# u-boot из своей сборки. Голова эталонного образа уже содержит наш загрузчик
-# (патч про HUSB311 в нём есть), но она заморожена: всё, что мы добавляем в
-# u-boot после того, как эталон был сделан, сам собой в образ не попадёт.
-# Раздел p1 — это ровно uboot.img, FIT с u-boot и trust, 4 МиБ в обрез.
+# u-boot из своей сборки. Раздел p1 — это ровно uboot.img, FIT с u-boot и
+# trust, 4 МиБ в обрез. Без него образ не собирается: эталонного загрузчика,
+# на который можно было бы откатиться, больше нет.
 #
-# idbloader (RKNS с сектора 64) намеренно остаётся из эталона: там SPL и блоб
-# инициализации DDR, а их мы не меняли. Если когда-нибудь тронем SPL или
-# частоту памяти — сюда придётся добавить и его.
-#
-# Нет файла — остаётся загрузчик из эталона, о чём скрипт скажет вслух.
+# idbloader (RKNS с сектора 64) — SPL и блоб инициализации DDR из эталона,
+# частота памяти стоковая. Разгон до 928 МГц на карту не ставится, см.
+# doc/rg52mini/04-частота-памяти.md.
 UBOOTDIR=${UBOOTDIR:-/home/mamaich/rg52/u-boot-rg52}
 TREE=/home/mamaich/rg52/GammaOSNext-RG52mini
+BOOTDIR=$TREE/device/rg52mini/boot
+IDBLOCK=$TREE/device/rg52mini/ddr/emmc-idblock-stock.bin
 WORK=/home/mamaich/rg52/gamma
 OUTDIR=$WORK/out
 
@@ -90,7 +102,19 @@ if [ -z "$SYSIMG" ]; then
     SYSIMG=$(ls -t "$TREE"/out/home/build-output/*.img 2>/dev/null | head -1 || true)
 fi
 [ -n "$SYSIMG" ] && [ -f "$SYSIMG" ] || { echo "не найден system.img (укажи первым аргументом)" >&2; exit 1; }
-[ -f "$SRC" ] || { echo "не найден исходный образ $SRC" >&2; exit 1; }
+# Всё, без чего карта не загрузится: замены из эталона больше нет.
+for f in "$IDBLOCK" "$BOOTDIR/vendor-storage.bin" "$BOOTDIR/vendor.img.xz" \
+         "$BOOTDIR/rk3562-rg52mini.dtb" "$BOOTDIR/initrd.gz" \
+         "$UBOOTDIR/uboot.img" "$KERNELDIR/Image"; do
+    [ -f "$f" ] || { echo "не найден $f" >&2; exit 1; }
+done
+# initrd.gz и vendor.img.xz лежат в git LFS: без git lfs pull на их месте
+# текстовые заглушки по сотне байт, и карта не загрузится.
+if [ "$(stat -c %s "$BOOTDIR/initrd.gz")" -lt 1048576 ] ||
+   [ "$(stat -c %s "$BOOTDIR/vendor.img.xz")" -lt 1048576 ]; then
+    echo "в $BOOTDIR заглушки git LFS вместо файлов - сделай git lfs pull" >&2
+    exit 1
+fi
 
 mkdir -p "$OUTDIR"
 OUT=${2:-$OUTDIR/GammaOSCore-RG52Mini-$(date +%Y%m%d-%H%M).img}
@@ -144,23 +168,23 @@ echo "раздел system: $(( SYS_SECTORS / 2048 )) МиБ постоянно, 
 echo "выход:      $OUT ($(( TOTAL * 512 / 1024 / 1024 )) МиБ)"
 echo
 
-# --- голова: MBR, GPT, idbloader, uboot, resource, загрузочный FAT ---
-echo "== копирую первые $HEAD секторов из $(basename "$SRC")"
-dd if="$SRC" of="$OUT" bs=512 count=$HEAD status=none
+# --- пустой образ и таблица разделов ---
+# p1..p3 с границами, именами и GUID эталона. Флаг 2 у p3 (legacy BIOS
+# bootable, в GPT атрибут 0x4) обязателен: u-boot ищет extlinux.conf только на
+# разделе с этим флагом. GUID оставлены прежними на всякий случай: так разметка
+# головы совпадает с картами, которые уже на руках.
+echo "== пустой образ, GPT"
+rm -f "$OUT"
 truncate -s $(( TOTAL * 512 )) "$OUT"
-
-# --- vendor из исходного образа ---
-VEN=$WORK/vendor.img
-if [ ! -f "$VEN" ]; then
-    echo "== вынимаю vendor из исходного образа"
-    dd if="$SRC" of="$VEN" bs=512 skip=3317760 count=$VENDOR_SECTORS status=none
-fi
-
-# --- новая таблица разделов ---
-echo "== переписываю GPT"
-sgdisk --move-second-header "$OUT" > /dev/null
-for n in 4 5 6 7 8 9; do sgdisk --delete=$n "$OUT" > /dev/null 2>&1 || true; done
-sgdisk \
+sgdisk --zap-all "$OUT" > /dev/null 2>&1 || true
+sgdisk --clear --disk-guid=B2CFCE89-98F6-485F-81A6-3AE5E64FEC4B \
+  --new=1:16384:24575  --change-name=1:uboot      --typecode=1:8300 \
+      --partition-guid=1:01EB8129-A0CB-4ECA-8981-772A60D8BCA2 \
+  --new=2:24576:32767  --change-name=2:resource   --typecode=2:8300 \
+      --partition-guid=2:8716794A-36EA-429B-8B42-D23F9A8A35E3 \
+  --new=3:32768:235519 --change-name=3:dArkOS_Fat --typecode=3:8300 \
+      --partition-guid=3:DA99877B-92AC-4741-9702-68B6A44F2A05 \
+      --attributes=3:set:2 \
   --new=4:$P4:$P4E --change-name=4:system   --typecode=4:8300 \
   --new=5:$P5:$P5E --change-name=5:vendor   --typecode=5:8300 \
   --new=6:$P6:$P6E --change-name=6:cache    --typecode=6:8300 \
@@ -175,26 +199,42 @@ LOOP=$(sudo losetup -P -f --show "$OUT")
 trap 'sudo losetup -d "$LOOP" 2>/dev/null || true' EXIT
 echo "== loop $LOOP"
 
+# --- до первого раздела: idbloader и хранилище vendor ---
+# Пишем в сам файл образа, мимо loop: это не разделы.
+echo "== idbloader (сектор 64) и хранилище vendor (сектор 7168)"
+dd if="$IDBLOCK" of="$OUT" bs=512 seek=64 conv=notrunc status=none
+dd if="$BOOTDIR/vendor-storage.bin" of="$OUT" bs=512 seek=7168 conv=notrunc status=none
+
 echo "== system"
 sudo dd if="$SYSIMG" of="${LOOP}p4" bs=4M status=none conv=fsync
 echo "== vendor"
-sudo dd if="$VEN" of="${LOOP}p5" bs=4M status=none conv=fsync
+xz -dc "$BOOTDIR/vendor.img.xz" | sudo dd of="${LOOP}p5" bs=4M iflag=fullblock status=none conv=fsync
 
 # --- u-boot из своей сборки ---
 echo "== загрузчик"
 UB="$UBOOTDIR/uboot.img"
-if [ -f "$UB" ]; then
-    UBBYTES=$(stat -c %s "$UB")
-    P1BYTES=$(( $(sudo blockdev --getsz "${LOOP}p1") * 512 ))
-    if [ "$UBBYTES" -gt "$P1BYTES" ]; then
-        echo "   !! uboot.img $UBBYTES байт не влезает в p1 ($P1BYTES) — оставляю эталонный"
-    else
-        sudo dd if="$UB" of="${LOOP}p1" bs=1M status=none conv=fsync
-        echo "   u-boot из своей сборки: $UBBYTES байт"
-    fi
-else
-    echo "   !! нет $UB — в образе останется загрузчик из эталона"
+UBBYTES=$(stat -c %s "$UB")
+P1BYTES=$(( $(sudo blockdev --getsz "${LOOP}p1") * 512 ))
+if [ "$UBBYTES" -gt "$P1BYTES" ]; then
+    echo "uboot.img $UBBYTES байт не влезает в p1 ($P1BYTES)" >&2
+    exit 1
 fi
+sudo dd if="$UB" of="${LOOP}p1" bs=1M status=none conv=fsync
+echo "   u-boot из своей сборки: $UBBYTES байт"
+
+# --- загрузочный FAT ---
+# Параметры как у эталонного: FAT32, кластер 512 байт, 32 резервных сектора,
+# серийный номер A96B-415C (UUID раздела, который видит Android). Ядро,
+# логотип и extlinux.conf кладутся ниже; здесь - то, что от эталона.
+echo "== загрузочный FAT"
+sudo mkfs.vfat -F 32 -s 1 -S 512 -R 32 -f 2 -i A96B415C -h 32768 "${LOOP}p3" > /dev/null
+sudo mkdir -p /mnt/imgboot && sudo mount "${LOOP}p3" /mnt/imgboot
+sudo mkdir -p /mnt/imgboot/extlinux
+for f in rk3562-rg52mini.dtb initrd.gz battery_0.bmp battery_1.bmp battery_2.bmp \
+         battery_3.bmp battery_4.bmp battery_5.bmp battery_fail.bmp; do
+    sudo cp "$BOOTDIR/$f" /mnt/imgboot/$f
+done
+sudo umount /mnt/imgboot
 
 # --- убираем из vendor лаунчер Android 13 ---
 # /vendor/app/syach1Home регистрируется как HOME и перехватывает экран: система
@@ -379,7 +419,6 @@ sync
 # замерено на устройстве.
 echo "== правлю extlinux.conf"
 sudo mkdir -p /mnt/imgboot && sudo mount "${LOOP}p3" /mnt/imgboot
-sudo cp /mnt/imgboot/extlinux/extlinux.conf "$OUTDIR/extlinux.conf.orig" 2>/dev/null || true
 sudo tee /mnt/imgboot/extlinux/extlinux.conf > /dev/null <<'EOF'
 DEFAULT GammaOS
 TIMEOUT 10
@@ -403,7 +442,8 @@ ls -la /mnt/imgboot | head -8
 # mode-emmc. Без неё команда молча уходит в обычную перезагрузку.
 #
 # Правим готовое дерево, а не собираем своё. Дерево здесь - из эталонного
-# образа, и именно пара "новое ядро + эталонное дерево" проверена на
+# образа (device/rg52mini/boot/rk3562-rg52mini.dtb, побайтно как там), и
+# именно пара "новое ядро + эталонное дерево" проверена на
 # устройстве; собранное из наших исходников отличалось бы куда шире, чем на
 # одну запись. fdtput добавляет ровно её - проверено сравнением dtc -I dtb -O
 # dts до и после: разница в одну строку.
@@ -477,16 +517,12 @@ if [ -f "$LOGO" ]; then
     sudo cp "$LOGO" /mnt/imgboot/logo.bmp
     echo "   логотип u-boot: $(stat -c %s "$LOGO") байт"
 else
-    echo "   !! нет $LOGO - в образе останется логотип из эталона"
+    echo "   !! нет $LOGO - загрузочного логотипа не будет"
 fi
 
-# --- ядро из своей сборки ---
-if [ -f "$KERNELDIR/Image" ]; then
-    sudo cp "$KERNELDIR/Image" /mnt/imgboot/Image
-    echo "   ядро из своей сборки: $(stat -c %s "$KERNELDIR/Image") байт"
-else
-    echo "   !! нет $KERNELDIR/Image — в образе останется ядро из эталона"
-fi
+# --- ядро из своей сборки (наличие проверено в начале) ---
+sudo cp "$KERNELDIR/Image" /mnt/imgboot/Image
+echo "   ядро из своей сборки: $(stat -c %s "$KERNELDIR/Image") байт"
 sync
 
 sudo umount /mnt/imgboot
