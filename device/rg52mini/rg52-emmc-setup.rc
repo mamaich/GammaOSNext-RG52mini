@@ -1,0 +1,14 @@
+# Настройка EmuELEC во внутренней памяти по запросу GammaOS Toolbox, см.
+# rg52-emmc-setup.sh. Триггер сбрасывается сразу, чтобы следующий запрос
+# (Toolbox спрашивает при каждом включении переключателя) снова сработал.
+
+on property:sys.rg52.emmc_setup=1
+    setprop sys.rg52.emmc_setup 0
+    start rg52_emmc_setup
+
+service rg52_emmc_setup /system/bin/rg52-emmc-setup.sh
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0

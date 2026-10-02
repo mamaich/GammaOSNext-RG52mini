@@ -27,6 +27,8 @@ import android.content.pm.ResolveInfo;
 import android.graphics.drawable.Drawable;
 import android.hardware.input.InputManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemProperties;
 import android.text.InputType;
 import android.text.TextUtils;
@@ -51,6 +53,10 @@ import com.android.settings.SettingsPreferenceFragment;
 import com.android.settings.search.BaseSearchIndexProvider;
 import com.android.settingslib.search.SearchIndexable;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -319,6 +325,8 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         // RG52: HDMI output mode; its key is outside the GammaOS namespace, so
         // the generic binder skipped it.
         bindHdmiMode();
+        // RG52: turning on reboot-to-eMMC offers to set up EmuELEC there.
+        bindRebootEmmc();
     }
 
     @Override
@@ -326,6 +334,101 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         super.onResume();
         // The TV may have been plugged in while the page was in the background.
         populateHdmiModes();
+    }
+
+    /* ------------------------------------------------------------------ */
+    /*  RG52: reboot to eMMC - offer to set up EmuELEC on the eMMC        */
+    /* ------------------------------------------------------------------ */
+
+    // Включение «Allow reboot to eMMC» само по себе только добавляет пункт в
+    // меню выключателя. Но EmuELEC/RGBox на eMMC без настройки не видит папку
+    // ROMs Android, гасит подсветку и т.д. - настраивает его restore-emmc.sh
+    // (doc/rg52mini/06-emuelec-на-emmc.md). Поэтому при каждом включении
+    // предлагаем его запустить: скрипт можно запускать повторно. Ему нужен
+    // root, а Toolbox работает от system, поэтому он идёт службой init
+    // rg52_emmc_setup (device/rg52mini/rg52-emmc-setup.rc) по свойству.
+    // Пункт меню включается при любом ответе.
+    private static final String REBOOT_EMMC_KEY = "persist.rg52.reboot_emmc";
+    private static final String EMMC_SETUP_TRIGGER = "sys.rg52.emmc_setup";
+    private static final String EMMC_SETUP_STATE = "sys.rg52.emmc_setup.state";
+    private static final String EMMC_SETUP_LOG = "/data/system/rg52-emmc-setup.log";
+    private static final long EMMC_SETUP_POLL_MS = 500;
+    private static final long EMMC_SETUP_TIMEOUT_MS = 180_000;
+
+    private void bindRebootEmmc() {
+        Preference pref = findPreference(REBOOT_EMMC_KEY);
+        if (!(pref instanceof SwitchPreference)) return;
+        SwitchPreference sw = (SwitchPreference) pref;
+        sw.setOnPreferenceChangeListener((p, newValue) -> {
+            boolean val = (Boolean) newValue;
+            SystemProperties.set(REBOOT_EMMC_KEY, val ? "1" : "0");
+            if (val) offerEmmcSetup();
+            return true;
+        });
+    }
+
+    private void offerEmmcSetup() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        new AlertDialog.Builder(ctx)
+                .setTitle(R.string.gammaos_toolbox_emmc_setup_title)
+                .setMessage(R.string.gammaos_toolbox_emmc_setup_msg)
+                .setPositiveButton(R.string.gammaos_toolbox_emmc_setup_run, (d, w) -> runEmmcSetup())
+                .setNegativeButton(R.string.gammaos_toolbox_emmc_setup_skip, null)
+                .show();
+    }
+
+    private void runEmmcSetup() {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        final AlertDialog progress = new AlertDialog.Builder(ctx)
+                .setTitle(R.string.gammaos_toolbox_emmc_setup_running)
+                .setMessage(R.string.gammaos_toolbox_emmc_setup_wait)
+                .setCancelable(false)
+                .show();
+        SystemProperties.set(EMMC_SETUP_STATE, "");
+        SystemProperties.set(EMMC_SETUP_TRIGGER, "1");
+        final Handler h = new Handler(Looper.getMainLooper());
+        final long deadline = System.currentTimeMillis() + EMMC_SETUP_TIMEOUT_MS;
+        h.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                String st = SystemProperties.get(EMMC_SETUP_STATE, "");
+                boolean timedOut = System.currentTimeMillis() > deadline;
+                if (!st.startsWith("done:") && !timedOut) {
+                    h.postDelayed(this, EMMC_SETUP_POLL_MS);
+                    return;
+                }
+                progress.dismiss();
+                Context c = getContext();
+                if (c == null) return;
+                boolean ok = "done:0".equals(st);
+                new AlertDialog.Builder(c)
+                        .setTitle(ok ? R.string.gammaos_toolbox_emmc_setup_ok
+                                     : R.string.gammaos_toolbox_emmc_setup_fail)
+                        .setMessage(emmcSetupLogTail(timedOut))
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show();
+            }
+        }, EMMC_SETUP_POLL_MS);
+    }
+
+    // Журнал скрипта - по-английски; показываем его конец как есть: там итог
+    // или текст ошибки.
+    private String emmcSetupLogTail(boolean timedOut) {
+        String text;
+        try {
+            text = new String(Files.readAllBytes(Paths.get(EMMC_SETUP_LOG)),
+                    StandardCharsets.UTF_8);
+        } catch (IOException | SecurityException e) {
+            text = "";
+        }
+        String[] lines = text.split("\n");
+        int from = Math.max(0, lines.length - 25);
+        StringBuilder sb = new StringBuilder();
+        if (timedOut) sb.append("Timed out waiting for the setup to finish.\n\n");
+        for (int i = from; i < lines.length; i++) sb.append(lines[i]).append('\n');
+        return sb.toString().trim();
     }
 
     /* ------------------------------------------------------------------ */

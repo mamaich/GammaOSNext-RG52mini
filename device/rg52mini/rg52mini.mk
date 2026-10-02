@@ -183,6 +183,14 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-hdmi-unplug.sh:system/bin/rg52-hdmi-unplug.sh \
     device/rg52mini/rg52-hdmi-unplug.rc:system/etc/init/rg52-hdmi-unplug.rc
 
+# Настройка EmuELEC во внутренней памяти из GammaOS Toolbox: при включении
+# «Allow reboot to eMMC» Toolbox предлагает её и по согласию запускает
+# restore-emmc.sh через службу init (скрипту нужен root), см. rg52-emmc-setup.sh.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/tools/emmc-restore/restore-emmc.sh:system/bin/rg52-restore-emmc.sh \
+    device/rg52mini/rg52-emmc-setup.sh:system/bin/rg52-emmc-setup.sh \
+    device/rg52mini/rg52-emmc-setup.rc:system/etc/init/rg52-emmc-setup.rc
+
 # Загрузочная анимация GammaOS с кадром 480x480 вместо 2880x2880: на экране он
 # всё равно 480x480, а исходный занимал 32 МиБ памяти GPU и перечитывался с
 # шестикратным уменьшением 60 раз в секунду - пока анимация держит экран до
