@@ -34,7 +34,9 @@ import androidx.preference.SwitchPreference;
 import com.android.tv.settings.R;
 import com.android.tv.settings.SettingsPreferenceFragment;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Keep
@@ -43,6 +45,8 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
     private static final Map<String, String> DEFAULTS = new HashMap<>();
     static {
         DEFAULTS.put("persist.gammaos.immersive", "0");
+        // RG52: on by default, see DisplayRotation.
+        DEFAULTS.put("persist.rg52.fixed_rotation", "1");
         DEFAULTS.put("persist.gammaos.refresh.lock", "false");
         DEFAULTS.put("persist.gammaos.refresh.rate", "0");
         DEFAULTS.put("persist.gammaos.display.tweaks", "false");
@@ -213,6 +217,59 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         // Swap size needs custom handling (a "Custom..." entry that types any size),
         // so bind it after the generic binder to override its listener.
         bindSwapSize();
+        // RG52: HDMI output mode; its key is outside the GammaOS namespace, so
+        // the generic binder skipped it.
+        bindHdmiMode();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // The TV may have been plugged in while the page was in the background.
+        populateHdmiModes();
+    }
+
+    /* ---- RG52: HDMI output mode (vendor HWC, see HdmiModes) ---- */
+
+    private void bindHdmiMode() {
+        ListPreference lp = (ListPreference) findPreference(HdmiModes.PROP_MODE);
+        if (lp == null) return;
+        populateHdmiModes();
+        lp.setOnPreferenceChangeListener((p, newValue) -> {
+            String val = (String) newValue;
+            HdmiModes.apply(val);
+            updateListSummary(lp, val);
+            return true;
+        });
+    }
+
+    /**
+     * Entries: "Auto" (empty value), then the modes from the TV's EDID plus the
+     * forced 640x480/1024x768/1280x720/1920x1080, sorted by height and width.
+     * A stored value that is not in the list (set by hand) stays selectable.
+     */
+    private void populateHdmiModes() {
+        ListPreference lp = (ListPreference) findPreference(HdmiModes.PROP_MODE);
+        if (lp == null) return;
+        String current = HdmiModes.current();
+
+        List<CharSequence> entries = new ArrayList<>();
+        List<CharSequence> values = new ArrayList<>();
+        entries.add(getString(R.string.gammaos_toolbox_hdmi_mode_auto));
+        values.add("");
+        for (HdmiModes.Mode m : HdmiModes.list()) {
+            entries.add(m.label());
+            values.add(m.value);
+        }
+        if (!values.contains(current)) {
+            entries.add(getString(R.string.gammaos_toolbox_hdmi_mode_custom, current));
+            values.add(current);
+        }
+
+        lp.setEntries(entries.toArray(new CharSequence[0]));
+        lp.setEntryValues(values.toArray(new CharSequence[0]));
+        lp.setValue(current);
+        updateListSummary(lp, current);
     }
 
     /* ---- Virtual memory (swap): preset list + a "Custom..." numeric entry ---- */
@@ -338,7 +395,12 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
                 continue;
             }
             String key = pref.getKey();
-            if (key == null || !key.startsWith("persist.gammaos.")) continue;
+            // RG52: device-specific settings of this port live under persist.rg52.*;
+            // without the prefix the preference renders but is dead.
+            if (key == null
+                    || !(key.startsWith("persist.gammaos.") || key.startsWith("persist.rg52."))) {
+                continue;
+            }
 
             if (pref instanceof SwitchPreference) {
                 bindSwitch((SwitchPreference) pref, key);

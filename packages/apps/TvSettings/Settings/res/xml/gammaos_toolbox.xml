@@ -52,6 +52,14 @@
             android:selectable="false"
             android:summary="@string/gammaos_toolbox_category_display_description" />
 
+        <!-- RG52: the panel is landscape-only; apps may not rotate it
+             (persist.rg52.fixed_rotation, read by DisplayRotation). -->
+        <SwitchPreference
+            android:key="persist.rg52.fixed_rotation"
+            android:title="@string/gammaos_toolbox_fixed_rotation_title"
+            android:summary="@string/gammaos_toolbox_fixed_rotation_summary"
+            android:defaultValue="1" />
+
         <SwitchPreference
             android:key="persist.gammaos.immersive"
             android:title="@string/gammaos_toolbox_immersive_title"
@@ -665,6 +673,13 @@
             android:key="category_external_description"
             android:selectable="false"
             android:summary="@string/gammaos_toolbox_category_external_description" />
+
+        <!-- RG52: HDMI mode for the vendor HWC; entries are filled at
+             runtime from the TV's EDID (HdmiModes). -->
+        <ListPreference
+            android:key="persist.vendor.resolution.aux"
+            android:title="@string/gammaos_toolbox_hdmi_mode_title"
+            android:dialogTitle="@string/gammaos_toolbox_hdmi_mode_title" />
 
         <SwitchPreference
             android:key="persist.gammaos.ext.primary"

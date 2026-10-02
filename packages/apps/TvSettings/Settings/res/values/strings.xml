@@ -3762,4 +3762,10 @@
     <string name="battery_saver_title">Battery saver</string>
     <string name="battery_category_title">Battery</string>
 
+    <!-- RG52: same strings as in packages/apps/Settings (GammaOS Toolbox). -->
+    <string name="gammaos_toolbox_fixed_rotation_title">Keep the screen in landscape</string>
+    <string name="gammaos_toolbox_fixed_rotation_summary">Apps cannot rotate the display. An app that insists on portrait is shown as a vertical window in the middle instead of turning the screen sideways.</string>
+    <string name="gammaos_toolbox_hdmi_mode_title">HDMI output mode</string>
+    <string name="gammaos_toolbox_hdmi_mode_auto">Auto (the TV\'s preferred mode)</string>
+    <string name="gammaos_toolbox_hdmi_mode_custom">Custom: %1$s</string>
 </resources>
