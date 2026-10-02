@@ -505,6 +505,10 @@ public final class DisplayManagerService extends SystemService {
                 }
                 mWindowManagerInternal.setForcedDisplaySize(targetDisplayId, w, h);
                 mWindowManagerInternal.requestTraversalFromDisplayManager();
+                // RG52: see gammaosClearStaleInternalResize().
+                if (targetDisplayId == android.view.Display.DEFAULT_DISPLAY) {
+                    android.os.SystemProperties.set(GAMMAOS_INTERNAL_RESIZED_PROP, "1");
+                }
             }
 
             if (suppressInternalBacklight) {
@@ -645,6 +649,7 @@ public final class DisplayManagerService extends SystemService {
                 mWindowManagerInternal.clearForcedDisplaySize(android.view.Display.DEFAULT_DISPLAY);
                 // 2) Force a traversal so SF/WM re-evaluate immediately
                 mWindowManagerInternal.requestTraversalFromDisplayManager();
+                android.os.SystemProperties.set(GAMMAOS_INTERNAL_RESIZED_PROP, "0");
             }
 
             // 3) Power ON the internal panel and explicitly restore brightness if we suppressed it.
@@ -1087,7 +1092,59 @@ public final class DisplayManagerService extends SystemService {
             mLogicalDisplayMapper.onBootCompleted();
             mDisplayNotificationManager.onBootCompleted();
             mExternalDisplayPolicy.onBootCompleted();
+            // RG52: a size forced on the internal panel for an external display that is gone.
+            mHandler.postDelayed(this::gammaosClearStaleInternalResize,
+                    GAMMAOS_STALE_RESIZE_DELAY_MS);
         }
+    }
+
+    // RG52: Mirror resize и External as primary выставляют встроенному экрану
+    // размер внешнего (setForcedDisplaySize, как `wm size`). Android хранит его
+    // в /data/system/display_settings.xml, то есть через перезагрузку, а
+    // возвращает только обработчик отключения - и только про дисплей, который
+    // помнит в памяти. Кабель вынут при выключенном устройстве или во сне, и
+    // интерфейс навсегда остаётся мелким (жалоба на v1.5: «как будто
+    // разрешение стало 1920x1080»).
+    //
+    // Поэтому подгонку помечаем свойством и, если при завершении загрузки
+    // внешнего дисплея так и нет, возвращаем размер. Размер, выставленный
+    // руками через `wm size`, не трогаем: пометки у него нет. Исключение -
+    // однократно для систем, где свойства ещё нет совсем (обновление с v1.5,
+    // где размер мог уже залипнуть): там сбрасываем любой принудительный размер.
+    private static final String GAMMAOS_INTERNAL_RESIZED_PROP =
+            "persist.gammaos.ext.internal_resized";
+    // HDMI, подключённый при загрузке, приходит не сразу - даём ему время.
+    private static final long GAMMAOS_STALE_RESIZE_DELAY_MS = 5000;
+
+    private void gammaosClearStaleInternalResize() {
+        final String flag = android.os.SystemProperties.get(GAMMAOS_INTERNAL_RESIZED_PROP, "");
+        if ("0".equals(flag)) return;
+        final boolean forced;
+        synchronized (mSyncRoot) {
+            if (gammaosHasAnyPhysicalExternalConnectedLocked()) {
+                Slog.i(TAG, "GammaOS: stale-resize check skipped; external connected");
+                return;
+            }
+            final LogicalDisplay ld =
+                    mLogicalDisplayMapper.getDisplayLocked(android.view.Display.DEFAULT_DISPLAY);
+            final android.view.DisplayInfo di = (ld != null) ? ld.getDisplayInfoLocked() : null;
+            final android.view.Display.Mode mode = (di != null) ? di.getMode() : null;
+            // Сравниваем площади: от поворота они не зависят.
+            forced = mode != null
+                    && (long) di.logicalWidth * di.logicalHeight
+                       != (long) mode.getPhysicalWidth() * mode.getPhysicalHeight();
+        }
+        if (!"1".equals(flag) && !forced) {
+            android.os.SystemProperties.set(GAMMAOS_INTERNAL_RESIZED_PROP, "0");
+            return;
+        }
+        if (mWindowManagerInternal != null && forced) {
+            Slog.i(TAG, "GammaOS: no external display at boot; clearing the size forced on "
+                    + "DEFAULT_DISPLAY for it (flag=" + flag + ")");
+            mWindowManagerInternal.clearForcedDisplaySize(android.view.Display.DEFAULT_DISPLAY);
+            mWindowManagerInternal.requestTraversalFromDisplayManager();
+        }
+        android.os.SystemProperties.set(GAMMAOS_INTERNAL_RESIZED_PROP, "0");
     }
 
     @Override
