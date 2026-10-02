@@ -63,3 +63,22 @@ on property:persist.gammaos.performance_mode=3d_game
 
 on property:sys.boot_completed=1
     start rg52_perf_boot
+
+# Счётчики планировщика. atrace.rc из AOSP включает их на late-init ради трасс
+# perfetto («Scheduler tracepoints require schedstats»), и с этого момента каждое
+# пробуждение и переключение потока ведёт статистику ожидания. Копейки (десятые
+# доли процента), но постоянно и даром: трассы на этом устройстве снимают руками,
+# и для них можно вернуть 1.
+on property:sys.boot_completed=1
+    write /proc/sys/kernel/sched_schedstats 0
+
+# Ускоренные периоды RCU на время загрузки. Ядро и само работает так, пока не
+# запустит init, а дальше переходит на обычные. Между тем самые долгие шаги init
+# ждут именно конца периода RCU: закрытие устройств ввода, настройка loop- и
+# dm-устройств под apex. Ускоренный период рассылает прерывания на все ядра,
+# поэтому после загрузки обычный режим возвращается.
+on early-init
+    write /sys/kernel/rcu_expedited 1
+
+on property:sys.boot_completed=1
+    write /sys/kernel/rcu_expedited 0

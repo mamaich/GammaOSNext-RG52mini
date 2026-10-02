@@ -385,6 +385,86 @@ for m in aic8800_bsp.ko aic8800_fdrv.ko rk915.ko; do
     fi
 done
 
+# --- HAL питания: тепловая защита остаётся включённой во время ввода ---
+# android.hardware.power-service.rockchip (v12.0) на каждое событие ввода
+# (Boost::INTERACTION, не чаще раза в 100 мс) заводит сессию на секунду и в её
+# начале пишет «disabled» в /sys/class/thermal/thermal_zone0/mode, а «enabled» -
+# только после секунды без ввода. Пока игрок жмёт кнопки, ядро за температурой
+# не следит вовсе: не работают ни power_allocator на 75/85 °C, ни критическая
+# точка 115 °C, остаётся один аппаратный сброс при 120 °C. Хватает и дрожания
+# стика: в простое защита была выключена 4-9 % времени. Сам Rockchip в
+# следующей версии HAL (v13, исходники KickPi) эту запись убрал.
+#
+# Оба вызова записи - по 0x8a40 («disabled») и по 0x8d14 («enabled») -
+# заменяются на NOP, их результат там не используется. Прижим частоты CPU к
+# потолку на время ввода (scaling_min_freq) остаётся как был. Правится только
+# та сборка HAL, которую разбирали: сверка sha256 до и после.
+PWR=/mnt/imgven/bin/hw/android.hardware.power-service.rockchip
+PWR_SHA_ORIG=024f89dbf27b33509459aee2269aec401c01e8aaccfbee5a65febaa29298949f
+PWR_SHA_NEW=67af061e3d9b3bcacd106e923637622c9d8362571c26935066899d5930e5fc03
+if [ -f "$PWR" ]; then
+    case "$(sha256sum "$PWR" | cut -d' ' -f1)" in
+        "$PWR_SHA_ORIG")
+            for off in 0x8a40 0x8d14; do
+                printf '\x1f\x20\x03\xd5' | sudo dd of="$PWR" bs=1 seek=$((off)) count=4 conv=notrunc status=none
+            done
+            if [ "$(sha256sum "$PWR" | cut -d' ' -f1)" != "$PWR_SHA_NEW" ]; then
+                echo "!! HAL питания после правки не совпал с ожидаемым" >&2
+                exit 1
+            fi
+            echo "   HAL питания: запись в thermal_zone0/mode убрана" ;;
+        "$PWR_SHA_NEW")
+            echo "   HAL питания уже исправлен" ;;
+        *)
+            echo "   !! HAL питания незнакомой сборки - не правлю" ;;
+    esac
+fi
+
+# --- готовая политика SELinux ---
+# В vendor от Android 13 нет precompiled_sepolicy, и init на каждой загрузке
+# компилирует политику из CIL сам - однопоточным secilc, 3,3 с на критическом
+# пути до запуска zygote. Здесь она компилируется тем же secilc и с теми же
+# аргументами, что у init (system/core/init/selinux.cpp, OpenSplitPolicy), из
+# файлов того самого system, который ложится на карту. Результат побайтно тот
+# же, что получает init: сверено на устройстве, sha256 совпал.
+#
+# Рядом кладутся копии трёх хэшей из system. init берёт готовую политику, только
+# если все три совпадают, иначе компилирует сам, как раньше - так что пакет с
+# одним system без vendor ничего не сломает. Чего init не сверяет - это CIL
+# самого vendor, но готовый файл и так пересобирается при каждой сборке образа.
+SECILC=$TREE/out/host/linux-x86/bin/secilc
+SEPOL_VER=30    # SEPOLICY_VERSION из system/core/init/Android.bp
+if [ -x "$SECILC" ]; then
+    sudo mkdir -p /mnt/imgsys && sudo mount -o ro "${LOOP}p4" /mnt/imgsys
+    SR=/mnt/imgsys/system    # GSI устроен как system-as-root
+    VSEL=/mnt/imgven/etc/selinux
+    V=$(cat "$VSEL/plat_sepolicy_vers.txt")
+    SEPOL_ARGS=("$SR/etc/selinux/plat_sepolicy.cil" -m -M true -G -N -c "$SEPOL_VER"
+                "$SR/etc/selinux/mapping/$V.cil" -o "$WORK/precompiled_sepolicy" -f /dev/null)
+    for f in "$SR/etc/selinux/mapping/$V.compat.cil" \
+             "$SR/system_ext/etc/selinux/system_ext_sepolicy.cil" \
+             "$SR/system_ext/etc/selinux/mapping/$V.cil" \
+             "$SR/system_ext/etc/selinux/mapping/$V.compat.cil" \
+             "$SR/product/etc/selinux/product_sepolicy.cil" \
+             "$SR/product/etc/selinux/mapping/$V.cil" \
+             "$VSEL/plat_pub_versioned.cil" "$VSEL/vendor_sepolicy.cil"; do
+        [ -e "$f" ] && SEPOL_ARGS+=("$f")
+    done
+    "$SECILC" "${SEPOL_ARGS[@]}"
+    sudo cp "$WORK/precompiled_sepolicy" "$VSEL/precompiled_sepolicy"
+    for p in plat:etc system_ext:system_ext/etc product:product/etc; do
+        src="$SR/${p#*:}/selinux/${p%%:*}_sepolicy_and_mapping.sha256"
+        [ -f "$src" ] && sudo cp "$src" "$VSEL/precompiled_sepolicy.${p%%:*}_sepolicy_and_mapping.sha256"
+    done
+    sudo chmod 644 "$VSEL"/precompiled_sepolicy*
+    sudo chcon u:object_r:vendor_configs_file:s0 "$VSEL"/precompiled_sepolicy* 2>/dev/null || true
+    sudo umount /mnt/imgsys
+    echo "   готовая политика SELinux: /vendor/etc/selinux/precompiled_sepolicy ($(stat -c %s "$WORK/precompiled_sepolicy") байт, отображение $V)"
+    rm -f "$WORK/precompiled_sepolicy"
+else
+    echo "   !! нет $SECILC - политику init будет компилировать при каждой загрузке"
+fi
+
 sudo umount /mnt/imgven
 
 # Раздел system править здесь нельзя: он собран с BOARD_EXT4_SHARE_DUP_BLOCKS

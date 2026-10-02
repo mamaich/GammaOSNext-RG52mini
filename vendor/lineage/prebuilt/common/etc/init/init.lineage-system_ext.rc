@@ -2,8 +2,13 @@
 on init
     export TERMINFO /system_ext/etc/terminfo
 
-# bugreport is triggered by holding down volume down, volume up and power
+# bugreport (adb bugreport still works).
+#
+# GammaOS RG52: no "keycodes 114 115 116" (volume down + volume up + power) here. While any
+# service declares a key chord, init opens every /dev/input/event* at boot (KeychordInit) and
+# closes the ones without those keys; each close waits for an RCU grace period. On RG52 Mini
+# that step took 0.42 s on the critical path before zygote. The vendor rc declares the same
+# service with the same chord, but as a duplicate it is ignored.
 service bugreport /system/bin/dumpstate -d -p -z
     oneshot
     disabled
-    keycodes 114 115 116

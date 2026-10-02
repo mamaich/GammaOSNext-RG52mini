@@ -80,6 +80,34 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-trim.rc:system/etc/init/rg52-trim.rc
 
+# Замена vendor-службы audio_standby: смысл тот же (audioserver гасится, пока
+# экран погашен), но по триггеру init, а не опросом подсветки раз в секунду -
+# тот съедал 5-6 % ядра и глушил звук в режиме HDMI «Internal Display Off».
+# Разбор - в самом rg52-audio-standby.rc.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-audio-standby.rc:system/etc/init/rg52-audio-standby.rc
+
+# Свойства, которые гасят то, чему на этом устройстве нечего делать. Пишем в
+# product: он читается последним и перекрывает vendor (drm.service.enabled=true
+# задан именно там).
+#
+#   bootreceiver.enable=0 - init.rc не создаёт экземпляр трассировки
+#     /sys/kernel/tracing/instances/bootreceiver. Он нужен только для отчётов
+#     KFENCE и KASAN, а их в нашем ядре нет. Каждый экземпляр tracefs сразу
+#     заводит полную копию дерева событий - около 8300 закреплённых записей,
+#     ~7 МБ памяти ядра, которые не отдаются даже под давлением. Второй такой
+#     экземпляр, wifi, гасит rg52-trim.rc.
+#   config.disable_cameraservice=true - камер нет, cameraserver гасится после
+#     загрузки (rg52-trim.rc). Без свойства system_server и SystemUI раз в
+#     секунду пытаются к нему переподключиться и пишут по две строки в журнал:
+#     88 % всего logcat и около 0,5 % ядра впустую.
+#   drm.service.enabled=false - drmserver, старый DRM-фреймворк. Плагинов к нему
+#     в образе нет, а клиенты без службы сами переходят на заглушку.
+PRODUCT_PRODUCT_PROPERTIES += \
+    bootreceiver.enable=0 \
+    config.disable_cameraservice=true \
+    drm.service.enabled=false
+
 
 # Штатный геймпад-демон GammaOS вместо vendor-овского rgp2pad. Умеет то же и
 # больше: режим мыши (оба стика удержать 2 с), отображение в тачскрин,

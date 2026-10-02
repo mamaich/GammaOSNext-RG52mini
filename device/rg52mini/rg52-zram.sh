@@ -79,6 +79,12 @@ setup_zswap() {
 
     if [ "$on" = N ]; then
         [ "$(cat "$ZSWAP_DIR/enabled" 2>/dev/null)" = "Y" ] && echo N > "$ZSWAP_DIR/enabled" 2>/dev/null
+        # Выключенный zswap всё равно держит пул с компрессором ядра по умолчанию
+        # (у нас zstd): по рабочей области 1,4 МБ на каждое ядро, ~5,5 МБ vmalloc.
+        # Смена компрессора у выключенного zswap заводит новый пул и отпускает
+        # пустой старый, а lz4 обходится в 16 КБ на ядро. Проверено на устройстве:
+        # VmallocUsed 49100 -> 43532 КБ. Включение (ниже) выставит алгоритм заново.
+        [ "$(cat "$ZSWAP_DIR/compressor" 2>/dev/null)" = lz4 ] || echo lz4 > "$ZSWAP_DIR/compressor" 2>/dev/null
         return 0
     fi
 

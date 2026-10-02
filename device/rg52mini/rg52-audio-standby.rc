@@ -1,0 +1,43 @@
+# RG52 Mini: замена vendor-службы audio_standby.
+#
+# /vendor/etc/init/audio_standby.rc (от SyachOS) крутит /vendor/bin/audio_standby.sh -
+# вечный цикл: раз в секунду $(cat /sys/class/backlight/backlight/brightness) и
+# sleep 1, а если подсветка две секунды держится на нуле - stop audioserver, при
+# включении - start. Это два fork+exec в секунду без перерыва, в том числе во
+# время игры: по замеру 5-6 % одного ядра.
+#
+# И ошибка в придачу: в режиме HDMI «Internal Display Off» подсветка встроенного
+# экрана тоже равна нулю, и через две секунды скрипт глушит audioserver - на
+# телевизоре пропадает звук.
+#
+# Здесь то же самое сделано триггерами init по sys.screen.state - его выставляет
+# PowerManagerService при засыпании и пробуждении. Опроса нет вовсе, а при
+# подключённом HDMI устройство бодрствует, и звук не трогается.
+#
+# Служба audio_standby названа так же, как в vendor, и ничего не делает. Каталог
+# /system/etc/init разбирается раньше /vendor/etc/init, поэтому определение из
+# vendor отбрасывается как повторное, а его "start audio_standby" по
+# sys.boot_completed запускает эту пустышку.
+service audio_standby /system/bin/true
+    user root
+    group root
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+# Задержка в две секунды - как у vendor: короткое засыпание и пробуждение
+# (так, например, rg52-hdmi-unplug возвращает встроенный экран) audioserver не
+# перезапускает - пробуждение убивает ожидающую службу раньше.
+service rg52_audio_sleep /system/bin/sh -c "sleep 2; getprop sys.screen.state | grep -qx off && stop audioserver"
+    user root
+    group root shell
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+on property:sys.screen.state=off && property:sys.boot_completed=1
+    start rg52_audio_sleep
+
+on property:sys.screen.state=on && property:sys.boot_completed=1
+    stop rg52_audio_sleep
+    start audioserver

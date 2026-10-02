@@ -55,17 +55,35 @@ done
 
 log -p i -t "$TAG" "сторож вытеснения запущен, порог ${THRESH} МБ"
 
+# Цикл - на встроенных командах оболочки. Каждый внешний процесс (cat, awk) на
+# этом устройстве стоит 15-18 мс процессора, и прежний опрос - cat, awk и sleep
+# раз в две секунды - съедал около 2,7 % ядра на одни только запуски. read
+# читает файлы без fork, внешним остаётся только sleep.
+read_avail() {   # AVAIL - MemAvailable в МБ
+    AVAIL=0
+    while read -r k v rest; do
+        case $k in MemAvailable:) AVAIL=$(( v / 1024 )); return ;; esac
+    done < /proc/meminfo
+}
+
 while :; do
     # Подложку настраивает rg52-zram.sh, и он может ещё не отработать: обе
     # службы поднимаются по одному и тому же изменению свойства. Ждём её.
-    if [ "$(cat "$SYS/backing_dev" 2>/dev/null)" = "none" ]; then
+    read -r BD 2>/dev/null < "$SYS/backing_dev" || BD=none
+    if [ "$BD" = none ]; then
         sleep 5
         continue
     fi
-    AVAIL=$(( $(awk '/MemAvailable/{print $2}' /proc/meminfo) / 1024 ))
+    read_avail
     if [ "$AVAIL" -lt "$THRESH" ]; then
         echo all > "$SYS/idle" 2>/dev/null
         echo idle > "$SYS/writeback" 2>/dev/null
     fi
-    sleep 2
+    # Пока до порога больше его самого, смотрим реже: даже самая жадная игра
+    # из замеров (1,8 ГБ за минуту) не съест такой запас за шесть секунд.
+    if [ "$AVAIL" -gt $(( THRESH * 2 )) ]; then
+        sleep 6
+    else
+        sleep 2
+    fi
 done

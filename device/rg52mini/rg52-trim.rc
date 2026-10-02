@@ -42,6 +42,35 @@ service rg52_disable_rkpd /system/bin/sh -c "pm list packages -d | grep -q com.a
     oneshot
     seclabel u:r:shell:s0
 
+# Ассистент уведомлений android.ext.services/.notification.Assistant - «умные»
+# действия и ранжирование уведомлений. NotificationManagerService держит к нему
+# постоянную привязку, и процесс android.ext.services живёт на уровне visible:
+# не уходит в кеш и не вытесняется, 9-20 МБ PSS в простое. На консоли он не нужен.
+#
+# Отзываем один раз. remove_assistant помечает выбор как сделанный
+# пользователем (setUserSet), это хранится в /data/system/notification_policy.xml
+# и переживает перезагрузки и обновления - сам ассистент обратно не вернётся.
+# persist.rg52.nas_off=1 не даёт отозвать его повторно, если однажды его
+# включат руками (cmd notification allow_assistant <компонент>).
+service rg52_nas_off /system/bin/sh -c "getprop persist.rg52.nas_off | grep -qx 1 || { cmd notification get_approved_assistant | grep -q android.ext.services && cmd notification remove_assistant android.ext.services/android.ext.services.notification.Assistant; setprop persist.rg52.nas_off 1; }"
+    user root
+    group root shell
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
 on property:sys.boot_completed=1
     stop cameraserver
     start rg52_disable_rkpd
+    start rg52_nas_off
+
+# Трассировка Wi-Fi (LastMileLogger) - отладочная, для bugreport. wifi.rc по
+# sys.boot_completed заводит экземпляр /sys/kernel/tracing/instances/wifi, а
+# каждый экземпляр tracefs держит полную копию дерева событий: ~8300 записей и
+# ~7 МБ закреплённой памяти ядра, плюс 0,4 с работы init сразу после загрузки.
+# Условие в wifi.rc - sys.wifitracing.started=0 (его ставит on fs). Ставим 1
+# раньше, и экземпляр не создаётся; LastMileLogger без него только пишет
+# предупреждение. Второй такой экземпляр, bootreceiver, гасит свойство
+# bootreceiver.enable=0 в rg52mini.mk.
+on post-fs-data
+    setprop sys.wifitracing.started 1

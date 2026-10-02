@@ -160,6 +160,13 @@ public class BootReceiver extends BroadcastReceiver {
             }
         }.start();
 
+        // GammaOS RG52: with bootreceiver.enable=0 init.rc does not create the tracing instance
+        // (each tracefs instance pins a full copy of the event tree, ~7 MB of kernel memory), so
+        // there is no pipe to watch - do not report its absence as a wtf on every boot.
+        if (!SystemProperties.getBoolean("bootreceiver.enable", true)) {
+            return;
+        }
+
         FileDescriptor tracefd = null;
         try {
             tracefd = Os.open(ERROR_REPORT_TRACE_PIPE, O_RDONLY, 0600);
