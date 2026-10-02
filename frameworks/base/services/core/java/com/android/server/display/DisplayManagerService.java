@@ -1107,10 +1107,12 @@ public final class DisplayManagerService extends SystemService {
     // разрешение стало 1920x1080»).
     //
     // Поэтому подгонку помечаем свойством и, если при завершении загрузки
-    // внешнего дисплея так и нет, возвращаем размер. Размер, выставленный
-    // руками через `wm size`, не трогаем: пометки у него нет. Исключение -
-    // однократно для систем, где свойства ещё нет совсем (обновление с v1.5,
-    // где размер мог уже залипнуть): там сбрасываем любой принудительный размер.
+    // внешнего дисплея так и нет, возвращаем размер. Трогаем только размер с
+    // пометкой - тот, что выставили мы сами. Размер, выставленный руками через
+    // `wm size`, остаётся. Остаётся и размер, залипший ещё в v1.5, когда пометки
+    // не было: его возвращает обычный путь - подключить и снова отключить HDMI
+    // (так решил владелец: однократный сброс при обновлении задевал бы и
+    // размер, выставленный руками).
     private static final String GAMMAOS_INTERNAL_RESIZED_PROP =
             "persist.gammaos.ext.internal_resized";
     // HDMI, подключённый при загрузке, приходит не сразу - даём ему время.
@@ -1118,7 +1120,7 @@ public final class DisplayManagerService extends SystemService {
 
     private void gammaosClearStaleInternalResize() {
         final String flag = android.os.SystemProperties.get(GAMMAOS_INTERNAL_RESIZED_PROP, "");
-        if ("0".equals(flag)) return;
+        if (!"1".equals(flag)) return;
         final boolean forced;
         synchronized (mSyncRoot) {
             if (gammaosHasAnyPhysicalExternalConnectedLocked()) {
@@ -1134,13 +1136,9 @@ public final class DisplayManagerService extends SystemService {
                     && (long) di.logicalWidth * di.logicalHeight
                        != (long) mode.getPhysicalWidth() * mode.getPhysicalHeight();
         }
-        if (!"1".equals(flag) && !forced) {
-            android.os.SystemProperties.set(GAMMAOS_INTERNAL_RESIZED_PROP, "0");
-            return;
-        }
         if (mWindowManagerInternal != null && forced) {
             Slog.i(TAG, "GammaOS: no external display at boot; clearing the size forced on "
-                    + "DEFAULT_DISPLAY for it (flag=" + flag + ")");
+                    + "DEFAULT_DISPLAY for it");
             mWindowManagerInternal.clearForcedDisplaySize(android.view.Display.DEFAULT_DISPLAY);
             mWindowManagerInternal.requestTraversalFromDisplayManager();
         }

@@ -397,6 +397,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.autofill.AutofillManagerInternal;
+import android.webkit.WebViewZygote;
 
 import com.android.internal.annotations.CompositeRWLock;
 import com.android.internal.annotations.GuardedBy;
@@ -1904,12 +1905,23 @@ public class ActivityManagerService extends IActivityManager.Stub
             case MAYBE_STOP_SECONDARY_ZYGOTE_MSG: {
                 synchronized (ActivityManagerService.this) {
                     if (mProcessList.countLive32BitProcsLOSP(null) == 0) {
-                        Slog.i(TAG, "lazy32: no 32-bit procs left, reaping zygote_secondary");
-                        // Issued under `this` so a concurrent 32-bit startProcessLocked (which
-                        // also needs `this`) cannot fork off the daemon between the check and
-                        // the stop. stopSecondaryZygote takes only ZygoteProcess.mLock; the
-                        // this -> mLock order is safe (no path holds mLock then takes `this`).
-                        Process.ZYGOTE_PROCESS.stopSecondaryZygote();
+                        if (WebViewZygote.isRunning32Bit()) {
+                            // GammaOS RG52: the WebView child zygote is a child of
+                            // zygote_secondary. Reaping the parent orphans it with descriptors
+                            // from a detached mount namespace, and its next fork aborts
+                            // ("Not allowlisted: /null") - WebView then stays black until
+                            // reboot. The child zygote is not an app process and is not
+                            // counted above, so the parent lives as long as it does.
+                            Slog.i(TAG, "lazy32: WebView zygote is running, keeping zygote_secondary");
+                        } else {
+                            Slog.i(TAG, "lazy32: no 32-bit procs left, reaping zygote_secondary");
+                            // Issued under `this` so a concurrent 32-bit startProcessLocked
+                            // (which also needs `this`) cannot fork off the daemon between the
+                            // check and the stop. stopSecondaryZygote takes only
+                            // ZygoteProcess.mLock; the this -> mLock order is safe (no path
+                            // holds mLock then takes `this`).
+                            Process.ZYGOTE_PROCESS.stopSecondaryZygote();
+                        }
                     }
                 }
             } break;

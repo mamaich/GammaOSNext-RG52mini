@@ -22,4 +22,23 @@
          ронял system_server по кругу. В ZramWriteback добавлена проверка на
          null, но правильнее не включать то, чего мы не хотим. -->
     <bool name="config_zramWriteback">false</bool>
+
+    <!-- Местоположение - без microG.
+
+         Со значениями по умолчанию (true) LocationManagerService ищет провайдеров
+         сети, fused и геокодера среди пакетов config_locationProviderPackageNames,
+         а там первым стоит com.google.android.gms. Три привязки системы к GmsCore
+         (каждой одной достаточно) держат его на уровне perceptible: процесс
+         поднимается на загрузке вместе с оболочкой и не выгружается никогда -
+         48 МБ PSS и 133 МБ RSS в простое. Проверено на устройстве: стоит отключить
+         все три службы провайдеров, и GmsCore выгружается сам за 15 секунд.
+
+         С false берутся пакеты по умолчанию из framework-res: fused - системный
+         com.android.location.fused, он работает внутри system_server; провайдера
+         сети и геокодера нет. На консоли без GPS и связи они не нужны. GmsCore
+         при этом остаётся и поднимается по требованию: вход в аккаунт, Aurora
+         Store, покупки в играх. -->
+    <bool name="config_enableNetworkLocationOverlay">false</bool>
+    <bool name="config_enableFusedLocationOverlay">false</bool>
+    <bool name="config_enableGeocoderOverlay">false</bool>
 </resources>

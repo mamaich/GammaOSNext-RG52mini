@@ -289,6 +289,12 @@ public class SystemImpl implements SystemInterface {
 
     @Override
     public void ensureZygoteStarted() {
+        // GammaOS lazy 32-bit zygote: the WebView zygote is 32-bit here, so starting it ahead
+        // of time brings zygote_secondary up on every boot. Leave it to the first renderer:
+        // Process.startWebView -> WebViewZygote.getProcess() starts it on demand.
+        if (WebViewZygote.isLazy32BitZygote()) {
+            return;
+        }
         WebViewZygote.getProcess();
     }
 

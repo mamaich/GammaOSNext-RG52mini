@@ -732,6 +732,17 @@ public final class ViewRootImpl implements ViewParent,
     @InputSourceClass
     int mUnbufferedInputSource = SOURCE_CLASS_NONE;
 
+    /**
+     * GammaOS RG52: deliver joystick motion - sticks, triggers and, on this handheld, the D-pad
+     * (it is reported as hat axes) - as soon as it arrives instead of batching it until the next
+     * frame. Batching suits touch scrolling, but a game that polls its input right after vsync
+     * then sees the stick or D-pad change a frame late: 8 ms on average, up to 16.7. No emulator
+     * asks for unbuffered dispatch itself. Read once per window, so a change of the property
+     * applies to windows opened afterwards (restart the game).
+     */
+    private final boolean mUnbufferedJoystick = SystemProperties.getBoolean(
+            "persist.gammaos.input.unbuffered_joystick", true);
+
     String mPendingInputEventQueueLengthCounterName = "pq";
 
     InputStage mFirstInputStage;
@@ -9973,7 +9984,9 @@ public final class ViewRootImpl implements ViewParent,
         @Override
         public void onBatchedInputEventPending(int source) {
             final boolean unbuffered = mUnbufferedInputDispatch
-                    || (source & mUnbufferedInputSource) != SOURCE_CLASS_NONE;
+                    || (source & mUnbufferedInputSource) != SOURCE_CLASS_NONE
+                    || (mUnbufferedJoystick
+                            && (source & InputDevice.SOURCE_CLASS_JOYSTICK) != SOURCE_CLASS_NONE);
             if (unbuffered) {
                 if (mConsumeBatchedInputScheduled) {
                     unscheduleConsumeBatchedInput();

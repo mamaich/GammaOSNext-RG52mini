@@ -166,7 +166,12 @@ public class WebViewLibraryLoader {
         if (DEBUG) Log.v(LOGTAG, "creating relro files");
         int numRelros = 0;
 
-        if (Build.SUPPORTED_32_BIT_ABIS.length > 0) {
+        // GammaOS lazy 32-bit zygote: the 32-bit RELRO is made in a 32-bit isolated process,
+        // which would bring zygote_secondary up on every boot just for this. Without the file
+        // a 32-bit WebView user loads the library without the shared RELRO ("proceeding
+        // without"): the WebView zygote shares it with its renderers by forking anyway, and
+        // there are no 32-bit apps on this device.
+        if (Build.SUPPORTED_32_BIT_ABIS.length > 0 && !WebViewZygote.isLazy32BitZygote()) {
             if (DEBUG) Log.v(LOGTAG, "Create 32 bit relro");
             createRelroFile(false /* is64Bit */, packageName, libraryFileName);
             numRelros++;

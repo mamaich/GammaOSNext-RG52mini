@@ -22,12 +22,15 @@ import android.content.pm.PackageInfo;
 import android.os.Build;
 import android.os.ChildZygoteProcess;
 import android.os.Process;
+import android.os.SystemProperties;
 import android.os.ZygoteProcess;
 import android.text.TextUtils;
 import android.util.Log;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.os.Zygote;
+
+import dalvik.system.VMRuntime;
 
 /** @hide */
 public class WebViewZygote {
@@ -47,9 +50,9 @@ public class WebViewZygote {
 
     /**
      * Information about the selected WebView package. This is set from #onWebViewProviderChanged().
+     * GammaOS: written under sLock, but volatile and read without it - see getPackageName().
      */
-    @GuardedBy("sLock")
-    private static PackageInfo sPackage;
+    private static volatile PackageInfo sPackage;
 
     /**
      * Flag for whether multi-process WebView is enabled. If this is {@code false}, the zygote will
@@ -57,6 +60,33 @@ public class WebViewZygote {
      */
     @GuardedBy("sLock")
     private static boolean sMultiprocessEnabled = false;
+
+    /**
+     * GammaOS lazy 32-bit zygote: true while the child zygote runs with a 32-bit ABI, i.e. was
+     * forked from zygote_secondary. Written under sLock, read without it so ActivityManagerService
+     * can check it under its own lock.
+     */
+    private static volatile boolean sRunning32Bit = false;
+
+    /**
+     * GammaOS lazy 32-bit zygote: whether the WebView child zygote is alive as a child of
+     * zygote_secondary. While it is, zygote_secondary must not be reaped: the child would be
+     * orphaned with descriptors from a detached mount namespace and abort on its next fork.
+     */
+    public static boolean isRunning32Bit() {
+        return sRunning32Bit;
+    }
+
+    /**
+     * GammaOS lazy 32-bit zygote (persist.gammaos.lazy32 with ro.zygote.disable_secondary=1):
+     * zygote_secondary is started by the first 32-bit fork and reaped after the last 32-bit app
+     * exits, so nothing 32-bit should be started ahead of time - neither the 32-bit RELRO nor
+     * the WebView zygote (32-bit here: the WebView package is armeabi-v7a primary).
+     */
+    public static boolean isLazy32BitZygote() {
+        return SystemProperties.getBoolean("persist.gammaos.lazy32", false)
+                && SystemProperties.getBoolean("ro.zygote.disable_secondary", false);
+    }
 
     public static ZygoteProcess getProcess() {
         synchronized (sLock) {
@@ -68,18 +98,20 @@ public class WebViewZygote {
     }
 
     public static String getPackageName() {
-        synchronized (sLock) {
-            return sPackage.packageName;
-        }
+        // GammaOS lazy 32-bit zygote: no sLock here. getProcess() holds sLock for the whole cold
+        // start of the WebView zygote (zygote_secondary start and preload, the child fork and its
+        // preload - seconds), while ActiveServices calls this and isMultiprocessEnabled() under
+        // the global AMS lock for every renderer bind: waiting on sLock there would stall the
+        // whole system for that time. sPackage is volatile and only ever replaced as a whole.
+        return sPackage.packageName;
     }
 
     public static boolean isMultiprocessEnabled() {
+        if (updateServiceV2()) {
+            return sPackage != null;    // lock-free, see getPackageName()
+        }
         synchronized (sLock) {
-            if (updateServiceV2()) {
-                return sPackage != null;
-            } else {
-                return sMultiprocessEnabled && sPackage != null;
-            }
+            return sMultiprocessEnabled && sPackage != null;
         }
     }
 
@@ -122,6 +154,7 @@ public class WebViewZygote {
             sZygote.close();
             Process.killProcess(sZygote.getPid());
             sZygote = null;
+            sRunning32Bit = false;
         }
     }
 
@@ -157,6 +190,19 @@ public class WebViewZygote {
                         + sPackage.applicationInfo.secondaryCpuAbi);
                 abi = sPackage.applicationInfo.secondaryCpuAbi;
             }
+            // GammaOS lazy 32-bit zygote: zygote_secondary started on demand is never preloaded
+            // (it runs with --enable-lazy-preload, and SystemServer no longer sends it
+            // --preload-default at boot). Preload it before forking the WebView zygote from it,
+            // as before: the child inherits the preloaded classes and resources and the address
+            // space reserved for the WebView RELRO. A no-op if it is already preloaded; a
+            // failure is not fatal - the WebView zygote then loads everything itself.
+            if (abi != null && !VMRuntime.is64BitAbi(abi) && isLazy32BitZygote()) {
+                try {
+                    Process.ZYGOTE_PROCESS.preloadDefault(abi);
+                } catch (Exception e) {
+                    Log.w(LOGTAG, "Could not preload zygote_secondary for the WebView zygote", e);
+                }
+            }
             int runtimeFlags = Zygote.getMemorySafetyRuntimeFlagsForSecondaryZygote(
                     sPackage.applicationInfo, null);
             sZygote = Process.ZYGOTE_PROCESS.startChildZygote(
@@ -172,6 +218,7 @@ public class WebViewZygote {
                     null, // instructionSet
                     Process.FIRST_ISOLATED_UID,
                     Integer.MAX_VALUE); // TODO(b/123615476) deal with user-id ranges properly
+            sRunning32Bit = abi != null && !VMRuntime.is64BitAbi(abi);
             ZygoteProcess.waitForConnectionToZygote(sZygote.getPrimarySocketAddress());
             sZygote.preloadApp(sPackage.applicationInfo, abi);
         } catch (Exception e) {

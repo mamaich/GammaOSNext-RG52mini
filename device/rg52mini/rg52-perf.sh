@@ -93,10 +93,10 @@ if [ "$MODE" = boot ]; then
     if [ "$(getprop persist.rg52.perf.remember_mode 1)" != 1 ]; then
         if on_external_power; then
             MODE=max
-            log -t rg52-perf "загрузка от внешнего питания: режим max"
+            log -t rg52-perf "boot on external power: mode max"
         else
             MODE=stock
-            log -t rg52-perf "загрузка от батареи: режим stock"
+            log -t rg52-perf "boot on battery: mode stock"
         fi
         # Только при изменении: на любую запись init поднимает setclock_<режим>,
         # то есть ещё один проход применения. На второй и дальнейших загрузках
@@ -128,7 +128,7 @@ i=0
 while ! mkdir "$LOCK" 2>/dev/null; do
     i=$((i + 1))
     if [ "$i" -gt 50 ]; then
-        log -t rg52-perf "замок $LOCK занят 5 с, применяю без него"
+        log -t rg52-perf "lock $LOCK busy for 5 s, applying without it"
         LOCK=
         break
     fi
@@ -211,6 +211,32 @@ if [ -n "$DMC" ]; then
     fi
 fi
 
-log -t rg52-perf "режим $MODE: cpu $(cat $CPU/scaling_governor 2>/dev/null) \
+# Опрос геймпада. Стики, курки, B, X, Y и крестовина (кроме «вверх») сидят на
+# АЦП, и драйвер опрашивает их по таймеру. Его 16 мс из дерева устройства на
+# деле давали период 20 мс: таймер ядра тикает по 3,3 мс (HZ=300), и к пяти-шести
+# тикам прибавляется время самого опроса. 50 опросов в секунду на игре в 60
+# кадров - это кадр без свежих данных стика примерно каждые шесть кадров, отсюда
+# подёргивание камеры в 3D. С 8 мс выходит 76 опросов в секунду (замер по
+# прерываниям АЦП) ценой около 1 % одного ядра. В powersave остаётся 16 мс.
+#
+# persist.rg52.joypad.poll_ms задаёт интервал явно, в любом режиме, и действует
+# сразу (триггер в rg52-perf.rc). Драйвер принимает 8-100 мс: значение вне
+# диапазона прижимается к границе. 10# - чтобы "08" не читалось как восьмеричное.
+POLL=$(getprop persist.rg52.joypad.poll_ms)
+case "$POLL" in
+    ''|*[!0-9]*) POLL=8; [ "$MODE" = powersave ] && POLL=16 ;;
+    *) POLL=$((10#$POLL)); [ "$POLL" -lt 8 ] && POLL=8; [ "$POLL" -gt 100 ] && POLL=100 ;;
+esac
+JOY=none
+for d in /sys/class/input/input*; do
+    read -r NAME 2>/dev/null < "$d/name" || continue
+    if [ "$NAME" = retrogame_joypad ]; then
+        w "$d/poll" "$POLL"
+        read -r JOY 2>/dev/null < "$d/poll" || JOY=?
+    fi
+done
+
+log -t rg52-perf "mode $MODE: cpu $(cat $CPU/scaling_governor 2>/dev/null) \
 $(cat $CPU/scaling_min_freq 2>/dev/null)-$(cat $CPU/scaling_max_freq 2>/dev/null), \
-gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null)"
+gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null), \
+joypad poll ${JOY} ms"

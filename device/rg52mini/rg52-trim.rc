@@ -47,12 +47,17 @@ service rg52_disable_rkpd /system/bin/sh -c "pm list packages -d | grep -q com.a
 # постоянную привязку, и процесс android.ext.services живёт на уровне visible:
 # не уходит в кеш и не вытесняется, 9-20 МБ PSS в простое. На консоли он не нужен.
 #
-# Отзываем один раз. remove_assistant помечает выбор как сделанный
+# Отзываем один раз. disallow_assistant помечает выбор как сделанный
 # пользователем (setUserSet), это хранится в /data/system/notification_policy.xml
 # и переживает перезагрузки и обновления - сам ассистент обратно не вернётся.
 # persist.rg52.nas_off=1 не даёт отозвать его повторно, если однажды его
-# включат руками (cmd notification allow_assistant <компонент>).
-service rg52_nas_off /system/bin/sh -c "getprop persist.rg52.nas_off | grep -qx 1 || { cmd notification get_approved_assistant | grep -q android.ext.services && cmd notification remove_assistant android.ext.services/android.ext.services.notification.Assistant; setprop persist.rg52.nas_off 1; }"
+# включат руками (cmd notification allow_assistant <компонент>), и ставится
+# только после удачного отзыва (или если ассистента и так нет).
+#
+# Команда именно disallow_assistant: справка cmd notification называет её
+# remove_assistant, но такой команды нет («Unknown command») - так ошибается сам
+# AOSP (NotificationShellCmd: текст справки против case "disallow_assistant").
+service rg52_nas_off /system/bin/sh -c "getprop persist.rg52.nas_off | grep -qx 1 || if cmd notification get_approved_assistant | grep -q android.ext.services; then cmd notification disallow_assistant android.ext.services/android.ext.services.notification.Assistant && setprop persist.rg52.nas_off 1; else setprop persist.rg52.nas_off 1; fi"
     user root
     group root shell
     disabled

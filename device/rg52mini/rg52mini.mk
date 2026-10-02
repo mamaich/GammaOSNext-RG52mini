@@ -108,6 +108,17 @@ PRODUCT_PRODUCT_PROPERTIES += \
     config.disable_cameraservice=true \
     drm.service.enabled=false
 
+# FUSE passthrough для /sdcard. Эмуляторы читают ROM по пути /storage/emulated,
+# а он смонтирован через FUSE: без passthrough каждое чтение проходит через
+# демон в процессе MediaProvider. С passthrough после открытия файла ядро
+# читает и пишет прямо в ext4 (fs/fuse/passthrough.c, вариант V2 - тот, что
+# ждёт libfuse). Замер на одном и том же файле на 703 МБ с холодным кешем: 77,8
+# -> 85,0 МБ/с, то есть как при чтении напрямую, а процессор MediaProvider
+# 2,2 -> 0,01 с. Проверены контрольные суммы при чтении, через mmap и после
+# записи и дозаписи через /sdcard.
+PRODUCT_PRODUCT_PROPERTIES += \
+    persist.sys.fuse.passthrough.enable=true
+
 
 # Штатный геймпад-демон GammaOS вместо vendor-овского rgp2pad. Умеет то же и
 # больше: режим мыши (оба стика удержать 2 с), отображение в тачскрин,
@@ -373,9 +384,9 @@ PRODUCT_PRODUCT_PROPERTIES += \
     ro.config.low_ram=false \
     ro.lmk.swap_util_max=100 \
     ro.lmk.thrashing_limit=200 \
-    persist.gammaos.lazy32=0
+    persist.gammaos.lazy32=1
 
-# Про persist.gammaos.lazy32=0 выше — из-за него не работал WebView.
+# Про persist.gammaos.lazy32=1 выше — 32-битный зигот по требованию.
 #
 # GammaOS экономит память «ленивым» 32-битным зиготом: atv_lowram_defaults.mk
 # ставит ro.zygote.disable_secondary=1, init не поднимает zygote_secondary при
@@ -404,10 +415,20 @@ PRODUCT_PRODUCT_PROPERTIES += \
 # в браузере GammaOS, в окне авторизации Aurora Store — везде, где рисует
 # WebView. Firefox работает, потому что у него свой движок Gecko.
 #
-# Ставим 0 — zygote_secondary поднимается по требованию и больше не убивается.
-# Цена по dumpsys meminfo: около 62 МБ приватной памяти, и только после того,
-# как запустится первое 32-битное приложение. Проверено на устройстве: страница
-# открывается, рендерер живёт (com.android.webview:sandboxed_process0).
+# Сначала жнец был просто выключен (lazy32=0). Но тогда zygote_secondary
+# поднимался на каждой загрузке - его будили сразу три вещи: предзагрузка в
+# SystemServer (SecondaryZygotePreload), 32-битный RELRO WebView и ранний старт
+# дочернего зигота WebView, - и жил всегда: 65-90 МБ в простое и 3-4,5 с
+# процессора на загрузке, хотя 32-битных приложений на устройстве нет ни одного.
+#
+# Теперь все три ничего 32-битного заранее не запускают
+# (WebViewZygote.isLazy32BitZygote), дочерний зигот WebView стартует по первому
+# требованию, а жнец не трогает zygote_secondary, пока жив дочерний зигот
+# WebView (WebViewZygote.isRunning32Bit). После загрузки 32-битного зигота нет
+# вовсе; первое окно с WebView (вход в Google в Aurora Store, браузер)
+# открывается на пару секунд дольше и поднимает оба зигота, а дальше они живут
+# до перезагрузки, как раньше. Битность WebView не меняется: рендереры в играх
+# остаются 32-битными и лёгкими.
 #
 # Свойство пишем в product: у GammaOS оно задано в PRODUCT_SYSTEM_PROPERTIES,
 # то есть в /system/build.prop, а /product/etc/build.prop читается позже и

@@ -94,6 +94,7 @@ import android.util.Pair;
 import android.util.Slog;
 import android.util.TimeUtils;
 import android.view.contentcapture.ContentCaptureManager;
+import android.webkit.WebViewZygote;
 
 import com.android.i18n.timezone.ZoneInfoDb;
 import com.android.internal.R;
@@ -1583,7 +1584,11 @@ public final class SystemServer implements Dumpable {
             // ensure that it completes before the 32 bit relro process is forked
             // from the zygote. In the event that it takes too long, the webview
             // RELRO process will block, but it will do so without holding any locks.
-            if (!minimalBoot) {
+            //
+            // GammaOS lazy 32-bit zygote: nothing 32-bit is started at boot any more (no
+            // 32-bit RELRO, the WebView zygote starts on first use), so preloading would only
+            // bring zygote_secondary up for nothing - 3-4.5 s of CPU during boot and 65-90 MB.
+            if (!minimalBoot && !WebViewZygote.isLazy32BitZygote()) {
             mZygotePreload = SystemServerInitThreadPool.submit(() -> {
                 try {
                     Slog.i(TAG, SECONDARY_ZYGOTE_PRELOAD);

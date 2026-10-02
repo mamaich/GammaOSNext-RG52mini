@@ -327,6 +327,37 @@ post_retroarch() {
         sed -i 's/vrr_runloop_enable = "false"/vrr_runloop_enable = "true"/' \
             /sdcard/Android/data/com.retroarch.aarch64/files/retroarch.cfg 2>/dev/null
     fi
+    # RG52 Mini: видеодрайвер gl вместо vulkan. Экран портретный, и кадр надо
+    # повернуть. На vulkan (и glcore) RetroArch этого не делает, и кадр на каждом
+    # кадре поворачивает SurfaceFlinger на GPU; на gl поворачивает драйвер Mali, и
+    # кадр уходит на экран слоем, без композиции. Замер на Snes9x, 62,5 кадра/с:
+    # SurfaceFlinger 322 -> 148 мс процессора в секунду, GPU 21 -> 8 %, шина
+    # памяти 45 -> 30 %, сам RetroArch +50 мс/с. Ядрам, которым нужен другой
+    # контекст, RetroArch переключает драйвер сам (driver_switch_enable).
+    #
+    # Пресеты slang на gl не грузятся, а пресет ядра RetroArch выбирает по
+    # драйверу. Поэтому рядом с каждым .slangp кладётся такой же .glslp: GLSL-версия
+    # Sharp-Shimmerless есть в том же наборе шейдеров.
+    #
+    # Заодно чинятся пресеты mGBA и SwanStation: в наборе они ссылаются на
+    # shaders/SHARP_SHIMMERLESS.slangp, которого нет, и шейдера у них не было и на
+    # vulkan. Теперь у всех трёх тот же Sharp-Shimmerless, что работал у Snes9x.
+    if [ "$(getprop ro.gammaos.device)" = rg52mini ]; then
+        step "RetroArch: video driver gl (the GPU driver rotates frames for the portrait panel)."
+        sed -i 's/^video_driver = "vulkan"$/video_driver = "gl"/' \
+            /sdcard/Android/data/com.retroarch.aarch64/files/retroarch.cfg 2>/dev/null
+        local sp=/data/user/0/com.retroarch.aarch64/shaders/Sharp-Shimmerless core
+        for core in Snes9x mGBA SwanStation; do
+            [ -d "/sdcard/RetroArch/config/$core" ] || continue
+            echo "#reference \"$sp/shaders_slang/sharp-shimmerless.slangp\"" \
+                > "/sdcard/RetroArch/config/$core/$core.slangp"
+            echo "#reference \"$sp/shaders_glsl/sharp-shimmerless.glslp\"" \
+                > "/sdcard/RetroArch/config/$core/$core.glslp"
+            [ -n "$u" ] && chown "$u:media_rw" "/sdcard/RetroArch/config/$core/$core.slangp" \
+                "/sdcard/RetroArch/config/$core/$core.glslp"
+        done
+        step "RetroArch: Sharp-Shimmerless presets for Snes9x, mGBA and SwanStation (slang and GLSL)."
+    fi
     # XMB icons for the nano boot menu come out of the RetroArch asset set.
     step "Copying XMB icons for Nano boot menu."
     mkdir -p /data/system/nano_icons
@@ -387,6 +418,17 @@ post_flycast() {
     u=$(app_user com.flycast.emulator)
     [ -n "$u" ] && [ -d /sdcard/Android/data/com.flycast.emulator ] && \
         chown -R "$u:ext_data_rw" /sdcard/Android/data/com.flycast.emulator
+    # RG52 Mini: рендер OpenGL (pvr.rend = 0) вместо Vulkan (4). Экран портретный: на Vulkan
+    # Flycast кадр не поворачивает, и его на каждом кадре поворачивает SurfaceFlinger на GPU;
+    # на GL поворачивает драйвер Mali, и кадр уходит на экран слоем, без композиции (если
+    # драйвер не выдаёт 10-битный буфер - см. device/rg52mini/mali-g25p0.prop). Замер на
+    # Crazy Taxi, по два отрезка в игре: GL 27-30 кадров/с, Vulkan 21-22; SurfaceFlinger
+    # 101-116 против 151 мс процессора в секунду, GPU 14-16 против 19-20 %.
+    if [ "$(getprop ro.gammaos.device)" = rg52mini ]; then
+        step "Flycast: OpenGL renderer (the GPU driver rotates frames for the portrait panel)."
+        sed -i 's/^pvr.rend = 4$/pvr.rend = 0/' \
+            /sdcard/Android/data/com.flycast.emulator/files/emu.cfg 2>/dev/null
+    fi
 }
 
 post_mupen() {

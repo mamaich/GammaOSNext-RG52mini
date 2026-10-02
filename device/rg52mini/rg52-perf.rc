@@ -64,6 +64,19 @@ on property:persist.gammaos.performance_mode=3d_game
 on property:sys.boot_completed=1
     start rg52_perf_boot
 
+# Интервал опроса геймпада задаётся вручную (persist.rg52.joypad.poll_ms) и
+# применяется сразу: без аргумента скрипт заново применяет текущий режим, а с ним
+# и интервал. До загрузки не нужно - тогда его применит rg52_perf_boot.
+service rg52_perf_apply /system/bin/rg52-perf.sh
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+on property:persist.rg52.joypad.poll_ms=* && property:sys.boot_completed=1
+    start rg52_perf_apply
+
 # Счётчики планировщика. atrace.rc из AOSP включает их на late-init ради трасс
 # perfetto («Scheduler tracepoints require schedstats»), и с этого момента каждое
 # пробуждение и переключение потока ведёт статистику ожидания. Копейки (десятые
