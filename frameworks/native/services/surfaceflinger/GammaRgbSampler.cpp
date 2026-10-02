@@ -205,8 +205,16 @@ void GammaRgbSampler::threadMain() {
             }
         }
 
+        // RG52: the stick LEDs' master switch is persist.gammargb.control
+        // (JoystickLedPicker, the QS tile, rg52-ledd); "off" leaves rgb.enable
+        // and rgb.effect as they were. nano's own follow sampler
+        // (NanoMenuRgbFollow.cpp) already idles then; do the same here, or SF
+        // keeps reading the screen back several times a second (RenderEngine
+        // readback, ~4% of a core plus RT bursts) for LEDs that are off.
+        const bool ledsOff = (GetProperty("persist.gammargb.control", "") == "off");
+
         // If enabled and effect=none, do passthrough BEFORE any sampling path
-        if (mEnabled.load() && mEffect == "none") {
+        if (mEnabled.load() && !ledsOff && mEffect == "none") {
             const bool colorSplit = GetBoolProperty("persist.gammaos.rgb.color_split", false);
             // Also key updates on brightness when scaling is enabled
             const int briKey = currentBrightnessKey();
@@ -262,8 +270,9 @@ void GammaRgbSampler::threadMain() {
             continue;
         }
 
-        // If disabled, ensure DCS is off and idle without sampling
-        if (!mEnabled.load()) {
+        // If disabled (or the LEDs are switched off), ensure DCS is off and
+        // idle without sampling
+        if (!mEnabled.load() || ledsOff) {
             if (dcsReady) {
                 disableDcs(/*log*/true);
                 dcsReady = false;
