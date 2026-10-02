@@ -251,6 +251,22 @@ if [ -f "$RGP" ] && [ -f /mnt/imgven/bin/rgp2pad ]; then
     echo "   заменён: /vendor/bin/rgp2pad ($(stat -c %s "$RGP") байт)"
 fi
 
+# Эквалайзер HAL Rockchip (rk_effect, libRK_AudioProcess.so) отключается: файл
+# параметров переименовывается, и без него HAL эффект не создаёт ("param ... do
+# not exist, effect created fail"). Причина - падение HAL при каждом закрытии
+# выходного потока, то есть при подключении и отключении HDMI:
+# adev_close_output_stream -> rk_effect_destory выгружает библиотеку эффекта,
+# пока поток writer ещё в ней, SIGSEGV. Audioserver перезапускается, и Android
+# после этого может потерять состояние "HDMI подключён" - звук остаётся в
+# динамике. Падает и HAL Doogee 2024 года, и с файлом параметров Doogee, а без
+# эффекта ни одного падения. Эквалайзер действовал на все выходы HAL, в том
+# числе на динамик; GammaEQ работает выше, в Android, и это его не касается.
+for f in /mnt/imgven/etc/Para_*Hz_*ch.bin; do
+    [ -f "$f" ] || continue
+    sudo mv "$f" "$f.off"
+    echo "   эквалайзер HAL отключён: /vendor/etc/$(basename "$f") -> .off"
+done
+
 sync
 # --- драйвер Mali посвежее ---
 for abi in lib64 lib; do
