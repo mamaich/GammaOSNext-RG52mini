@@ -38,6 +38,7 @@ import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.preference.EditTextPreference;
@@ -406,15 +407,36 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
                 new AlertDialog.Builder(c)
                         .setTitle(ok ? R.string.gammaos_toolbox_emmc_setup_ok
                                      : R.string.gammaos_toolbox_emmc_setup_fail)
-                        .setMessage(emmcSetupLogTail(timedOut))
+                        .setView(emmcSetupLogView(c, emmcSetupLogTail(timedOut)))
                         .setPositiveButton(android.R.string.ok, null)
                         .show();
             }
         }, EMMC_SETUP_POLL_MS);
     }
 
-    // Журнал скрипта - по-английски; показываем его конец как есть: там итог
-    // или текст ошибки.
+    // Журнал в прокручиваемой области не выше половины экрана: в теме
+    // Android TV длинное сообщение AlertDialog не прокручивается и наползает
+    // на кнопку.
+    private static View emmcSetupLogView(Context c, String text) {
+        final float dp = c.getResources().getDisplayMetrics().density;
+        final int maxH = c.getResources().getDisplayMetrics().heightPixels / 2;
+        TextView tv = new TextView(c);
+        tv.setText(text);
+        tv.setTextIsSelectable(false);
+        int pad = (int) (24 * dp);
+        tv.setPadding(pad, (int) (8 * dp), pad, (int) (8 * dp));
+        ScrollView sv = new ScrollView(c) {
+            @Override
+            protected void onMeasure(int w, int h) {
+                super.onMeasure(w, MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST));
+            }
+        };
+        sv.addView(tv);
+        return sv;
+    }
+
+    // Журнал скрипта - по-английски; показываем его целиком, с начала: итог
+    // или текст ошибки - в конце, до него можно прокрутить.
     private String emmcSetupLogTail(boolean timedOut) {
         String text;
         try {
@@ -424,7 +446,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
             text = "";
         }
         String[] lines = text.split("\n");
-        int from = Math.max(0, lines.length - 25);
+        int from = 0;   // весь журнал, он прокручивается
         StringBuilder sb = new StringBuilder();
         if (timedOut) sb.append("Timed out waiting for the setup to finish.\n\n");
         for (int i = from; i < lines.length; i++) sb.append(lines[i]).append('\n');
