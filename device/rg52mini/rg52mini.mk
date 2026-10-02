@@ -176,6 +176,13 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-mouseflash.sh:system/bin/rg52-mouseflash.sh \
     device/rg52mini/rg52-mouseflash.rc:system/etc/init/rg52-mouseflash.rc
 
+# Возврат встроенного экрана, если HWC Rockchip после отключения HDMI его не
+# привязал (чёрный экран, руками лечится двойным нажатием кнопки питания).
+# Запускается только по событию отключения, см. rg52-hdmi-unplug.sh.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-hdmi-unplug.sh:system/bin/rg52-hdmi-unplug.sh \
+    device/rg52mini/rg52-hdmi-unplug.rc:system/etc/init/rg52-hdmi-unplug.rc
+
 # Загрузочная анимация GammaOS с кадром 480x480 вместо 2880x2880: на экране он
 # всё равно 480x480, а исходный занимал 32 МиБ памяти GPU и перечитывался с
 # шестикратным уменьшением 60 раз в секунду - пока анимация держит экран до

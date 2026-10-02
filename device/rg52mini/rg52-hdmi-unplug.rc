@@ -1,0 +1,16 @@
+# Возврат встроенного экрана после отключения HDMI, см. rg52-hdmi-unplug.sh.
+#
+# HWC пишет состояние HDMI в vendor.hwc.device.display-1
+# (HDMI-A-1:<crtc>:connected / disconnected). Номер CRTC в значении может
+# меняться, поэтому триггер на любую запись, а отключение распознаёт сам
+# скрипт. Служба oneshot: повторный start во время её работы init игнорирует.
+
+on property:vendor.hwc.device.display-1=*
+    start rg52_hdmi_unplug
+
+service rg52_hdmi_unplug /system/bin/rg52-hdmi-unplug.sh
+    user shell
+    group shell
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
