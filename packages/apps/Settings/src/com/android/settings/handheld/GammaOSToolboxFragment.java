@@ -373,7 +373,8 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         if (ctx == null) return;
         new AlertDialog.Builder(ctx)
                 .setTitle(R.string.gammaos_toolbox_emmc_setup_title)
-                .setMessage(R.string.gammaos_toolbox_emmc_setup_msg)
+                // Вопрос с предупреждением длинный - тоже в прокручиваемой области.
+                .setView(emmcSetupLogView(ctx, getString(R.string.gammaos_toolbox_emmc_setup_msg)))
                 .setPositiveButton(R.string.gammaos_toolbox_emmc_setup_run, (d, w) -> runEmmcSetup())
                 .setNegativeButton(R.string.gammaos_toolbox_emmc_setup_skip, null)
                 .show();

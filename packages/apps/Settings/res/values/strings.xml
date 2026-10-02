@@ -13646,7 +13646,7 @@
     <string name="gammaos_toolbox_reboot_emmc_title">Allow reboot to eMMC</string>
     <string name="gammaos_toolbox_reboot_emmc_summary">Adds a “Reboot to eMMC” entry to the power menu. The device then boots the system from the internal memory instead of the card; the next ordinary reboot returns to the card. Off by default.</string>
     <string name="gammaos_toolbox_emmc_setup_title">Set up EmuELEC on the internal memory?</string>
-    <string name="gammaos_toolbox_emmc_setup_msg">EmuELEC/RGBox on the internal memory can be prepared to work alongside this GammaOS card: it will see the same ROMs folder as Android, keep the backlight on at boot and skip its first-run prompts. Only EmuELEC\'s own settings on the internal memory are changed, and running this again does no harm.</string>
+    <string name="gammaos_toolbox_emmc_setup_msg">EmuELEC/RGBox on the internal memory can be prepared to work alongside this GammaOS card: it will see the same ROMs folder as Android, keep the backlight on at boot and skip its first-run prompts. Running this again does no harm.\n\nWarning: this changes the system on the internal memory (eMMC). Swapping or removing the SD card does not undo it; to go back you will have to reflash the stock firmware manually.</string>
     <string name="gammaos_toolbox_emmc_setup_run">Set up</string>
     <string name="gammaos_toolbox_emmc_setup_skip">Not now</string>
     <string name="gammaos_toolbox_emmc_setup_running">Setting up EmuELEC</string>
