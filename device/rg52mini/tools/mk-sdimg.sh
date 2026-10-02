@@ -497,12 +497,18 @@ sync
 # расчётных по объёму памяти: элементов в них 50-60 тысяч, на ячейку всё равно
 # меньше одного, а память это ещё 1,5 МиБ. Всё вместе - MemTotal +5,4 МиБ,
 # замерено на устройстве.
+#
+# Строки MENU TITLE нет намеренно. В нашем u-boot любое MENU верхнего уровня
+# включает интерактивное меню (cmd/pxe.c: case T_MENU -> cfg->prompt = 1), и
+# на каждой загрузке он ждал TIMEOUT 10, то есть секунду, на единственном
+# пункте. PROMPT 0 это не отменяет - здесь он разбирается и отбрасывается. Без
+# меню u-boot сразу берёт DEFAULT. Прервать загрузку с UART по-прежнему можно
+# на отсчёте autoboot.
 echo "== правлю extlinux.conf"
 sudo mkdir -p /mnt/imgboot && sudo mount "${LOOP}p3" /mnt/imgboot
 sudo tee /mnt/imgboot/extlinux/extlinux.conf > /dev/null <<'EOF'
 DEFAULT GammaOS
 TIMEOUT 10
-MENU TITLE RG52Mini GammaOS Core (Android 14)
 
 LABEL GammaOS
     MENU LABEL GammaOS Core
