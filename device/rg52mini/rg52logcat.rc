@@ -1,4 +1,4 @@
-# RG52 Mini: logcat в последовательную консоль и в файл на /metadata.
+# RG52 Mini: logcat в последовательную консоль.
 #
 # Перенесено из порта Android 13, где это лежало в разделе system. Ключевое
 # слово console привязывает вывод службы к /dev/console, а /dev/console — это
@@ -14,11 +14,11 @@ service rg52logcat_con /system/bin/logcat -b all -v threadtime
     seclabel u:r:shell:s0
     console
 
-service rg52logcat_file /system/bin/logcat -b all -v threadtime -f /metadata/rg52_logcat.txt -r 4096 -n 2
-    class main
-    user root
-    group root system log
-    seclabel u:r:shell:s0
+# Запись журнала в файл на /metadata (служба rg52logcat_file) убрана. Она
+# держала до трёх файлов по 4 МБ на разделе в 11 МБ: раздел заполнялся до
+# 98 %, logcat упирался в нехватку места, завершался, и init перезапускал его
+# каждые 5 секунд. А /metadata не свалка: там ключи шифрования userdata и
+# состояние OTA. Файлы, оставшиеся от прежних сборок, удаляются здесь же.
 
 # Намеренно post-fs, а не post-fs-data: именно в post-fs-data чаще всего и
 # застревает загрузка (там perform_apex_config, wait_for_prop apexd.status и
@@ -26,4 +26,6 @@ service rg52logcat_file /system/bin/logcat -b all -v threadtime -f /metadata/rg5
 # поднят: он стартует по триггеру fs.
 on post-fs
     start rg52logcat_con
-    start rg52logcat_file
+    rm /metadata/rg52_logcat.txt
+    rm /metadata/rg52_logcat.txt.1
+    rm /metadata/rg52_logcat.txt.2
