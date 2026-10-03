@@ -799,7 +799,17 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
 
             @Override
             public void onPress() {
-                Intent intent = new Intent(Settings.ACTION_SETTINGS);
+                // RG52: open TvSettings, not the phone Settings. Its side panel is translucent, so
+                // a game underneath stays visible: OOM adj ~100 instead of 700 behind a
+                // full-screen Settings (the low memory killer leaves it alone), and its surface
+                // is kept, so emulators do not rebuild their GL context on return. It is also
+                // lighter (PSS ~39 vs ~55 MB) and made for D-pad navigation. Falls back to the
+                // phone Settings if TvSettings is missing.
+                Intent intent = new Intent(Intent.ACTION_MAIN).setClassName(
+                        "com.android.tv.settings", "com.android.tv.settings.MainSettings");
+                if (mContext.getPackageManager().resolveActivity(intent, 0) == null) {
+                    intent = new Intent(Settings.ACTION_SETTINGS);
+                }
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 mContext.startActivity(intent);
             }
