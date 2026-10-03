@@ -3,16 +3,14 @@
 #
 # HWC пишет состояние HDMI в vendor.hwc.device.display-1
 # (HDMI-A-1:<crtc>:connected / release / disconnected). Номер CRTC в значении
-# может меняться, поэтому триггер на любую запись, а нужный случай распознают
-# сами скрипты. Службы oneshot: повторный start во время их работы init
-# игнорирует.
+# может меняться, поэтому триггер на любую запись, а отключение распознаёт сам
+# скрипт. Службы oneshot: повторный start во время их работы init игнорирует.
 
 on property:vendor.hwc.device.display-1=*
     start rg52_hdmi_unplug
-    start rg52_hdmi_rebind
 
-# При пробуждении HWC может отпустить HDMI, не меняя этого свойства (оно уже
-# было release на время сна), поэтому возврат HDMI проверяется и по пробуждению.
+# Только по пробуждению (и в конце загрузки): в другое время HWC отпускает HDMI
+# лишь при отключении кабеля, и возвращать там нечего.
 on property:sys.screen.state=on && property:sys.boot_completed=1
     start rg52_hdmi_rebind
 

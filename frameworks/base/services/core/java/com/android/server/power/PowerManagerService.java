@@ -5093,6 +5093,17 @@ public final class PowerManagerService extends SystemService
                 // Power group for the default display group is already added.
                 continue;
             }
+            // RG52: a display that never got a display group reports INVALID_DISPLAY_GROUP.
+            // GammaOS gives every non-first local display FLAG_OWN_DISPLAY_GROUP, and
+            // LogicalDisplayMapper.assignDisplayGroupLocked() then skips such displays before the
+            // group is ever assigned, so an HDMI screen connected at boot shows up here as -1.
+            // A power group for it matches no display group: the power button (default group
+            // only) never puts it to sleep, the global wakefulness stays awake and the device
+            // does not sleep at all while HDMI is connected. With HDMI connected after boot
+            // there is no such group, and sleep works - this makes both cases the same.
+            if (displayGroupId == Display.INVALID_DISPLAY_GROUP) {
+                continue;
+            }
             if (mPowerGroups.contains(displayGroupId)) {
                 Slog.e(TAG, "Tried to add already existing group:" + displayGroupId);
                 continue;
