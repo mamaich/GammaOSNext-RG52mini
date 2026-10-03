@@ -159,7 +159,7 @@ done
 
 case "$MODE" in
     powersave) DEF=schedutil:408000:1416000:powersave::528000000 ;;
-    max)       DEF=performance:1416000:2016000:performance:max: ;;
+    max)       DEF=performance:1416000:2208000:performance:max: ;;
     3d_game)   DEF=schedutil:408000:1416000:simple_ondemand ;;
     stock|*)   MODE=stock; DEF=schedutil:408000:2016000:simple_ondemand ;;
 esac
@@ -180,6 +180,8 @@ LOWEST=$(set -- $(cat "$CPU/scaling_available_frequencies" 2>/dev/null); echo "$
 
 [ -n "$CPU_GOV" ] && w "$CPU/scaling_governor" "$CPU_GOV"
 [ -n "$LOWEST"  ] && w "$CPU/scaling_min_freq" "$LOWEST"
+# ступени разгона в дереве ядра помечены turbo-mode: пока boost выключен, потолок их не видит
+w /sys/devices/system/cpu/cpufreq/boost "$([ "$MODE" = max ] && echo 1 || echo 0)"
 [ -n "$CPU_MAX" ] && w "$CPU/scaling_max_freq" "$CPU_MAX"
 [ -n "$CPU_MIN" ] && w "$CPU/scaling_min_freq" "$CPU_MIN"
 [ -n "$GPU_GOV" ] && [ -n "$GPU" ] && w "$GPU/governor" "$GPU_GOV"
