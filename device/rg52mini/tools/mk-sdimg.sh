@@ -611,6 +611,38 @@ if command -v fdtput >/dev/null 2>&1 && [ -f "$DTB" ]; then
 fi
 sync
 
+# --- ступени разгона: ЦП 2208 МГц, ГПУ 1000 МГц ---
+# Те же узлы, что в rk3562-rg52mini.dts ядра (коммиты 23bda260a, ad98c2f27):
+# дерево образа - эталонное, а не собранное из исходников, поэтому ступени
+# дописываются сюда. Работают только вместе с BL31 из u-boot с таблицей
+# разгона (tools/rg52mini/make-oc.sh): штатный BL31 этих меток не знает, и
+# ядро их не выберет. 2208 помечена turbo-mode - её видно, только пока включён
+# cpufreq/boost, а его включает лишь режим overclock (rg52-perf.sh). У ГПУ флага
+# turbo нет, и вне overclock rg52-perf.sh ставит потолок 900 МГц. Напряжения
+# подобраны под бин L3: 1,15 В - рекомендуемый максимум VDD_CPU по даташиту,
+# выше не поднимать. rockchip,high-temp (выше 95 °C - не выше 1,1 В) не трогаем.
+if command -v fdtput >/dev/null 2>&1 && [ -f "$DTB" ]; then
+    C=/cpu0-opp-table/opp-2208000000
+    G=/gpu-opp-table/opp-1000000000
+    ok=1
+    sudo fdtput -c "$DTB" $C $G || ok=
+    sudo fdtput -t x "$DTB" $C opp-supported-hw 0xf9 0xffff || ok=
+    sudo fdtput -t x "$DTB" $C opp-hz 0 0x839b6800 || ok=
+    for v in opp-microvolt opp-microvolt-L0 opp-microvolt-L1 opp-microvolt-L2              opp-microvolt-L3 opp-microvolt-L4; do
+        sudo fdtput -t x "$DTB" $C $v 0x118c30 0x118c30 0x118c30 || ok=
+        sudo fdtput -t x "$DTB" $G $v 0xee098 0xee098 0xf4240 || ok=
+    done
+    sudo fdtput -t x "$DTB" $C clock-latency-ns 0x9c40 || ok=
+    sudo fdtput -t s "$DTB" $C turbo-mode "" || ok=
+    sudo fdtput -t x "$DTB" $G opp-supported-hw 0xf9 0xffff || ok=
+    sudo fdtput -t x "$DTB" $G opp-hz 0 0x3b9aca00 || ok=
+    if [ -n "$ok" ]; then
+        echo "   разгон: ЦП $(fdtget -t x "$DTB" $C opp-hz), ГПУ $(fdtget -t x "$DTB" $G opp-hz)"
+    else
+        echo "   !! не удалось добавить ступени разгона - режим overclock будет равен max"
+    fi
+fi
+
 # --- логотип u-boot: 22 КБ вместо 2,7 МБ ---
 # Эталонный logo.bmp - 24 бита, 2,7 МБ, и u-boot читает его с FAT 1,4-1,5 с.
 # Наш - тот же рисунок в 8 битах с RLE8 и палитрой из 16 ступеней
