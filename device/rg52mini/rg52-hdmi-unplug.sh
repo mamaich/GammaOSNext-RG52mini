@@ -45,9 +45,14 @@ done
 dumpsys power | grep -q "mWakefulness=Awake" || exit 0
 
 log -t $TAG "internal display not rebound after HDMI unplug ($(getprop vendor.hwc.device.display-0)), sleep/wake"
+# Между «сном» и «пробуждением» ядро может успеть уснуть по-настоящему (без USB
+# к ПК его ничто не держит), и тогда пробуждение не наступит до кнопки питания.
+# Держим wakelock, с тайм-аутом на случай гибели скрипта.
+echo "rg52_hdmi_unplug 10000000000" > /sys/power/wake_lock
 input keyevent KEYCODE_SLEEP
 sleep 1
 input keyevent KEYCODE_WAKEUP
+echo rg52_hdmi_unplug > /sys/power/wake_unlock
 
 sleep 2
 log -t $TAG "after sleep/wake: $(getprop vendor.hwc.device.display-0)"

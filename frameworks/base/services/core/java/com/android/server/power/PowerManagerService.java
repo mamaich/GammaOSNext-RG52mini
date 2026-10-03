@@ -2159,9 +2159,14 @@ public final class PowerManagerService extends SystemService
             if (displayInfo == null) {
                 return;
             }
-            final int groupId = displayInfo.displayGroupId;
+            int groupId = displayInfo.displayGroupId;
             if (groupId == Display.INVALID_DISPLAY_GROUP) {
-                return;
+                // RG52: the HDMI display never gets a display group in GammaOS (see
+                // addPowerGroupsForNonDefaultDisplayGroupLocked), and it has no power group of its
+                // own: the default group's timeout is what puts the whole device to sleep. Input
+                // and user activity on HDMI used to be dropped here, so without mirroring the
+                // device dozed off by the screen-off timeout while being used on the TV.
+                groupId = Display.DEFAULT_DISPLAY_GROUP;
             }
             if (userActivityNoUpdateLocked(mPowerGroups.get(groupId), eventTime, event, flags,
                     uid)) {
@@ -2577,18 +2582,19 @@ public final class PowerManagerService extends SystemService
             }
             target = anyOn ? "on" : "off";
         }
-        // RG52: while the device is not awake (asleep, dozing, dreaming) the screen state is "off",
-        // whatever an external display reports. With HDMI connected the external display stays on
-        // through a power-button sleep, and "any display on" flipped sys.screen.state back to "on"
-        // right after going to sleep: the stick LEDs came back on (rg52-ledd keys off this
-        // property) and everything that waits for the screen to go off saw the device as awake.
-        // While awake, "any display on" still counts - HDMI "Internal Display Off" keeps the panel
-        // off while the device is in use on the TV.
-        final boolean awake;
+        // RG52: while the device is asleep or dozing the screen state is "off", whatever an
+        // external display reports. With HDMI connected the external display stays on through a
+        // power-button sleep, and "any display on" flipped sys.screen.state back to "on" right
+        // after going to sleep: the stick LEDs came back on (rg52-ledd keys off this property)
+        // and everything that waits for the screen to go off saw the device as awake.
+        // While interactive, "any display on" still counts: HDMI "Internal Display Off" keeps the
+        // panel off while the device is in use on the TV, and a screensaver (DREAMING) is shown on
+        // a lit panel - reporting "off" there stopped audioserver 2 s into the dream.
+        final boolean interactive;
         synchronized (mLock) {
-            awake = getGlobalWakefulnessLocked() == WAKEFULNESS_AWAKE;
+            interactive = PowerManagerInternal.isInteractive(getGlobalWakefulnessLocked());
         }
-        if (!awake) {
+        if (!interactive) {
             target = "off";
         }
         // Do not derive an "off" screen state from transient display power before boot completes.

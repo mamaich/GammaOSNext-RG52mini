@@ -21,14 +21,19 @@ on property:sys.screen.state=on && property:sys.rg52.screen_was_off=1
     setprop sys.rg52.screen_was_off 0
     start rg52_hdmi_rebind
 
+# wakelock: запись в /sys/power/wake_lock (radio:wakelock 0660) на время
+# «сна-пробуждения».
 service rg52_hdmi_unplug /system/bin/rg52-hdmi-unplug.sh
     user shell
-    group shell
+    group shell wakelock
     disabled
     oneshot
     seclabel u:r:shell:s0
 
-# root: запись в /sys/class/drm/card0-HDMI-A-1/status.
+# root: запись в /sys/class/drm/card0-HDMI-A-1/status и /sys/power/wake_lock.
+# Пробуждение, пришедшее, пока служба ещё работает, init второй раз её не
+# запустит - его разбирает работающий экземпляр (повторная проверка после
+# переподключения).
 service rg52_hdmi_rebind /system/bin/rg52-hdmi-rebind.sh
     user root
     group root shell

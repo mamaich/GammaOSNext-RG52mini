@@ -62,38 +62,67 @@ state() {
 # HWC расставляет экраны в первые доли секунды после пробуждения, а встроенный
 # экран включается ещё около полусекунды. Ждём, пока это устоится: беда видна
 # две проверки подряд с интервалом 0,5 с, не раньше чем через секунду после
-# пробуждения. Если за шесть секунд всё в порядке - выходим.
-sleep 1
-n=0
-i=0
-why=
-while [ $i -lt 10 ]; do
-    cable_in || exit 0
-    [ "$(getprop sys.screen.state)" = on ] || exit 0
-    if released; then
-        why="HWC released it"
-    elif dark; then
-        why="HDMI has the video port but no planes"
-    else
-        why=
-    fi
-    if [ -n "$why" ]; then
-        n=$((n + 1))
-        [ $n -ge 2 ] && break
-    else
-        n=0
-    fi
-    sleep 0.5
-    i=$((i + 1))
-done
-[ $n -ge 2 ] || exit 0
-dumpsys power | grep -q "mWakefulness=Awake" || exit 0
+# пробуждения. Если за шесть секунд всё в порядке - выходим (код 1). Кабель
+# вынут или экран погас - выходим из скрипта совсем.
+find_trouble() {
+    n=0
+    i=0
+    while [ $i -lt 10 ]; do
+        cable_in || exit 0
+        [ "$(getprop sys.screen.state)" = on ] || exit 0
+        if released; then
+            why="HWC released it"
+        elif dark; then
+            why="HDMI has the video port but no planes"
+        else
+            why=
+        fi
+        if [ -n "$why" ]; then
+            n=$((n + 1))
+            [ $n -ge 2 ] && return 0
+        else
+            n=0
+        fi
+        sleep 0.5
+        i=$((i + 1))
+    done
+    return 1
+}
 
-log -t $TAG "HDMI cable is in but $why, re-plugging: $(state)"
-echo off > "$C"
-sleep 1
-echo on > "$C"
-sleep 3
-echo detect > "$C"
-sleep 1
-log -t $TAG "after re-plug: $(state)"
+# Переподключение длится около 6 с. На это время держим wakelock ядра (с
+# тайм-аутом на случай гибели скрипта): если ядро уснёт посреди пауз, коннектор
+# останется принудительно отключённым до следующего пробуждения. Кабель могут
+# выдернуть и в эти секунды - тогда принуждение снимается сразу (extcon моста
+# обновляется по прерыванию HPD и при принуждении).
+LOCK=rg52_hdmi_rebind
+replug() {
+    echo "$LOCK 15000000000" > /sys/power/wake_lock
+    echo off > "$C"
+    sleep 1
+    if cable_in; then
+        echo on > "$C"
+        i=0
+        while [ $i -lt 6 ] && cable_in; do
+            sleep 0.5
+            i=$((i + 1))
+        done
+    fi
+    echo detect > "$C"
+    sleep 1
+    echo $LOCK > /sys/power/wake_unlock
+}
+
+# После переподключения проверяем ещё раз: если устройство успело уснуть и
+# проснуться, пока скрипт работал, init второй экземпляр не запустит (oneshot),
+# и новое пробуждение разбирает этот же. Не больше трёх переподключений подряд.
+pass=0
+while [ $pass -lt 3 ]; do
+    sleep 1
+    why=
+    find_trouble || exit 0
+    dumpsys power | grep -q "mWakefulness=Awake" || exit 0
+    log -t $TAG "HDMI cable is in but $why, re-plugging: $(state)"
+    replug
+    log -t $TAG "after re-plug: $(state)"
+    pass=$((pass + 1))
+done
