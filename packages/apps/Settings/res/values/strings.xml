@@ -13664,7 +13664,7 @@
     <string name="gammaos_toolbox_gesture_wake_title">Wake gesture filter</string>
     <string name="gammaos_toolbox_gesture_wake_summary">Filter specific wake gestures to prevent accidental screen wake. Comma-separated gesture identifiers.</string>
     <string name="gammaos_toolbox_performance_mode_title">Performance mode</string>
-    <string name="gammaos_toolbox_performance_mode_summary">Performance profile for CPU/GPU/memory governor tuning. Options: stock, max, powersave, 3d_game.</string>
+    <string name="gammaos_toolbox_performance_mode_summary">Performance profile for CPU/GPU/memory governor tuning. Options: stock, max, powersave, 3d_game, overclock.</string>
     <string name="gammaos_toolbox_perf_remember_title">Remember performance mode across reboots</string>
     <string name="gammaos_toolbox_zram_size_title">zRAM size (% of RAM)</string>
     <string name="gammaos_toolbox_zram_algo_title">zRAM compression</string>

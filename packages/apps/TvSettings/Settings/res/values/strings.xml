@@ -3457,7 +3457,7 @@
     <string name="rg52_phone_apps_summary">Let app stores offer apps made for phones, not only the TV catalogue. Restart to apply.</string>
 
     <string name="gammaos_toolbox_performance_mode_title">Performance mode</string>
-    <string name="gammaos_toolbox_performance_mode_summary">Performance profile for CPU/GPU governor tuning. Options: stock, max, powersave, 3d_game.</string>
+    <string name="gammaos_toolbox_performance_mode_summary">Performance profile for CPU/GPU governor tuning. Options: stock, max, powersave, 3d_game, overclock.</string>
     <string name="gammaos_toolbox_category_shader_crt">CRT Simple Shader</string>
     <string name="gammaos_toolbox_category_shader_crt_description">Fine-tune the CRT Simple shader effect. Controls scanline appearance, curvature, vignette, and blur intensity.</string>
     <string name="gammaos_toolbox_shader_crt_scan_px_title">Scanline pixel count</string>

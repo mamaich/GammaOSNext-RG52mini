@@ -371,7 +371,7 @@ const CcTileDef CC_TILE[8] = {
     { "Gamma EQ",     A_EQ },      { "Mouse",       A_MOUSE },  { "Screenshot",   A_SHOT },     { "Wi-Fi", A_WIFI },
 };
 // live on-state / mode of a tile action. 0 = off/inactive; 1 = on (or perf=powersave); 2 = perf=max;
-// 3 = perf=3d_game (CPU capped, GPU left free - see device/rg52mini/rg52-perf.sh).
+// 3 = perf=3d_game (CPU capped, GPU left free - see device/rg52mini/rg52-perf.sh); 4 = perf=overclock.
 int ccActState(int act, bool sleeping) {
     char v[PROPERTY_VALUE_MAX] = {};
     switch (act) {
@@ -380,6 +380,7 @@ int ccActState(int act, bool sleeping) {
                          if (!strcmp(v, "powersave")) return 1;
                          if (!strcmp(v, "max"))       return 2;
                          if (!strcmp(v, "3d_game"))   return 3;
+                         if (!strcmp(v, "overclock")) return 4;
                          return 0;
         case A_SPLITBRI: return property_get_int32("persist.gammaos.multidisplay.split_brightness", 0) ? 1 : 0;
         case A_SHADER:   return property_get_int32("persist.gammaos.shader.enable", 0) ? 1 : 0;
@@ -676,7 +677,7 @@ void NanoMenu::renderCcPass(int pass) {
             }
             // Performance shows its mode name; the Screenshot tile shows "Close App" while a bottom app runs.
             const char* lbl = t.label;
-            if (t.act == A_PERF)   lbl = (st == 3) ? "3D Games" : (st == 2) ? "Max"
+            if (t.act == A_PERF)   lbl = (st == 4) ? "Overclock" : (st == 3) ? "3D Games" : (st == 2) ? "Max"
                                        : (st == 1) ? "Powersave" : "Stock";
             else if (isClose)      lbl = "Close App";
             textC(lbl, icx, y + CC_TH - 20, 11.0f, 0.82f, 0.85f, 0.92f, 1.0f);

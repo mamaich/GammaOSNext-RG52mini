@@ -1220,9 +1220,11 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         // быстрее одного графического, и при перегреве выгоднее придержать
         // их, чем позволить троттлингу резать кадры. Названия режимов -
         // это значения persist.gammaos.performance_mode, по ним стартуют
-        // службы setclock_<режим>.
-        final String[] modes = {"stock", "max", "powersave", "3d_game"};
-        final String[] labels = {"Normal", "Max Performance", "Power Saver", "3D Games"};
+        // службы setclock_<режим>. overclock - всё на верхние ступени вместе с
+        // разгонными (см. device/rg52mini/rg52-perf.sh), через перезагрузку
+        // не сохраняется.
+        final String[] modes = {"stock", "max", "powersave", "3d_game", "overclock"};
+        final String[] labels = {"Normal", "Max Performance", "Power Saver", "3D Games", "Overclock"};
         int checkedItem = 0;
         for (int i = 0; i < modes.length; i++) {
             if (modes[i].equals(current)) {

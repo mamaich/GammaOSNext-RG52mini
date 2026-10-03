@@ -24,7 +24,11 @@
 #
 # Формат свойства persist.rg52.perf.<режим>:
 #
-#     <рег. cpu>:<мин. cpu>:<макс. cpu>:<рег. gpu>:<мин. память>:<макс. память>
+#     <рег. cpu>:<мин. cpu>:<макс. cpu>:<рег. gpu>:<мин. память>:<макс. память>:<макс. gpu>
+#
+# Седьмое поле - потолок графики, по умолчанию 900 МГц (верх штатной таблицы).
+# В полях частот процессора тоже можно писать max - верхняя ступень вместе с
+# turbo.
 #
 # Два последних поля необязательны, пустое значит «не ограничивать», max -
 # верхняя ступень из списка (пол max прибивает память к максимуму). Заданное
@@ -50,6 +54,18 @@
 # Выигрыш от потолка в powersave скромнее, чем кажется: регулятор dmc_ondemand и
 # так держит память на нижней ступени почти всё время, а потолок ограничивает
 # пики, а не постоянное потребление.
+#
+# Про режим overclock (в меню «Overclock»). Всё на верхнюю ступень из таблиц
+# ядра: процессор с включённым boost (2208 МГц на разгонном дереве), графика
+# 1000 МГц, память 928, пол процессора равен потолку. Ступени
+# разгона есть только в дереве с ними и работают только с BL31, в таблицу
+# которого они вписаны (u-boot: tools/rg52mini/bl31_oc.py); на штатном BL31
+# режим сводится к max с графикой на верхней штатной ступени. Защиту от
+# перегрева режим не отключает: пороги троттлинга и аварийное выключение
+# остаются. Через перезагрузку не сохраняется - при загрузке будет max.
+#
+# Про режим max. Проверенные частоты: процессор 2016 МГц, графика 900 МГц,
+# память на верхней ступени.
 #
 # Про режим 3d_game. Он снижает потолок процессора, а графику оставляет
 # свободной. Смысл в тепловом бюджете: четыре ядра съедают его заметно
@@ -93,7 +109,9 @@ MODE=${1:-}
 # подключённой зарядкой max, от батареи stock. Умолчание сменилось на обратное
 # после того, как стало ясно, что чаще мешает именно подмена: выбранный режим
 # должен оставаться выбранным.
+BOOTING=
 if [ "$MODE" = boot ]; then
+    BOOTING=1
     MODE=""
     if [ "$(getprop persist.rg52.perf.remember_mode 1)" != 1 ]; then
         if on_external_power; then
@@ -114,6 +132,15 @@ fi
 
 [ -z "$MODE" ] && MODE=$(getprop persist.gammaos.performance_mode)
 [ -z "$MODE" ] && MODE=stock
+
+# Разгон не переживает перезагрузку: если ступени разгона на этом экземпляре
+# чипа нестабильны, сохранённый overclock ронял бы систему на каждой загрузке
+# сразу после boot_completed. Поэтому при загрузке он заменяется на max.
+if [ "$BOOTING" = 1 ] && [ "$MODE" = overclock ]; then
+    MODE=max
+    setprop persist.gammaos.performance_mode max
+    log -t rg52-perf "boot: overclock is not kept across reboots, mode max"
+fi
 
 # Замок на применение. При загрузке оно запускается несколько раз подряд: init
 # срабатывает по триггеру на восстановленное persist-свойство, плюс служба
@@ -159,7 +186,8 @@ done
 
 case "$MODE" in
     powersave) DEF=schedutil:408000:1416000:powersave::528000000 ;;
-    max)       DEF=performance:1416000:2208000:performance:max: ;;
+    max)       DEF=performance:1416000:2016000:performance:max: ;;
+    overclock) DEF=performance:max:max:performance:max::max ;;
     3d_game)   DEF=schedutil:408000:1416000:simple_ondemand ;;
     stock|*)   MODE=stock; DEF=schedutil:408000:2016000:simple_ondemand ;;
 esac
@@ -169,7 +197,11 @@ SPEC=$(getprop "persist.rg52.perf.$MODE")
 
 OLDIFS=$IFS; IFS=:; set -- $SPEC; IFS=$OLDIFS
 CPU_GOV=${1:-}; CPU_MIN=${2:-}; CPU_MAX=${3:-}; GPU_GOV=${4:-}
-DDR_MIN=${5:-}; DDR_MAX=${6:-}
+DDR_MIN=${5:-}; DDR_MAX=${6:-}; GPU_MAX=${7:-}
+# Потолок графики по умолчанию - 900 МГц, верх штатной таблицы. Ступень
+# 1000 МГц из разгонного дерева без turbo-mode, и без потолка simple_ondemand
+# и performance забирались бы на неё в любом режиме.
+[ -z "$GPU_MAX" ] && GPU_MAX=900000000
 
 w() { [ -e "$1" ] && echo "$2" > "$1" 2>/dev/null; }
 
@@ -180,11 +212,28 @@ LOWEST=$(set -- $(cat "$CPU/scaling_available_frequencies" 2>/dev/null); echo "$
 
 [ -n "$CPU_GOV" ] && w "$CPU/scaling_governor" "$CPU_GOV"
 [ -n "$LOWEST"  ] && w "$CPU/scaling_min_freq" "$LOWEST"
-# ступени разгона в дереве ядра помечены turbo-mode: пока boost выключен, потолок их не видит
-w /sys/devices/system/cpu/cpufreq/boost "$([ "$MODE" = max ] && echo 1 || echo 0)"
+# Ступень 2208 МГц в разгонном дереве помечена turbo-mode: пока boost выключен,
+# потолок её не видит. Включается только в overclock.
+w /sys/devices/system/cpu/cpufreq/boost "$([ "$MODE" = overclock ] && echo 1 || echo 0)"
+# max в поле частоты процессора - верхняя ступень из списка вместе с turbo.
+CPU_TOP=
+for f in $(cat "$CPU/scaling_available_frequencies" "$CPU/scaling_boost_frequencies" 2>/dev/null); do
+    [ -z "$CPU_TOP" ] || [ "$f" -gt "$CPU_TOP" ] && CPU_TOP=$f
+done
+[ "$CPU_MAX" = max ] && CPU_MAX=$CPU_TOP
+[ "$CPU_MIN" = max ] && CPU_MIN=$CPU_TOP
 [ -n "$CPU_MAX" ] && w "$CPU/scaling_max_freq" "$CPU_MAX"
 [ -n "$CPU_MIN" ] && w "$CPU/scaling_min_freq" "$CPU_MIN"
 [ -n "$GPU_GOV" ] && [ -n "$GPU" ] && w "$GPU/governor" "$GPU_GOV"
+# Графика: потолок - ближайшая ступень не выше заданной, max - верхняя.
+if [ -n "$GPU" ]; then
+    PICK=
+    for f in $(cat "$GPU/available_frequencies" 2>/dev/null); do
+        [ "$GPU_MAX" = max ] || [ "$f" -le "$GPU_MAX" ] || continue
+        [ -z "$PICK" ] || [ "$f" -gt "$PICK" ] && PICK=$f
+    done
+    [ -n "$PICK" ] && w "$GPU/max_freq" "$PICK"
+fi
 
 # Память. Порядок тот же, что у процессора: сначала распускаем границы на весь
 # список, потом ставим потолок, потом пол. Иначе ядро не примет потолок ниже
@@ -247,5 +296,5 @@ done
 
 log -t rg52-perf "mode $MODE: cpu $(cat $CPU/scaling_governor 2>/dev/null) \
 $(cat $CPU/scaling_min_freq 2>/dev/null)-$(cat $CPU/scaling_max_freq 2>/dev/null), \
-gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null), \
+gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null) max $(cat ${GPU:-/dev/null}/max_freq 2>/dev/null), boost $(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null), \
 joypad poll ${JOY} ms"

@@ -38,6 +38,13 @@ service setclock_3d_game /system/bin/rg52-perf.sh 3d_game
     oneshot
     seclabel u:r:shell:s0
 
+service setclock_overclock /system/bin/rg52-perf.sh overclock
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
 # Аргумент boot: скрипт сам выберет режим по источнику питания (со вставленной
 # зарядкой max, от батареи stock) и запишет его в свойство. Служба нужна ещё и
 # потому, что свойство persist.* к этому моменту уже восстановлено, но изменения
@@ -60,6 +67,9 @@ on property:persist.gammaos.performance_mode=powersave
 
 on property:persist.gammaos.performance_mode=3d_game
     start setclock_3d_game
+
+on property:persist.gammaos.performance_mode=overclock
+    start setclock_overclock
 
 on property:sys.boot_completed=1
     start rg52_perf_boot
