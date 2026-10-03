@@ -2213,6 +2213,26 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
     private static final String RG52_CPU_MHZ = "/sys/kernel/rg52/cpu_mhz";
     private static final String RG52_GPU_MHZ = "/sys/kernel/rg52/gpu_mhz";
 
+    private static int sGpuZeroReads;
+    private static long sGpuLastMhz;
+
+    // Поля строки частот разделены табуляцией, а позиции табуляции заданы явно -
+    // по самому широкому значению каждого поля. Иначе поле, ставшее короче или
+    // длиннее (1946 -> 1952, «idle» -> «903 MHz»), сдвигало всё, что правее.
+    private static CharSequence tabbedSocStats(TextView tv, String text) {
+        android.text.TextPaint p = tv.getPaint();
+        float gap = p.measureText("    ");
+        String[] widest = { "CPU: 0000 MHz", "GPU: 0000 MHz", "DDR: 0000 MHz" };
+        android.text.SpannableString s = new android.text.SpannableString(text);
+        float x = 0;
+        for (String w : widest) {
+            x += p.measureText(w) + gap;
+            s.setSpan(new android.text.style.TabStopSpan.Standard((int) Math.ceil(x)),
+                    0, text.length(), android.text.Spanned.SPAN_INCLUSIVE_INCLUSIVE);
+        }
+        return s;
+    }
+
     private static long realMhz(long labelMhz, long ringFromMhz, String counterPath) {
         if (!new java.io.File(counterPath).exists() || labelMhz <= 0) return labelMhz;
         if (labelMhz < ringFromMhz) {
@@ -2249,9 +2269,18 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         if (gpu != null) {
             try {
                 long mhz = Long.parseLong(gpu) / 1000000;
-                if (sb.length() > 0) sb.append("    ");
+                if (sb.length() > 0) sb.append('\t');
                 long real = realMhz(mhz, 500, RG52_GPU_MHZ);
-                // Счётчик GPU равен нулю, пока графика простаивает или выключена.
+                // Счётчик GPU равен нулю, пока графика простаивает или выключена, а
+                // засыпает она и между кадрами. Чтобы строка не мигала, «idle» - только
+                // после трёх нулей подряд, до того - последнее ненулевое значение.
+                if (real == 0) {
+                    sGpuZeroReads++;
+                    if (sGpuZeroReads < 3 && sGpuLastMhz > 0) real = sGpuLastMhz;
+                } else {
+                    sGpuZeroReads = 0;
+                    sGpuLastMhz = real;
+                }
                 sb.append("GPU: ").append(real == 0 ? "idle" : real + " MHz");
             } catch (NumberFormatException ignored) { }
         }
@@ -2260,7 +2289,7 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         if (ddr != null) {
             try {
                 long hz = Long.parseLong(ddr);
-                if (sb.length() > 0) sb.append("    ");
+                if (sb.length() > 0) sb.append('\t');
                 sb.append("DDR: ").append(hz / 1000000).append(" MHz");
             } catch (NumberFormatException ignored) { }
         }
@@ -2269,7 +2298,7 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         if (temp != null) {
             try {
                 long milli = Long.parseLong(temp);
-                if (sb.length() > 0) sb.append("    ");
+                if (sb.length() > 0) sb.append('\t');
                 sb.append(String.format(java.util.Locale.US, "SoC: %.1f\u00B0C", milli / 1000.0f));
             } catch (NumberFormatException ignored) { }
         }
@@ -2330,7 +2359,7 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
 
                                                         TextView socText = headerView.findViewById(R.id.soc_stats);
                                                         if (socText != null) {
-                                                                socText.setText(socStatsText);
+                                                                socText.setText(tabbedSocStats(socText, socStatsText));
                                                         }
                                                 }
                                         });
