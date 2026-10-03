@@ -1541,11 +1541,14 @@ void NanoMenu::ccOnTap(float px, float py) {
                 case A_PERF: {
                     char v[PROPERTY_VALUE_MAX] = {};
                     property_get("persist.gammaos.performance_mode", v, "stock");
+                    // По росту производительности: powersave -> stock -> 3d_game -> max
+                    // и снова powersave. Overclock плитка не перебирает - его выбирают
+                    // осознанно в меню режимов; с него нажатие ведёт на powersave.
                     const char* next = "stock";
-                    if      (!strcmp(v, "stock"))     next = "powersave";
-                    else if (!strcmp(v, "powersave")) next = "max";
-                    else if (!strcmp(v, "max"))       next = "3d_game";
-                    else                              next = "stock";
+                    if      (!strcmp(v, "powersave")) next = "stock";
+                    else if (!strcmp(v, "stock"))     next = "3d_game";
+                    else if (!strcmp(v, "3d_game"))   next = "max";
+                    else                              next = "powersave";
                     property_set("persist.gammaos.performance_mode", next);
                     break;
                 }

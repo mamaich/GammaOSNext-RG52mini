@@ -10398,11 +10398,12 @@ void NanoMenu::pollDualScreenDetect() {
 void NanoMenu::openPerformanceChooser() {
     mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
     mPs3DlgKind = 1; mPs3DlgThemeKey = 10; mPs3DlgTitle = "Performance Mode"; mPs3DlgBody.clear();
-    static const char* kPerfOpts[] = {"Normal", "Max Performance", "Power Saver", "3D Games", "Overclock"};
+    // По росту производительности; те же индексы - в kPerfModes ниже.
+    static const char* kPerfOpts[] = {"Power Saver", "Normal", "3D Games", "Max Performance", "Overclock"};
     for (const char* s : kPerfOpts) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
     char cur[PROPERTY_VALUE_MAX]; property_get("persist.gammaos.performance_mode", cur, "stock");
-    mPs3DlgSel = !strcmp(cur, "max") ? 1 : (!strcmp(cur, "powersave") ? 2
-                 : (!strcmp(cur, "3d_game") ? 3 : (!strcmp(cur, "overclock") ? 4 : 0)));
+    mPs3DlgSel = !strcmp(cur, "powersave") ? 0 : !strcmp(cur, "3d_game") ? 2
+                 : !strcmp(cur, "max") ? 3 : !strcmp(cur, "overclock") ? 4 : 1;
     mPs3DlgIconTex = 0; mPs3DlgIconNmap = nmapForIcon(21);   // performance glyph header (glass)
     mPs3DlgIconR = mPs3DlgIconG = mPs3DlgIconB = 1.0f;
     mPs3DlgOrigSel = mPs3DlgSel;
@@ -11100,8 +11101,8 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
         case 10: {  // Quick Menu -> Performance Mode. Replicates the legacy
             // global action / PerformanceTile: set persist.gammaos.performance_mode
             // to stock/max/powersave; the vendor governor trigger applies it.
-            static const char* kPerfModes[]  = {"stock", "max", "powersave", "3d_game", "overclock"};
-            static const char* kPerfLabels[] = {"Normal", "Max Performance", "Power Saver", "3D Games", "Overclock"};
+            static const char* kPerfModes[]  = {"powersave", "stock", "3d_game", "max", "overclock"};
+            static const char* kPerfLabels[] = {"Power Saver", "Normal", "3D Games", "Max Performance", "Overclock"};
             if (sel >= 0 && sel < 5) {
                 property_set("persist.gammaos.performance_mode", kPerfModes[sel]);
                 mPs3PerfModeLabel = kPerfLabels[sel];
