@@ -1,16 +1,32 @@
-# Возврат встроенного экрана после отключения HDMI, см. rg52-hdmi-unplug.sh.
+# Возврат встроенного экрана после отключения HDMI, см. rg52-hdmi-unplug.sh,
+# и возврат HDMI после пробуждения, см. rg52-hdmi-rebind.sh.
 #
 # HWC пишет состояние HDMI в vendor.hwc.device.display-1
-# (HDMI-A-1:<crtc>:connected / disconnected). Номер CRTC в значении может
-# меняться, поэтому триггер на любую запись, а отключение распознаёт сам
-# скрипт. Служба oneshot: повторный start во время её работы init игнорирует.
+# (HDMI-A-1:<crtc>:connected / release / disconnected). Номер CRTC в значении
+# может меняться, поэтому триггер на любую запись, а нужный случай распознают
+# сами скрипты. Службы oneshot: повторный start во время их работы init
+# игнорирует.
 
 on property:vendor.hwc.device.display-1=*
     start rg52_hdmi_unplug
+    start rg52_hdmi_rebind
+
+# При пробуждении HWC может отпустить HDMI, не меняя этого свойства (оно уже
+# было release на время сна), поэтому возврат HDMI проверяется и по пробуждению.
+on property:sys.screen.state=on && property:sys.boot_completed=1
+    start rg52_hdmi_rebind
 
 service rg52_hdmi_unplug /system/bin/rg52-hdmi-unplug.sh
     user shell
     group shell
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+# root: запись в /sys/class/drm/card0-HDMI-A-1/status.
+service rg52_hdmi_rebind /system/bin/rg52-hdmi-rebind.sh
+    user root
+    group root shell
     disabled
     oneshot
     seclabel u:r:shell:s0

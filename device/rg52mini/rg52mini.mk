@@ -218,8 +218,13 @@ PRODUCT_COPY_FILES += \
 # Возврат встроенного экрана, если HWC Rockchip после отключения HDMI его не
 # привязал (чёрный экран, руками лечится двойным нажатием кнопки питания).
 # Запускается только по событию отключения, см. rg52-hdmi-unplug.sh.
+#
+# И обратное: возврат HDMI, если HWC при пробуждении отдал видеоконтроллер
+# встроенному экрану, а кабель так и вставлен (телевизор чёрный, звука нет
+# нигде), см. rg52-hdmi-rebind.sh.
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-hdmi-unplug.sh:system/bin/rg52-hdmi-unplug.sh \
+    device/rg52mini/rg52-hdmi-rebind.sh:system/bin/rg52-hdmi-rebind.sh \
     device/rg52mini/rg52-hdmi-unplug.rc:system/etc/init/rg52-hdmi-unplug.rc
 
 # Настройка EmuELEC во внутренней памяти из GammaOS Toolbox: при включении

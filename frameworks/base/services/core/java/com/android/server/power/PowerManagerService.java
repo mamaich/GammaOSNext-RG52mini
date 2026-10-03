@@ -2577,6 +2577,20 @@ public final class PowerManagerService extends SystemService
             }
             target = anyOn ? "on" : "off";
         }
+        // RG52: while the device is not awake (asleep, dozing, dreaming) the screen state is "off",
+        // whatever an external display reports. With HDMI connected the external display stays on
+        // through a power-button sleep, and "any display on" flipped sys.screen.state back to "on"
+        // right after going to sleep: the stick LEDs came back on (rg52-ledd keys off this
+        // property) and everything that waits for the screen to go off saw the device as awake.
+        // While awake, "any display on" still counts - HDMI "Internal Display Off" keeps the panel
+        // off while the device is in use on the TV.
+        final boolean awake;
+        synchronized (mLock) {
+            awake = getGlobalWakefulnessLocked() == WAKEFULNESS_AWAKE;
+        }
+        if (!awake) {
+            target = "off";
+        }
         // Do not derive an "off" screen state from transient display power before boot completes.
         // While the panels are still being brought up during boot they report not-ON, which would
         // spuriously blank the backlight and (on the RG DS) trip the vendor force_sleep / screen-off
