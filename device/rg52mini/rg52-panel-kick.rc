@@ -1,0 +1,13 @@
+# Повторная инициализация встроенного экрана в конце загрузки на платах
+# ревизии A, см. rg52-panel-kick.sh. Один раз за загрузку.
+
+on property:sys.boot_completed=1
+    start rg52_panel_kick
+
+# root: запись в /sys/power/wake_lock.
+service rg52_panel_kick /system/bin/rg52-panel-kick.sh
+    user root
+    group root shell wakelock
+    disabled
+    oneshot
+    seclabel u:r:shell:s0

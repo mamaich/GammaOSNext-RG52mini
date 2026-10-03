@@ -227,6 +227,13 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-hdmi-rebind.sh:system/bin/rg52-hdmi-rebind.sh \
     device/rg52mini/rg52-hdmi-unplug.rc:system/etc/init/rg52-hdmi-unplug.rc
 
+# Платы ревизии A: в конце загрузки экран гаснет на полторы секунды и
+# включается снова - иначе он бывает чёрным после логотипа, пока не нажать
+# кнопку питания дважды. См. rg52-panel-kick.sh.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-panel-kick.sh:system/bin/rg52-panel-kick.sh \
+    device/rg52mini/rg52-panel-kick.rc:system/etc/init/rg52-panel-kick.rc
+
 # Настройка EmuELEC во внутренней памяти из GammaOS Toolbox: при включении
 # «Allow reboot to eMMC» Toolbox предлагает её и по согласию запускает
 # restore-emmc.sh через службу init (скрипту нужен root), см. rg52-emmc-setup.sh.
