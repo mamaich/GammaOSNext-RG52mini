@@ -59,6 +59,7 @@ Flycast, DraStic, mupen64plus, Daijishō, и вырезана телефония
 | **HDMI**: режимы, зеркалирование, «док-станция», диагностика | [doc/rg52mini/05-hdmi.md](doc/rg52mini/05-hdmi.md) |
 | **Сосуществование EmuELEC/RGBox с GammaOS Next**: переключение между системами, общая папка ромов | [doc/rg52mini/06-emuelec-на-emmc.md](doc/rg52mini/06-emuelec-на-emmc.md) |
 | **Наши настройки**: меню выключателя, GammaOS Toolbox, настройки Android TV | [doc/rg52mini/07-настройки.md](doc/rg52mini/07-настройки.md) |
+| **Производительность и память**: что сделано, что подкрутить самому, что проверено и отброшено | [doc/rg52mini/08-производительность.md](doc/rg52mini/08-производительность.md) |
 
 ## Состояние
 
