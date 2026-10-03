@@ -9,9 +9,16 @@
 on property:vendor.hwc.device.display-1=*
     start rg52_hdmi_unplug
 
-# Только по пробуждению (и в конце загрузки): в другое время HWC отпускает HDMI
-# лишь при отключении кабеля, и возвращать там нечего.
-on property:sys.screen.state=on && property:sys.boot_completed=1
+# Только по пробуждению: в другое время HWC отпускает HDMI лишь при отключении
+# кабеля, и возвращать там нечего. Уход в сон ставит метку, включение экрана с
+# меткой запускает службу. В конце загрузки, пока рисуется оболочка, HWC порой
+# несколько секунд держит HDMI на видеопорту без плоскостей и справляется сам -
+# там служба не нужна, а переподключение лишь моргнуло бы телевизором.
+on property:sys.screen.state=off && property:sys.boot_completed=1
+    setprop sys.rg52.screen_was_off 1
+
+on property:sys.screen.state=on && property:sys.rg52.screen_was_off=1
+    setprop sys.rg52.screen_was_off 0
     start rg52_hdmi_rebind
 
 service rg52_hdmi_unplug /system/bin/rg52-hdmi-unplug.sh
