@@ -257,8 +257,19 @@ if [ -n "$DMC" ]; then
         done
         [ -n "$PICK" ] && w "$DMC/max_freq" "$PICK"
     fi
+    # Пол max держится регулятором, а не min_freq: HAL питания Rockchip из
+    # vendor (android.hardware.power-service.rockchip) на подсказках питания сам
+    # переписывает min_freq памяти (как и scaling_min_freq процессора) и сбивал
+    # бы её на 324 МГц - так и было, пока здесь стояла запись в min_freq.
+    # Регулятор performance держит max_freq, а его HAL не трогает. В остальных
+    # режимах возвращается штатный dmc_ondemand.
     if [ "$DDR_MIN" = max ]; then
-        [ -n "$DDR_HI" ] && w "$DMC/min_freq" "$DDR_HI"
+        w "$DMC/governor" performance
+    else
+        [ "$(cat "$DMC/governor" 2>/dev/null)" = dmc_ondemand ] || w "$DMC/governor" dmc_ondemand
+    fi
+    if [ "$DDR_MIN" = max ]; then
+        :
     elif [ -n "$DDR_MIN" ]; then
         PICK=
         for f in $(cat "$DMC/available_frequencies" 2>/dev/null); do
@@ -296,5 +307,5 @@ done
 
 log -t rg52-perf "mode $MODE: cpu $(cat $CPU/scaling_governor 2>/dev/null) \
 $(cat $CPU/scaling_min_freq 2>/dev/null)-$(cat $CPU/scaling_max_freq 2>/dev/null), \
-gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null) max $(cat ${GPU:-/dev/null}/max_freq 2>/dev/null), boost $(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null), \
+gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null) max $(cat ${GPU:-/dev/null}/max_freq 2>/dev/null), boost $(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/governor 2>/dev/null) $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null), \
 joypad poll ${JOY} ms"
