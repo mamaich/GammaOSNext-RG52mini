@@ -215,6 +215,30 @@ LOWEST=$(set -- $(cat "$CPU/scaling_available_frequencies" 2>/dev/null); echo "$
 # Ступень 2208 МГц в разгонном дереве помечена turbo-mode: пока boost выключен,
 # потолок её не видит. Включается только в overclock.
 w /sys/devices/system/cpu/cpufreq/boost "$([ "$MODE" = overclock ] && echo 1 || echo 0)"
+
+# Тепловые пороги. В overclock троттлинг начинается позже: power_allocator
+# включается с 90 °C и держит чип около 95 (штатно 75 и 85). Не выключаем его
+# совсем (policy user_space) намеренно: у таблицы графики в дереве нет
+# rockchip,high-temp, и без регулятора выше 95 °C графику не сдерживало бы
+# ничего до аварийного выключения на 115 °C посреди игры. 95 °C - это и порог
+# rockchip,high-temp процессора: выше него ступени выше 1,1 В отключаются.
+# Критический порог 115 °C и аппаратный сброс tsadc на 120 °C не трогаем.
+# Пороги записываются только при CONFIG_THERMAL_WRITABLE_TRIPS; порядок -
+# сперва верхний при подъёме, сперва нижний при возврате.
+TZ=
+for z in /sys/class/thermal/thermal_zone*; do
+    [ "$(cat "$z/type" 2>/dev/null)" = soc-thermal ] && TZ=$z && break
+done
+if [ -n "$TZ" ]; then
+    if [ "$MODE" = overclock ]; then
+        w "$TZ/trip_point_1_temp" 95000
+        w "$TZ/trip_point_0_temp" 90000
+    else
+        w "$TZ/trip_point_0_temp" 75000
+        w "$TZ/trip_point_1_temp" 85000
+    fi
+    [ "$(cat "$TZ/policy" 2>/dev/null)" = power_allocator ] || w "$TZ/policy" power_allocator
+fi
 # max в поле частоты процессора - верхняя ступень из списка вместе с turbo.
 CPU_TOP=
 for f in $(cat "$CPU/scaling_available_frequencies" "$CPU/scaling_boost_frequencies" 2>/dev/null); do
@@ -307,5 +331,5 @@ done
 
 log -t rg52-perf "mode $MODE: cpu $(cat $CPU/scaling_governor 2>/dev/null) \
 $(cat $CPU/scaling_min_freq 2>/dev/null)-$(cat $CPU/scaling_max_freq 2>/dev/null), \
-gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null) max $(cat ${GPU:-/dev/null}/max_freq 2>/dev/null), boost $(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/governor 2>/dev/null) $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null), \
+gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null) max $(cat ${GPU:-/dev/null}/max_freq 2>/dev/null), boost $(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null), thermal $(cat ${TZ:-/dev/null}/trip_point_0_temp 2>/dev/null)/$(cat ${TZ:-/dev/null}/trip_point_1_temp 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/governor 2>/dev/null) $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null), \
 joypad poll ${JOY} ms"
