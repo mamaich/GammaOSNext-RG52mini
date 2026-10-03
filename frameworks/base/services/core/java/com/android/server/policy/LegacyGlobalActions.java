@@ -2201,6 +2201,32 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         }
     }
 
+    // RG52: настоящая частота вместо метки. cpufreq и devfreq отдают частоту,
+    // которую ядро попросило у BL31, а с 816 МГц у процессора (и с 500 МГц у
+    // графики) работает кольцевой генератор PVTPLL, реальная частота которого
+    // на 3-5 % ниже и плывёт с температурой: около 1960 МГц вместо 2016 на
+    // холодном, около 1910 на горячем. Ядро отдаёт аппаратные счётчики в
+    // /sys/kernel/rg52 (rg52_pvtpll.c); чтение - один регистр, только пока меню
+    // открыто. Ниже порога частота идёт от GPLL 1188 МГц через целый делитель,
+    // счётчик там не обновляется, и показывается расчётное значение (по коду
+    // BL31, на устройстве не проверено). Без узлов - прежняя метка.
+    private static final String RG52_CPU_MHZ = "/sys/kernel/rg52/cpu_mhz";
+    private static final String RG52_GPU_MHZ = "/sys/kernel/rg52/gpu_mhz";
+
+    private static long realMhz(long labelMhz, long ringFromMhz, String counterPath) {
+        if (!new java.io.File(counterPath).exists() || labelMhz <= 0) return labelMhz;
+        if (labelMhz < ringFromMhz) {
+            return 1188 / ((1188 + labelMhz - 1) / labelMhz);
+        }
+        String v = readSysfsLine(counterPath);
+        if (v == null) return labelMhz;
+        try {
+            return Long.parseLong(v);
+        } catch (NumberFormatException e) {
+            return labelMhz;
+        }
+    }
+
     private static String buildSocStats() {
         resolveSocPaths();
         StringBuilder sb = new StringBuilder();
@@ -2216,15 +2242,17 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
             }
         }
         if (cpuKHz > 0) {
-            sb.append("CPU: ").append(cpuKHz / 1000).append(" MHz");
+            sb.append("CPU: ").append(realMhz(cpuKHz / 1000, 816, RG52_CPU_MHZ)).append(" MHz");
         }
 
         String gpu = readSysfsLine(sGpuFreqPath);
         if (gpu != null) {
             try {
-                long hz = Long.parseLong(gpu);
+                long mhz = Long.parseLong(gpu) / 1000000;
                 if (sb.length() > 0) sb.append("    ");
-                sb.append("GPU: ").append(hz / 1000000).append(" MHz");
+                long real = realMhz(mhz, 500, RG52_GPU_MHZ);
+                // Счётчик GPU равен нулю, пока графика простаивает или выключена.
+                sb.append("GPU: ").append(real == 0 ? "idle" : real + " MHz");
             } catch (NumberFormatException ignored) { }
         }
 
