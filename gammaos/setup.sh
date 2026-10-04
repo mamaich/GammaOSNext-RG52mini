@@ -604,4 +604,14 @@ if [ -f /vendor/bin/setup.sh ]; then
     /vendor/bin/setup.sh
 fi
 
+# RG52: a fresh install starts in the Normal performance mode. Something in the
+# first-boot path leaves "max" behind (seen on a fresh card 04.10.2026: two writes
+# of performance_mode=max about 3 s after rg52_perf_boot), and the setup has no
+# business choosing the mode for the user. Only on the first setup: a re-run keeps
+# whatever the user picked.
+if [ "$FRESH_SETUP" = 1 ]; then
+    step "Performance mode: Normal."
+    setprop persist.gammaos.performance_mode stock
+fi
+
 step "All settings have been applied successfully."
