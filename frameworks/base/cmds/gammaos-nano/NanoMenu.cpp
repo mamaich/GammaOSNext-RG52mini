@@ -1283,6 +1283,8 @@ void NanoMenu::mouseModeHomeGuard() {
         return;
     property_set("sys.gammaos.gamepad.mouse_active", "0");
     ALOGI("NanoMenu: mouse mode switched off, the home is the foreground again");
+}
+
 // drastic-nano parks the user's global performance mode in persist.gammaos.drastic.perf_restore
 // while a game with a per-game mode runs and restores it at exit. The home repeats the restore
 // whenever it takes over (a fresh start after session_done, a crashed or killed session, a
