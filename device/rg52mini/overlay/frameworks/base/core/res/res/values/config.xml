@@ -41,4 +41,17 @@
     <bool name="config_enableNetworkLocationOverlay">false</bool>
     <bool name="config_enableFusedLocationOverlay">false</bool>
     <bool name="config_enableGeocoderOverlay">false</bool>
+
+    <!-- Без «фирменной клавиатуры».
+
+         RRO из vendor (от SyachOS) задаёт config_packagedKeyboardName = "Pixel C
+         Keyboard" - настройку планшета Pixel C с Bluetooth-клавиатурой. По ней
+         KeyboardUI в SystemUI, пока не пройден мастер настройки
+         (user_setup_complete = 0), сам включает Bluetooth, чтобы подключить
+         клавиатуру. На чистой установке это перебивало def_bluetooth_on = false:
+         Bluetooth включался через десяток секунд после загрузки
+         («Enabled due to APPLICATION_REQUEST by com.android.systemui» в dumpsys
+         bluetooth_manager). Пустое имя - KeyboardUI ничего не делает. Проверка:
+         cmd overlay lookup android android:string/config_packagedKeyboardName -->
+    <string name="config_packagedKeyboardName" translatable="false"></string>
 </resources>
