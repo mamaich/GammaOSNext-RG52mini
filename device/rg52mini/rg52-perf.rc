@@ -103,5 +103,15 @@ on property:sys.boot_completed=1
 on early-init
     write /sys/kernel/rcu_expedited 1
 
+# Потолок графики 900 МГц с самого начала загрузки. Ступень 1000 МГц из дерева
+# (разгон, нужна только режиму overclock) не помечена turbo-mode, и devfreq по
+# умолчанию разрешает верхнюю ступень - до первого запуска rg52-perf.sh (около
+# 19-й секунды, когда загружаются persist-свойства) графика под анимацией
+# загрузки могла уйти на разогнанную частоту. На экземпляре, где эта ступень
+# нестабильна, сбой был бы на каждой загрузке. Процессору такое не грозит:
+# 2208 МГц помечена turbo-mode, а boost в ядре по умолчанию выключен.
+on early-init
+    write /sys/class/devfreq/ff320000.gpu/max_freq 900000000
+
 on property:sys.boot_completed=1
     write /sys/kernel/rcu_expedited 0
