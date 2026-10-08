@@ -1023,6 +1023,7 @@ private:
     // when mOverlayMode (the home-mode launchXmbGame() must not run in the overlay).
     void overlayLaunchGame();
     void overlayStartDrasticNano();
+    void overlayStartAzaharNano();
     // True while mOverlayMode and at the XMB top level with no dialog/submenu, so
     // Back resumes the game rather than doing nothing.
     bool overlayAtTopLevel() const;
@@ -1159,6 +1160,7 @@ private:
     // completes, so launching a game/app fades out instead of hard-cutting. 0 = idle.
     int64_t mLaunchFadeStart = 0;
     bool mDrasticNanoPending; // drastic nano: waiting for cache, then restart
+    bool mAzaharNanoPending = false; // azahar nano: launch effect, then hand off to the binary
     bool mDrmBootPath; // headless EGL + DRM direct (SF deferred until app launch)
 
     // Submenu state
@@ -3107,6 +3109,7 @@ private:
     std::vector<std::string> mountedShareNames() const;
     void gsFolderSelect(const std::string& path); // add a folder as a rawpath scan source
     void drasticDataFolderSelect(const std::string& path); // #90: set persist.gammaos.drastic.data_dir (folder-picker target 5)
+    void azaharDataFolderSelect(const std::string& path);  // persist.gammaos.azahar.data_dir (folder-picker target 9)
     void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
     int64_t mMouseGuardMs = 0;                 // its once-a-second throttle (uptime)
     void drasticCheatsFolderSelect(const std::string& path); // persist.gammaos.drastic.cheats_dir (folder-picker target 8)
