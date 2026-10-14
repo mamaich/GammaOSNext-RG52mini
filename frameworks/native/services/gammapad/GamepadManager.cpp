@@ -1067,6 +1067,15 @@ void GamepadManager::handleInputEvent(int fd) {
         }
         if (n != sizeof(ev)) break;
 
+        // Эхо наших же команд вибрации. Запись EV_FF в устройство ядро раздаёт
+        // ещё и всем его читателям (input_get_disposition: EV_FF ->
+        // INPUT_PASS_TO_ALL), то есть и нам. Пересланное в виртуальный геймпад,
+        // оно замыкало петлю: uinput превращал его в новое «включить», то
+        // снова уходило на физический геймпад и снова возвращалось эхом -
+        // каждые 10-15 мс, и мотор не выключался, пока игра не удалит эффект
+        // (RG52 Mini, TMNT). Ввода такого типа от геймпада не бывает.
+        if (ev.type == EV_FF || ev.type == EV_FF_STATUS) continue;
+
         // SYN events: forward to virtual gamepad only when mouse mode is off
         if (ev.type == EV_SYN) {
             if (mMouseMode && mMouseMode->processEvent(ev)) {
