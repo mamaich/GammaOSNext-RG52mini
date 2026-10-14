@@ -2018,10 +2018,11 @@ public class GamepadSettings extends SettingsPreferenceFragment
 
     private void updateGlobalSensitivitySummary() {
         if (mGlobalSensitivityPref == null) return;
-        CharSequence entry = mGlobalSensitivityPref.getEntry();
-        if (entry != null) {
-            mGlobalSensitivityPref.setSummary(entry);
-        }
+        // ListPreference runs its summary through String.format(summary, entry),
+        // so an entry used as the summary itself ("-10%") threw
+        // UnknownFormatConversionException and closed the screen. "%s" makes the
+        // preference show the selected entry as an argument instead.
+        mGlobalSensitivityPref.setSummary("%s");
     }
 
     // --- Mouse mode helpers ---
