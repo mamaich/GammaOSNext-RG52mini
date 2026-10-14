@@ -112,6 +112,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
     private static final String KEY_MOUSE_STICK_SPEED = "gamepad_mouse_stick_speed";
     private static final String KEY_MOUSE_DPAD_SPEED = "gamepad_mouse_dpad_speed";
     private static final String KEY_MOUSE_BOOST = "gamepad_mouse_boost";
+    private static final String KEY_MOUSE_SPEED = "gamepad_mouse_speed";
     private static final String KEY_MOUSE_SCROLL_SPEED = "gamepad_mouse_scroll_speed";
 
     private static final String PROP_ENABLE = "persist.gammaos.gamepad.enable";
@@ -206,6 +207,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
     private static final String PROP_MOUSE_STICK_SPEED = "persist.gammaos.gamepad.mouse_stick_speed";
     private static final String PROP_MOUSE_DPAD_SPEED = "persist.gammaos.gamepad.mouse_dpad_speed";
     private static final String PROP_MOUSE_BOOST = "persist.gammaos.gamepad.mouse_boost";
+    private static final String PROP_MOUSE_SPEED_MULT = "persist.gammaos.gamepad.mouse_speed_mult";
     private static final String PROP_MOUSE_SCROLL_SPEED = "persist.gammaos.gamepad.mouse_scroll_speed";
     private static final String PROP_MOUSE_BTN_CLICK = "persist.gammaos.gamepad.mouse_btn_click";
     private static final String PROP_MOUSE_BTN_BACK = "persist.gammaos.gamepad.mouse_btn_back";
@@ -286,6 +288,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
     private SeekBarPreference mMouseStickSpeedPref;
     private SeekBarPreference mMouseDpadSpeedPref;
     private ListPreference mMouseBoostPref;
+    private ListPreference mMouseSpeedPref;
     private SeekBarPreference mMouseScrollSpeedPref;
 
     private final List<String> mSelectedDevices = new ArrayList<>();
@@ -477,6 +480,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
         mMouseStickSpeedPref = findPreference(KEY_MOUSE_STICK_SPEED);
         mMouseDpadSpeedPref = findPreference(KEY_MOUSE_DPAD_SPEED);
         mMouseBoostPref = findPreference(KEY_MOUSE_BOOST);
+        mMouseSpeedPref = findPreference(KEY_MOUSE_SPEED);
         mMouseScrollSpeedPref = findPreference(KEY_MOUSE_SCROLL_SPEED);
 
         if (mMouseEnablePref != null) {
@@ -507,6 +511,11 @@ public class GamepadSettings extends SettingsPreferenceFragment
             mMouseBoostPref.setValue(
                     String.valueOf(SystemProperties.getInt(PROP_MOUSE_BOOST, 20)));
             mMouseBoostPref.setOnPreferenceChangeListener(this);
+        }
+        if (mMouseSpeedPref != null) {
+            mMouseSpeedPref.setValue(String.valueOf(
+                    SystemProperties.getInt(PROP_MOUSE_SPEED_MULT, 100)));
+            mMouseSpeedPref.setOnPreferenceChangeListener(this);
         }
         if (mMouseScrollSpeedPref != null) {
             mMouseScrollSpeedPref.setMin(1);
@@ -1741,6 +1750,10 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 return true;
             case KEY_MOUSE_BOOST:
                 SystemProperties.set(PROP_MOUSE_BOOST, (String) newValue);
+                bumpConfigVersion();
+                return true;
+            case KEY_MOUSE_SPEED:
+                SystemProperties.set(PROP_MOUSE_SPEED_MULT, (String) newValue);
                 bumpConfigVersion();
                 return true;
             case KEY_MOUSE_SCROLL_SPEED:

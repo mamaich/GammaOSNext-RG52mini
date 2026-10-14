@@ -254,6 +254,15 @@
             android:defaultValue="20"
             android:dependency="gamepad_mouse_enable" />
 
+        <ListPreference
+            android:key="gamepad_mouse_speed"
+            android:title="@string/gamepad_mouse_speed_title"
+            android:summary="%s"
+            android:entries="@array/gamepad_mouse_speed_entries"
+            android:entryValues="@array/gamepad_mouse_speed_values"
+            android:defaultValue="100"
+            android:dependency="gamepad_mouse_enable" />
+
         <androidx.preference.SeekBarPreference
             android:key="gamepad_mouse_scroll_speed"
             android:title="@string/gamepad_mouse_scroll_speed_title"

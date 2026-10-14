@@ -87,6 +87,7 @@ MouseMode::MouseMode()
       mCurveMax(DEFAULT_CURVE_MAX),
       mCurvePow(DEFAULT_CURVE_POW),
       mCurveDead(DEFAULT_CURVE_DEAD),
+      mSpeedMult(1.0f),
       mClickBtnCode(BTN_A),
       mBackBtnCode(BTN_B),
       mRightClickBtnCode(BTN_Y),
@@ -301,6 +302,12 @@ void MouseMode::loadConfig() {
     mCurveDead = static_cast<float>(
         GetIntProperty("persist.gammaos.gamepad.mouse_dead", 250));
 
+    // Скорость курсора из настроек геймпада, в процентах: 25 - вчетверо
+    // медленнее, 200 - вдвое быстрее. Умножает всё перемещение за такт, так что
+    // форма кривой сохраняется, а меняется только её масштаб.
+    mSpeedMult = static_cast<float>(std::max(25, std::min(200,
+        GetIntProperty("persist.gammaos.gamepad.mouse_speed_mult", 100)))) / 100.0f;
+
     mClickBtnCode = GetIntProperty("persist.gammaos.gamepad.mouse_btn_click",
                                     BTN_A);
     mBackBtnCode = GetIntProperty("persist.gammaos.gamepad.mouse_btn_back",
@@ -317,6 +324,7 @@ void MouseMode::loadConfig() {
               << (mDpadSpeed <= 0.0f ? " (dpad passthrough)" : "")
               << " curveMax=" << mCurveMax << "px/s pow=" << mCurvePow
               << " dead=" << mCurveDead
+              << " speedMult=" << mSpeedMult
               << " scrollSpeed=" << mScrollSpeed
               << " click=" << mClickBtnCode << " back=" << mBackBtnCode
               << " rclick=" << mRightClickBtnCode
@@ -763,6 +771,9 @@ void MouseMode::tick() {
         dx += mDpadX * mDpadSpeed;
         dy += mDpadY * mDpadSpeed;
     }
+
+    dx *= mSpeedMult;
+    dy *= mSpeedMult;
 
     // Accumulate fractional movement for sub-pixel precision
     mAccumX += dx;

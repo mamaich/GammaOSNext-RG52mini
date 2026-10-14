@@ -224,6 +224,7 @@
     <string name="gamepad_mouse_stick_speed_title">Analog stick speed</string>
     <string name="gamepad_mouse_dpad_speed_title">DPAD speed</string>
     <string name="gamepad_mouse_boost_title">Speed boost multiplier</string>
+    <string name="gamepad_mouse_speed_title">Cursor speed</string>
     <string name="gamepad_mouse_scroll_speed_title">Scroll speed</string>
     <string name="gamepad_mouse_btn_click">Left click</string>
     <string name="gamepad_mouse_btn_back">Back</string>
@@ -247,6 +248,28 @@
         <item>20</item>
         <item>30</item>
         <item>40</item>
+    </string-array>
+
+    <!-- Mouse mode cursor speed, persist.gammaos.gamepad.mouse_speed_mult (percent) -->
+    <string-array name="gamepad_mouse_speed_entries">
+        <item>0.25\u00d7</item>
+        <item>0.5\u00d7</item>
+        <item>0.75\u00d7</item>
+        <item>1\u00d7</item>
+        <item>1.25\u00d7</item>
+        <item>1.5\u00d7</item>
+        <item>1.75\u00d7</item>
+        <item>2\u00d7</item>
+    </string-array>
+    <string-array name="gamepad_mouse_speed_values">
+        <item>25</item>
+        <item>50</item>
+        <item>75</item>
+        <item>100</item>
+        <item>125</item>
+        <item>150</item>
+        <item>175</item>
+        <item>200</item>
     </string-array>
 
     <!-- Button combo mapping -->

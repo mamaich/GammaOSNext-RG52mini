@@ -982,11 +982,11 @@
             android:summary="@string/gammaos_toolbox_category_mouse_description" />
 
         <EditTextPreference
-            android:key="persist.gammaos.gamepad.mouse_stick_speed"
-            android:title="@string/gammaos_toolbox_mouse_stick_speed_title"
-            android:summary="@string/gammaos_toolbox_mouse_stick_speed_summary"
+            android:key="persist.gammaos.gamepad.mouse_speed_mult"
+            android:title="@string/gammaos_toolbox_mouse_speed_mult_title"
+            android:summary="@string/gammaos_toolbox_mouse_speed_mult_summary"
             android:inputType="number"
-            android:defaultValue="12" />
+            android:defaultValue="100" />
 
         <EditTextPreference
             android:key="persist.gammaos.gamepad.mouse_dpad_speed"
@@ -994,13 +994,6 @@
             android:summary="@string/gammaos_toolbox_mouse_dpad_speed_summary"
             android:inputType="number"
             android:defaultValue="6" />
-
-        <EditTextPreference
-            android:key="persist.gammaos.gamepad.mouse_boost"
-            android:title="@string/gammaos_toolbox_mouse_boost_title"
-            android:summary="@string/gammaos_toolbox_mouse_boost_summary"
-            android:inputType="number"
-            android:defaultValue="20" />
 
         <EditTextPreference
             android:key="persist.gammaos.gamepad.mouse_scroll_speed"

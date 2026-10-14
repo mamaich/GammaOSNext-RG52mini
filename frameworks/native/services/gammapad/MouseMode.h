@@ -154,6 +154,7 @@ private:
     float mCurveMax;         // пикселей в секунду на полном отклонении
     float mCurvePow;         // показатель степени
     float mCurveDead;        // мёртвая зона в единицах оси
+    float mSpeedMult;        // множитель скорости курсора (mouse_speed_mult)
 
     // Configurable button mappings for mouse actions
     int mClickBtnCode;       // gamepad button for touch tap (default: BTN_A)

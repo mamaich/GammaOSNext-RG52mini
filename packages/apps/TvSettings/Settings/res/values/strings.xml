@@ -2939,6 +2939,7 @@
     <string name="gamepad_mouse_combo_btn">Button %d</string>
     <string name="gamepad_mouse_hold_time_title">Hold time (ms)</string>
     <string name="gamepad_mouse_boost_title">Cursor acceleration</string>
+    <string name="gamepad_mouse_speed_title">Cursor speed</string>
     <string name="gamepad_mouse_scroll_speed_title">Scroll speed</string>
 
     <!-- Gamepad: Controller list -->
@@ -3403,6 +3404,8 @@
     <string name="gammaos_toolbox_category_mouse">Mouse Mode</string>
     <string name="gammaos_toolbox_category_mouse_description">Configure GammaPad mouse emulation mode. When activated by a button combo, the gamepad analog stick controls a mouse cursor. Useful for navigating apps without touch input.</string>
     <string name="gammaos_toolbox_mouse_stick_speed_title">Stick cursor speed</string>
+    <string name="gammaos_toolbox_mouse_speed_mult_title">Cursor speed (percent)</string>
+    <string name="gammaos_toolbox_mouse_speed_mult_summary">Cursor speed in percent, 25 to 200: 25 is four times slower, 200 twice as fast. Default: 100.</string>
     <string name="gammaos_toolbox_mouse_stick_speed_summary">Cursor movement speed when using the analog stick. Default: 12.</string>
     <string name="gammaos_toolbox_mouse_dpad_speed_title">D-pad cursor speed</string>
     <string name="gammaos_toolbox_mouse_dpad_speed_summary">Cursor movement speed when using the D-pad. Default: 6.</string>

@@ -165,6 +165,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         DEFAULTS.put("persist.gammaos.gamepad.mouse_stick_speed", "12");
         DEFAULTS.put("persist.gammaos.gamepad.mouse_dpad_speed", "6");
         DEFAULTS.put("persist.gammaos.gamepad.mouse_boost", "20");
+        DEFAULTS.put("persist.gammaos.gamepad.mouse_speed_mult", "100");
         DEFAULTS.put("persist.gammaos.gamepad.mouse_scroll_speed", "4");
         // "1" (int style), not "false": the vendor init.gammargb.rc only starts/stops gammargb on
         // persist.gammaos.rgb.enable=1 / =0. A "true"/"false" value never turns the LEDs off, and
@@ -426,6 +427,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
             } else {
                 SystemProperties.set(key, String.valueOf(val));
             }
+            notifyGamepad(key);
             if ("persist.gammaos.taskbar.phone".equals(key)) {
                 android.provider.Settings.Secure.putInt(
                         getActivity().getContentResolver(),
@@ -444,6 +446,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         lp.setOnPreferenceChangeListener((p, newValue) -> {
             String val = (String) newValue;
             SystemProperties.set(key, val);
+            notifyGamepad(key);
             updateListSummary(lp, val);
             return true;
         });
@@ -492,12 +495,27 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
                     String val = sanitize(key, def, raw);
                     if (val != null) {
                         SystemProperties.set(key, val);
+                        notifyGamepad(key);
                         etp.setText(val);
                         updateEditTextSummary(etp, val);
                     }
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    /**
+     * gammapad перечитывает свои свойства, только когда меняется config_version,
+     * - так делает экран геймпада (GamepadSettingsFragment.bumpConfigVersion).
+     * Без этого правка свойства gammapad отсюда вступала в силу лишь после
+     * перезагрузки.
+     */
+    private static void notifyGamepad(String key) {
+        if (!key.startsWith("persist.gammaos.gamepad.")) return;
+        SystemProperties.set("persist.gammaos.gamepad.full_reload", "1");
+        int version = SystemProperties.getInt("persist.gammaos.gamepad.config_version", 0);
+        SystemProperties.set("persist.gammaos.gamepad.config_version",
+                String.valueOf(version + 1));
     }
 
     private void updateEditTextSummary(EditTextPreference etp, String value) {
