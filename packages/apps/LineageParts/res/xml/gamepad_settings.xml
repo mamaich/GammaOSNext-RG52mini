@@ -208,6 +208,12 @@
         android:dependency="gamepad_enable">
 
         <SwitchPreferenceCompat
+            android:key="gamepad_mouse_active"
+            android:title="@string/gamepad_mouse_active_title"
+            android:summary="@string/gamepad_mouse_active_summary"
+            android:persistent="false" />
+
+        <SwitchPreferenceCompat
             android:key="gamepad_mouse_enable"
             android:title="@string/gamepad_mouse_enable_title"
             android:summary="@string/gamepad_mouse_enable_summary"
@@ -260,15 +266,16 @@
             android:summary="%s"
             android:entries="@array/gamepad_mouse_speed_entries"
             android:entryValues="@array/gamepad_mouse_speed_values"
-            android:defaultValue="100"
-            android:dependency="gamepad_mouse_enable" />
+            android:defaultValue="100" />
 
-        <androidx.preference.SeekBarPreference
+        <ListPreference
             android:key="gamepad_mouse_scroll_speed"
             android:title="@string/gamepad_mouse_scroll_speed_title"
+            android:summary="%s"
+            android:entries="@array/gamepad_mouse_scroll_speed_entries"
+            android:entryValues="@array/gamepad_mouse_scroll_speed_values"
             android:defaultValue="4"
-            android:max="30"
-            android:dependency="gamepad_mouse_enable" />
+            android:persistent="false" />
 
     </PreferenceCategory>
 

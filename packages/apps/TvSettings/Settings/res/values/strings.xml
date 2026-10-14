@@ -2932,8 +2932,10 @@
     <string name="gamepad_ff_device_summary">Path to force-feedback device for rumble output</string>
     <string name="gamepad_test_vibration_title">Test vibration</string>
     <string name="gamepad_test_vibration_summary">Send a short test rumble to the vibration device</string>
-    <string name="gamepad_mouse_enable_title">Enable mouse mode</string>
-    <string name="gamepad_mouse_enable_summary">Use a button combo to toggle mouse cursor control via gamepad</string>
+    <string name="gamepad_mouse_active_title">Mouse mode</string>
+    <string name="gamepad_mouse_active_summary">The left stick moves a mouse cursor, the right stick scrolls. Same as the Mouse Mode tile and the power menu switch.</string>
+    <string name="gamepad_mouse_enable_title">Toggle with button combo</string>
+    <string name="gamepad_mouse_enable_summary">Press both sticks (L3 + R3) together to turn mouse mode on or off</string>
     <string name="gamepad_axis_roles_save">Save</string>
     <string name="gamepad_combo_map_btn">Button %d</string>
     <string name="gamepad_mouse_combo_btn">Button %d</string>

@@ -213,8 +213,10 @@
 
     <!-- Mouse mode -->
     <string name="gamepad_mouse_category">Mouse Mode</string>
-    <string name="gamepad_mouse_enable_title">Enable mouse mode</string>
-    <string name="gamepad_mouse_enable_summary">Use gamepad as a virtual mouse cursor. Toggle with combo hold.</string>
+    <string name="gamepad_mouse_active_title">Mouse mode</string>
+    <string name="gamepad_mouse_active_summary">The left stick moves a mouse cursor, the right stick scrolls. Same as the Mouse Mode tile and the power menu switch.</string>
+    <string name="gamepad_mouse_enable_title">Toggle with button combo</string>
+    <string name="gamepad_mouse_enable_summary">Press both sticks (L3 + R3) together to turn mouse mode on or off</string>
     <string name="gamepad_mouse_combo_title">Toggle combo</string>
     <string name="gamepad_mouse_combo_summary">Button combination to enter/exit mouse mode</string>
     <string name="gamepad_mouse_combo_current">%1$s + %2$s</string>
@@ -248,6 +250,28 @@
         <item>20</item>
         <item>30</item>
         <item>40</item>
+    </string-array>
+
+    <!-- Mouse mode scroll speed, persist.gammaos.gamepad.mouse_scroll_speed (tenths; 4 is the default, 1x) -->
+    <string-array name="gamepad_mouse_scroll_speed_entries">
+        <item>0.25\u00d7</item>
+        <item>0.5\u00d7</item>
+        <item>0.75\u00d7</item>
+        <item>1\u00d7</item>
+        <item>1.25\u00d7</item>
+        <item>1.5\u00d7</item>
+        <item>1.75\u00d7</item>
+        <item>2\u00d7</item>
+    </string-array>
+    <string-array name="gamepad_mouse_scroll_speed_values">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+        <item>8</item>
     </string-array>
 
     <!-- Mouse mode cursor speed, persist.gammaos.gamepad.mouse_speed_mult (percent) -->

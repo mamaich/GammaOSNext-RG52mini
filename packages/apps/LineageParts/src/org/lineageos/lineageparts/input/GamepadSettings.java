@@ -105,6 +105,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
     private static final String KEY_PERAPP_ADD = "gamepad_perapp_add";
 
     // Mouse mode keys
+    private static final String KEY_MOUSE_ACTIVE = "gamepad_mouse_active";
     private static final String KEY_MOUSE_ENABLE = "gamepad_mouse_enable";
     private static final String KEY_MOUSE_COMBO = "gamepad_mouse_combo";
     private static final String KEY_MOUSE_HOLD_TIME = "gamepad_mouse_hold_time";
@@ -199,6 +200,9 @@ public class GamepadSettings extends SettingsPreferenceFragment
     // Per profile: persist.gammaos.gamepad.paN_pkg, paN_btn, paN_combo
 
     // Mouse mode properties
+    // Режим мыши включён прямо сейчас: его ставит gammapad (аккорд), плитка QS
+    // и меню выключателя; gammapad раз в секунду сверяется с ним.
+    private static final String PROP_MOUSE_ACTIVE = "sys.gammaos.gamepad.mouse_active";
     private static final String PROP_MOUSE_COMBO1 = "persist.gammaos.gamepad.mouse_combo1";
     private static final String PROP_MOUSE_COMBO2 = "persist.gammaos.gamepad.mouse_combo2";
     private static final String PROP_MOUSE_COMBO1_PREV = "persist.gammaos.gamepad.mouse_combo1_prev";
@@ -283,13 +287,14 @@ public class GamepadSettings extends SettingsPreferenceFragment
     private ListPreference mGlobalSensitivityPref;
 
     // Mouse mode preferences
+    private SwitchPreferenceCompat mMouseActivePref;
     private SwitchPreferenceCompat mMouseEnablePref;
     private SeekBarPreference mMouseHoldTimePref;
     private SeekBarPreference mMouseStickSpeedPref;
     private SeekBarPreference mMouseDpadSpeedPref;
     private ListPreference mMouseBoostPref;
     private ListPreference mMouseSpeedPref;
-    private SeekBarPreference mMouseScrollSpeedPref;
+    private ListPreference mMouseScrollSpeedPref;
 
     private final List<String> mSelectedDevices = new ArrayList<>();
 
@@ -298,6 +303,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
         @Override
         public void run() {
             refreshRemapSummaries();
+            refreshMouseActive();
             mHandler.postDelayed(this, REMAP_POLL_INTERVAL_MS);
         }
     };
@@ -475,6 +481,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
         }
 
         // Mouse mode preferences
+        mMouseActivePref = findPreference(KEY_MOUSE_ACTIVE);
         mMouseEnablePref = findPreference(KEY_MOUSE_ENABLE);
         mMouseHoldTimePref = findPreference(KEY_MOUSE_HOLD_TIME);
         mMouseStickSpeedPref = findPreference(KEY_MOUSE_STICK_SPEED);
@@ -483,6 +490,10 @@ public class GamepadSettings extends SettingsPreferenceFragment
         mMouseSpeedPref = findPreference(KEY_MOUSE_SPEED);
         mMouseScrollSpeedPref = findPreference(KEY_MOUSE_SCROLL_SPEED);
 
+        if (mMouseActivePref != null) {
+            refreshMouseActive();
+            mMouseActivePref.setOnPreferenceChangeListener(this);
+        }
         if (mMouseEnablePref != null) {
             // Mouse mode is always available; use combo1 prop existence as proxy
             mMouseEnablePref.setChecked(
@@ -518,9 +529,8 @@ public class GamepadSettings extends SettingsPreferenceFragment
             mMouseSpeedPref.setOnPreferenceChangeListener(this);
         }
         if (mMouseScrollSpeedPref != null) {
-            mMouseScrollSpeedPref.setMin(1);
-            mMouseScrollSpeedPref.setValue(
-                    SystemProperties.getInt(PROP_MOUSE_SCROLL_SPEED, 4));
+            mMouseScrollSpeedPref.setValue(String.valueOf(
+                    SystemProperties.getInt(PROP_MOUSE_SCROLL_SPEED, 4)));
             mMouseScrollSpeedPref.setOnPreferenceChangeListener(this);
         }
 
@@ -648,6 +658,21 @@ public class GamepadSettings extends SettingsPreferenceFragment
         if (mPwmEnablePref != null)
             mPwmEnablePref.setChecked(SystemProperties.getInt(PROP_PWM_ENABLE, 1) != 0);
         updateFFDeviceSummary();
+        refreshMouseActive();
+    }
+
+    /**
+     * Переключатель «Mouse mode» показывает, включена ли мышь сейчас. Её
+     * включают и аккордом на стиках, и плиткой, и из меню выключателя, поэтому
+     * состояние перечитывается и на каждом опросе экрана, а не только при входе.
+     * «Toggle with button combo» под ним - только разрешение аккорда.
+     */
+    private void refreshMouseActive() {
+        if (mMouseActivePref == null) return;
+        boolean active = SystemProperties.getInt(PROP_MOUSE_ACTIVE, 0) != 0;
+        if (mMouseActivePref.isChecked() != active) {
+            mMouseActivePref.setChecked(active);
+        }
     }
 
     @Override
@@ -1701,6 +1726,10 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 return true;
 
             // Mouse mode settings
+            case KEY_MOUSE_ACTIVE:
+                // Как плитка QS: gammapad подхватит свойство на ближайшем опросе.
+                SystemProperties.set(PROP_MOUSE_ACTIVE, (Boolean) newValue ? "1" : "0");
+                return true;
             case KEY_MOUSE_ENABLE:
                 boolean mouseEnabled = (Boolean) newValue;
                 if (mouseEnabled) {
@@ -1757,8 +1786,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 bumpConfigVersion();
                 return true;
             case KEY_MOUSE_SCROLL_SPEED:
-                SystemProperties.set(PROP_MOUSE_SCROLL_SPEED,
-                        String.valueOf((int) newValue));
+                SystemProperties.set(PROP_MOUSE_SCROLL_SPEED, (String) newValue);
                 bumpConfigVersion();
                 return true;
         }
