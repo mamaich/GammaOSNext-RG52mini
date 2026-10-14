@@ -144,12 +144,31 @@ void ForceFeedback::handleUpload(int uinputFd,
     // Try native FF path first: find a physical device with FF support
     int physFd = findPhysicalWithFF(devices);
     if (physFd >= 0) {
+        auto& dev = devices[physFd];
         struct ff_effect physEffect = upload.effect;
-        physEffect.id = -1;  // Let kernel assign ID
 
-        if (ioctl(physFd, EVIOCSFF, &physEffect) >= 0) {
+        // Повторная загрузка того же виртуального эффекта обновляет уже
+        // выделенный ему физический слот. EventHub так и работает: перед каждым
+        // включением грузит эффект заново под прежним номером, с новыми силой
+        // и длительностью. Раньше здесь всегда просили новый слот (id = -1), а
+        // прежний не освобождали: у memless-устройства их 16, и после 16
+        // загрузок ядро отвечало ENOSPC. Отображение оставалось на последнем
+        // удачном слоте со старыми параметрами - игра включала, по её мнению,
+        // короткую вибрацию, а мотор крутился до её выхода (RG52 Mini, TMNT).
+        auto mapped = dev.ffEffects.find(upload.effect.id);
+        physEffect.id = (mapped != dev.ffEffects.end()) ? mapped->second : -1;
+
+        bool ok = ioctl(physFd, EVIOCSFF, &physEffect) >= 0;
+        if (!ok && mapped != dev.ffEffects.end()) {
+            // Слот не обновился - освобождаем его и пробуем взять новый.
+            ioctl(physFd, EVIOCRMFF, mapped->second);
+            dev.ffEffects.erase(mapped);
+            physEffect = upload.effect;
+            physEffect.id = -1;
+            ok = ioctl(physFd, EVIOCSFF, &physEffect) >= 0;
+        }
+        if (ok) {
             // Track mapping: virtual effect ID -> physical
-            auto& dev = devices[physFd];
             dev.ffEffects[upload.effect.id] = physEffect.id;
             LOG(VERBOSE) << "FF upload: virtual " << upload.effect.id
                          << " -> physical " << physEffect.id;
