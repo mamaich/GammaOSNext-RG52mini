@@ -687,17 +687,26 @@ public class GamepadSettings extends SettingsPreferenceFragment
 
     @Override
     public void onInputDeviceAdded(int deviceId) {
-        populateControllerList();
+        refreshControllerListIfShown();
     }
 
     @Override
     public void onInputDeviceRemoved(int deviceId) {
-        populateControllerList();
+        refreshControllerListIfShown();
     }
 
     @Override
     public void onInputDeviceChanged(int deviceId) {
-        populateControllerList();
+        refreshControllerListIfShown();
+    }
+
+    // На RG52 Mini список устройств скрыт (hideRg52PresetPreferences), а его
+    // перестройка при каждом пересоздании виртуального геймпада сбивала фокус
+    // с выбранного пункта экрана.
+    private void refreshControllerListIfShown() {
+        if (mDevicesCategory == null || mDevicesCategory.isVisible()) {
+            populateControllerList();
+        }
     }
 
     private void initDevicePreset() {
@@ -1692,7 +1701,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
             case KEY_DPAD_THRESHOLD:
                 SystemProperties.set(PROP_DPAD_THRESHOLD,
                         String.valueOf((int) newValue));
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 return true;
             case KEY_PWM_ENABLE:
                 SystemProperties.set(PROP_PWM_ENABLE,
@@ -1702,26 +1711,26 @@ public class GamepadSettings extends SettingsPreferenceFragment
             case KEY_PWM_INTENSITY:
                 SystemProperties.set(PROP_PWM_INTENSITY,
                         String.valueOf((int) newValue));
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 return true;
             case KEY_ABXY_SWAP:
                 SystemProperties.set(PROP_ABXY_SWAP,
                         (Boolean) newValue ? "1" : "0");
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 return true;
             case KEY_INVERT_LEFT:
                 SystemProperties.set(PROP_INVERT_LEFT,
                         (Boolean) newValue ? "1" : "0");
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 return true;
             case KEY_INVERT_RIGHT:
                 SystemProperties.set(PROP_INVERT_RIGHT,
                         (Boolean) newValue ? "1" : "0");
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 return true;
             case KEY_GLOBAL_SENSITIVITY:
                 SystemProperties.set(PROP_GLOBAL_SENSITIVITY, (String) newValue);
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 updateGlobalSensitivitySummary();
                 return true;
 
@@ -1783,11 +1792,11 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 return true;
             case KEY_MOUSE_SPEED:
                 SystemProperties.set(PROP_MOUSE_SPEED_MULT, (String) newValue);
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 return true;
             case KEY_MOUSE_SCROLL_SPEED:
                 SystemProperties.set(PROP_MOUSE_SCROLL_SPEED, (String) newValue);
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 return true;
         }
 
@@ -2970,6 +2979,19 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    /**
+     * Для настроек, которые gammapad перечитывает на лету (InputTransformer,
+     * MouseMode, ForceFeedback), - без full_reload. Полная перезагрузка
+     * отпускает и заново захватывает устройства и пересоздаёт виртуальный
+     * геймпад: на каждом шаге ползунка это перестраивало экран (onInputDevice*)
+     * и сбивало с него фокус, а нажатия ненадолго уходили в приложения мимо
+     * gammapad.
+     */
+    private void bumpConfigVersionLight() {
+        int version = SystemProperties.getInt(PROP_CONFIG_VERSION, 0);
+        SystemProperties.set(PROP_CONFIG_VERSION, String.valueOf(version + 1));
     }
 
     private void bumpConfigVersion() {

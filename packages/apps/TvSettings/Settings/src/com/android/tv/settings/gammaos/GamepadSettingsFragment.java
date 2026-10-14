@@ -1149,7 +1149,7 @@ public class GamepadSettingsFragment extends SettingsPreferenceFragment
                 return true;
             case KEY_MOUSE_SCROLL_SPEED:
                 SystemProperties.set(PROP_MOUSE_SCROLL_SPEED, (String) newValue);
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 return true;
             case KEY_MOUSE_ENABLE:
                 boolean mouseEnabled = (Boolean) newValue;
@@ -1190,7 +1190,7 @@ public class GamepadSettingsFragment extends SettingsPreferenceFragment
                 return true;
             case KEY_MOUSE_SPEED:
                 SystemProperties.set(PROP_MOUSE_SPEED_MULT, (String) newValue);
-                bumpConfigVersion();
+                bumpConfigVersionLight();
                 return true;
         }
         return false;
@@ -3468,6 +3468,19 @@ public class GamepadSettingsFragment extends SettingsPreferenceFragment
             return (int) Long.parseLong(s.substring(2), 16);
         }
         return Integer.parseInt(s);
+    }
+
+    /**
+     * Для настроек, которые gammapad перечитывает на лету (InputTransformer,
+     * MouseMode, ForceFeedback), - без full_reload. Полная перезагрузка
+     * отпускает и заново захватывает устройства и пересоздаёт виртуальный
+     * геймпад: на каждом шаге ползунка это перестраивало экран (onInputDevice*)
+     * и сбивало с него фокус, а нажатия ненадолго уходили в приложения мимо
+     * gammapad.
+     */
+    private void bumpConfigVersionLight() {
+        int version = SystemProperties.getInt(PROP_CONFIG_VERSION, 0);
+        SystemProperties.set(PROP_CONFIG_VERSION, String.valueOf(version + 1));
     }
 
     private void bumpConfigVersion() {

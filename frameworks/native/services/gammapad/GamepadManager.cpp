@@ -1280,6 +1280,9 @@ void GamepadManager::checkConfigChange() {
             mTransformer->loadConfig();
             if (mMouseMode) mMouseMode->loadConfig();
             if (mScreenMapMode) mScreenMapMode->loadConfig();
+            // сила и путь вибрации (Vibration intensity) - тоже без
+            // пересоздания устройств
+            mForceFeedback->loadConfig();
         }
 
         // Add/recreate/tear-down the companion keyboard to match the (possibly
