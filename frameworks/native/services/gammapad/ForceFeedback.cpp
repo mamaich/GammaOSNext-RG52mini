@@ -158,6 +158,20 @@ void ForceFeedback::handleUpload(int uinputFd,
         auto mapped = dev.ffEffects.find(upload.effect.id);
         physEffect.id = (mapped != dev.ffEffects.end()) ? mapped->second : -1;
 
+        // Ползунок Vibration intensity (pwm_intensity, 0..255) раньше
+        // действовал только на мост в вибратор Android и на программный ШИМ, а
+        // эффект, пересланный на физический геймпад, шёл с исходной силой.
+        // Теперь он масштабирует и его: силу драйвер геймпада переводит в
+        // долю включения мотора (RG52 Mini: ШИМ в rk3562-joystick).
+        if (physEffect.type == FF_RUMBLE && mPwmIntensity < 255) {
+            physEffect.u.rumble.strong_magnitude = static_cast<uint16_t>(
+                    static_cast<uint32_t>(physEffect.u.rumble.strong_magnitude) *
+                    mPwmIntensity / 255);
+            physEffect.u.rumble.weak_magnitude = static_cast<uint16_t>(
+                    static_cast<uint32_t>(physEffect.u.rumble.weak_magnitude) *
+                    mPwmIntensity / 255);
+        }
+
         bool ok = ioctl(physFd, EVIOCSFF, &physEffect) >= 0;
         if (!ok && mapped != dev.ffEffects.end()) {
             // Слот не обновился - освобождаем его и пробуем взять новый.

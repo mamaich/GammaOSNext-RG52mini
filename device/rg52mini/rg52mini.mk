@@ -193,6 +193,13 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.gammaos.gamepad.remap_axis=9:10,10:9
 
+# Сила вибрации по умолчанию - полная. Ползунок Vibration intensity с v1.11
+# масштабирует и эффекты, которые gammapad пересылает встроенному геймпаду
+# (силу драйвер превращает в ШИМ моторов), а у gammapad по умолчанию 200 из
+# 255 - привычная вибрация стала бы слабее.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    persist.gammaos.gamepad.pwm_intensity=255
+
 # GammaToast из образа убран. Строка GammaToast удалена из PRODUCT_PACKAGES в
 # device/phh/treble/base.mk и lineage_tv_arm64_bvN.mk: отсюда его не выключить,
 # PRODUCT_REMOVE_PACKAGES в этом дереве не существует (не объявлена ни в

@@ -185,8 +185,7 @@
             android:key="gamepad_pwm_intensity"
             android:title="@string/gamepad_pwm_intensity_title"
             android:defaultValue="200"
-            android:max="255"
-            android:dependency="gamepad_pwm_enable" />
+            android:max="255" />
 
         <Preference
             android:key="gamepad_ff_device"

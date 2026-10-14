@@ -2099,7 +2099,10 @@ public class GamepadSettings extends SettingsPreferenceFragment
      *    корпус (аккорд L3+R3, щелчки на стиках, крестовина остаётся
      *    крестовиной);
      *  - время удержания, скорость стика и Mouse boost - MouseMode их не
-     *    применяет: включение аккордом, курсор идёт по своей кривой.
+     *    применяет: включение аккордом, курсор идёт по своей кривой;
+     *  - PWM vibration и Direct FF device: запасные пути вибрации для
+     *    геймпадов без своей, а у встроенного она есть - эффект уходит прямо
+     *    на него, и Vibration intensity с v1.11 действует и на этот путь.
      *
      * Гасим, а не удаляем из xml: фрагмент держит ссылки на эти элементы.
      */
@@ -2109,7 +2112,8 @@ public class GamepadSettings extends SettingsPreferenceFragment
             "gamepad_identity_category",
             KEY_AXIS_ROLES, KEY_REMAP_BUTTONS, KEY_REMAP_AXES,
             KEY_MOUSE_COMBO, KEY_MOUSE_HOLD_TIME, KEY_MOUSE_BUTTONS,
-            KEY_MOUSE_STICK_SPEED, KEY_MOUSE_DPAD_SPEED, KEY_MOUSE_BOOST
+            KEY_MOUSE_STICK_SPEED, KEY_MOUSE_DPAD_SPEED, KEY_MOUSE_BOOST,
+            KEY_PWM_ENABLE, KEY_FF_DEVICE
         };
         for (String key : hidden) {
             Preference p = findPreference(key);
