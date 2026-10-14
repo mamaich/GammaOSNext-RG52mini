@@ -200,6 +200,8 @@ public class GamepadSettings extends SettingsPreferenceFragment
     // Mouse mode properties
     private static final String PROP_MOUSE_COMBO1 = "persist.gammaos.gamepad.mouse_combo1";
     private static final String PROP_MOUSE_COMBO2 = "persist.gammaos.gamepad.mouse_combo2";
+    private static final String PROP_MOUSE_COMBO1_PREV = "persist.gammaos.gamepad.mouse_combo1_prev";
+    private static final String PROP_MOUSE_COMBO2_PREV = "persist.gammaos.gamepad.mouse_combo2_prev";
     private static final String PROP_MOUSE_HOLD_MS = "persist.gammaos.gamepad.mouse_hold_ms";
     private static final String PROP_MOUSE_STICK_SPEED = "persist.gammaos.gamepad.mouse_stick_speed";
     private static final String PROP_MOUSE_DPAD_SPEED = "persist.gammaos.gamepad.mouse_dpad_speed";
@@ -543,6 +545,8 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 });
 
         mInputManager = getContext().getSystemService(InputManager.class);
+
+        hideRg52PresetPreferences();
 
         // Scroll to and highlight a specific preference when launched from QS tile
         Bundle args = getArguments();
@@ -1691,13 +1695,30 @@ public class GamepadSettings extends SettingsPreferenceFragment
             case KEY_MOUSE_ENABLE:
                 boolean mouseEnabled = (Boolean) newValue;
                 if (mouseEnabled) {
-                    // Set default combo if not configured yet
                     if (SystemProperties.get(PROP_MOUSE_COMBO1, "").isEmpty()) {
-                        SystemProperties.set(PROP_MOUSE_COMBO1, "314"); // BTN_SELECT
-                        SystemProperties.set(PROP_MOUSE_COMBO2, "311"); // BTN_TR
+                        // Возвращаем ту комбинацию, что была до выключения, как в
+                        // экране TvSettings. Раньше здесь безусловно ставились
+                        // SELECT+R1 (314/311), и устройство со своей комбинацией
+                        // (RG52 Mini: оба стика, 317/318) получало чужие кнопки.
+                        String c1 = SystemProperties.get(PROP_MOUSE_COMBO1_PREV, "");
+                        String c2 = SystemProperties.get(PROP_MOUSE_COMBO2_PREV, "");
+                        if (c1.isEmpty()) {
+                            c1 = "314"; // BTN_SELECT
+                            c2 = "311"; // BTN_TR
+                        }
+                        SystemProperties.set(PROP_MOUSE_COMBO1, c1);
+                        SystemProperties.set(PROP_MOUSE_COMBO2, c2);
                     }
                 } else {
-                    // Clear combo props to disable
+                    // Запоминаем перед тем, как стереть: свойства persist живут в
+                    // /data и перекрывают build.prop, иначе настройка устройства
+                    // терялась бы безвозвратно, перезагрузка её не возвращает.
+                    String c1 = SystemProperties.get(PROP_MOUSE_COMBO1, "");
+                    if (!c1.isEmpty()) {
+                        SystemProperties.set(PROP_MOUSE_COMBO1_PREV, c1);
+                        SystemProperties.set(PROP_MOUSE_COMBO2_PREV,
+                                SystemProperties.get(PROP_MOUSE_COMBO2, ""));
+                    }
                     SystemProperties.set(PROP_MOUSE_COMBO1, "");
                     SystemProperties.set(PROP_MOUSE_COMBO2, "");
                 }
@@ -2014,6 +2035,45 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    /**
+     * RG52 Mini: скрыть то, что на этом устройстве задано в
+     * device/rg52mini/rg52mini.mk, и то, чего gammapad не применяет.
+     *
+     * Тот же экран есть в TvSettings (GamepadSettingsFragment), там оставлен
+     * только «Enable mouse mode». Здесь, в Handheld Settings, рабочие
+     * пользовательские настройки остаются: инверсия и чувствительность стиков,
+     * калибровка, стик как крестовина, ABXY, вибрация, мышь вкл/выкл и прокрутка,
+     * профили приложений, проверка геймпада.
+     *
+     * Скрыто:
+     *  - выключатель gammapad, merge, hide_source и выбор устройств - на них
+     *    держится весь ввод;
+     *  - личина виртуального геймпада (preset): игры узнают раскладку по ней;
+     *  - роли осей, переназначение кнопок и осей - перезаписывают наши
+     *    remap_btn (HOME/BACK) и remap_axis (перепутанные курки), а частичные
+     *    роли уводят правый стик в курки;
+     *  - комбинация, кнопки и скорость крестовины в режиме мыши - заданы под
+     *    корпус (аккорд L3+R3, щелчки на стиках, крестовина остаётся
+     *    крестовиной);
+     *  - время удержания, скорость стика и Mouse boost - MouseMode их не
+     *    применяет: включение аккордом, курсор идёт по своей кривой.
+     *
+     * Гасим, а не удаляем из xml: фрагмент держит ссылки на эти элементы.
+     */
+    private void hideRg52PresetPreferences() {
+        String[] hidden = {
+            KEY_ENABLE, KEY_MERGE, KEY_HIDE_SOURCE, KEY_DEVICES_CATEGORY,
+            "gamepad_identity_category",
+            KEY_AXIS_ROLES, KEY_REMAP_BUTTONS, KEY_REMAP_AXES,
+            KEY_MOUSE_COMBO, KEY_MOUSE_HOLD_TIME, KEY_MOUSE_BUTTONS,
+            KEY_MOUSE_STICK_SPEED, KEY_MOUSE_DPAD_SPEED, KEY_MOUSE_BOOST
+        };
+        for (String key : hidden) {
+            Preference p = findPreference(key);
+            if (p != null) p.setVisible(false);
+        }
     }
 
     private void updateGlobalSensitivitySummary() {
