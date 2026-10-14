@@ -2,7 +2,11 @@ service drastic-nano /system/bin/drastic-nano
     class main
     user root
     group root graphics input system media_rw sdcard_rw everybody external_storage package_info audio readproc inet net_bw_stats
-    capabilities SYS_NICE IPC_LOCK SYS_RESOURCE DAC_READ_SEARCH DAC_OVERRIDE CHOWN
+    capabilities SYS_NICE IPC_LOCK SYS_RESOURCE DAC_READ_SEARCH DAC_OVERRIDE CHOWN SYS_ADMIN
+    # SYS_ADMIN: DRM_IOCTL_SET_MASTER on a card0 file that was never master is
+    # gated on CAP_SYS_ADMIN (drm_master_check_perm). Without it the session
+    # launched after a SurfaceFlinger app (the composer then holds master) got
+    # EACCES from every SET_MASTER retry and fell back to no panel at all.
     # `inet` (AID_INET 3003) is REQUIRED for network: the rc restricts capabilities
     # (no CAP_NET_RAW), so Android's paranoid-network gate (in_egroup_p(AID_INET) ||
     # capable(CAP_NET_RAW)) would otherwise EACCES every socket -- which broke the
