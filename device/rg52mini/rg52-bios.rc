@@ -1,0 +1,17 @@
+# Системная папка RetroArch - общая с dArkOS ROMs/bios, см. rg52-bios.sh.
+# Один раз на установку (persist.rg52.bios_shared): на загрузке - для уже
+# установленных систем, по окончании setup.sh - для новых (RetroArch распаковывает
+# он, и при первой загрузке retroarch.cfg ещё нет).
+
+service rg52_bios /system/bin/rg52-bios.sh
+    user root
+    group root media_rw
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+on property:sys.boot_completed=1
+    start rg52_bios
+
+on property:persist.gammaos.setupwizard_done=1 && property:sys.boot_completed=1
+    start rg52_bios

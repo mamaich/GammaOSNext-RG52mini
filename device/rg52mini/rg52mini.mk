@@ -257,6 +257,12 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-bootmenu.sh:system/bin/rg52-bootmenu.sh \
     device/rg52mini/rg52-bootmenu.rc:system/etc/init/rg52-bootmenu.rc
 
+# Системная папка RetroArch - ROMs/bios, общая с dArkOS (там его BIOS, разложенные
+# как в RetroArch). Один раз на установку, см. rg52-bios.sh.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-bios.sh:system/bin/rg52-bios.sh \
+    device/rg52mini/rg52-bios.rc:system/etc/init/rg52-bios.rc
+
 # Загрузочная анимация GammaOS с кадром 480x480 вместо 2880x2880: на экране он
 # всё равно 480x480, а исходный занимал 32 МиБ памяти GPU и перечитывался с
 # шестикратным уменьшением 60 раз в секунду - пока анимация держит экран до
