@@ -27,9 +27,10 @@ FIRST_PLAYER_ID = 313
 # ScummVM (37) и Wolfenstein 3D (40) были и убраны по решению владельца 17.10.2026;
 # номера остальных платформ - как на его консоли, где они уже стояли.
 SKIP_IDS = {"gc": 38}
-# Скрыты (is_visible = 0): PS2 - эмулятора в GammaOS нет (EmuCoreX ставится вручную),
-# а RK3562 тянет его лишь частично. Включается в настройках Daijishō.
-HIDDEN = {"ps2"}
+# Скрыты (is_visible = 0) по решению владельца 17.10.2026 - на RK3562 (4x Cortex-A53)
+# неиграбельны: PS2 (эмулятора в GammaOS нет, EmuCoreX ставится вручную) и GameCube
+# (Dolphin). Включаются в настройках Daijishō.
+HIDDEN = {"ps2", "gc"}
 
 
 def uris(folder):
@@ -169,6 +170,9 @@ for src, name, folders, default, regex, wall in SPECS:
     print("-- %d %s: %d players, default %d, %d paths%s" % (
         pid, name, len(ids), default_id, len(paths), ", hidden" if p["shortname"] in HIDDEN else ""))
     pid += 1
+# и для платформ, добавленных прежним запуском (GameCube скрыт позже, чем добавлен)
+print("UPDATE PlatformEntity SET is_visible = 0 WHERE shortname IN (%s) AND is_visible = 1;"
+      % ", ".join(q(s) for s in sorted(HIDDEN)))
 print("COMMIT;")
 if walls:
     json.dump(walls, open(WALLS, "w"))

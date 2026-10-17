@@ -25,6 +25,30 @@ GammaOS Next (LineageOS 21 / Android 14) для карманной консол�
 Бесполезные для встроенного геймпада переключатели PWM vibration и Direct FF
 device скрыты.
 
+### Совместимость с общей картой dArkOS
+
+На общей карте dArkOS (и EmuELEC) складывают игры в свои папки, и часть из них
+Daijishō не видел. Теперь он находит игры и в таких папках: `nesh` (NES), `pico-8`
+(PICO-8), `sg-1000` (Master System), `pspminis` (PSP), `snes-hacks` и
+`snesmsu1` (SNES), `msumd` (Genesis), `n64dd` (N64).
+
+Добавлены платформы для систем, которых в Daijishō не было: аркады (FinalBurn Neo и
+MAME), CP System I, II и III, Neo Geo, Atomiswave, PC Engine и PC Engine CD, Sega
+32X, Sega CD, Atari 2600, Atari Lynx и Amstrad CPC - с папками dArkOS, эмуляторами
+RetroArch по умолчанию и обоями в стиле остальных. GameCube и PlayStation 2 есть,
+но скрыты: на этой консоли они не тянут. Включить их можно в настройках
+Daijishō.
+
+BIOS теперь общие с dArkOS: RetroArch ищет их в `ROMs/bios`, как и dArkOS.
+Положите туда BIOS один раз - и они работают в обеих системах (нужны, например,
+для Sega CD, PC Engine CD и Atomiswave). То, что уже лежало в
+`RetroArch/system`, при первой загрузке копируется в `ROMs/bios`; файлы с
+теми же именами, которые там уже есть, не заменяются.
+
+Новые папки и платформы Daijishō появляются на чистой установке. После обновления
+по воздуху Daijishō сохраняет свою прежнюю базу. Общая папка BIOS включается и
+при обновлении.
+
 ## Что чинилось
 
 ### Ползунки в настройках геймпада не теряют фокус
