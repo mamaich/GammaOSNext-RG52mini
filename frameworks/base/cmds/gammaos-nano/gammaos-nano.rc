@@ -121,6 +121,18 @@ on property:sys.gammaos.minimal_boot=1 && property:persist.gammaos.nano.overlay_
 on property:sys.gammaos.nano.app_launched=1 && property:init.svc.gammaos-nano=stopped && property:persist.gammaos.nano.overlay=1 && property:sys.gammaos.minimal_boot=1
     start gammaos-nano-overlay
 
+# GammaOS RG52 Mini: HDMI plugged in at the DRM home. The DRM home cannot show anything on
+# HDMI, so it hands the display to SurfaceFlinger (drmStop + exit, like an app launch) and
+# sets hdmi_handoff; once it is gone, start the overlay instance as the full-wallpaper home,
+# the same way the crash-respawn rule below does. The overlay then mirrors the menu and any
+# app to HDMI (NanoExtMirror.cpp).
+on property:sys.gammaos.nano.hdmi_handoff=1 && property:init.svc.gammaos-nano=stopped && property:sys.gammaos.minimal_boot=1
+    setprop sys.gammaos.nano.hdmi_handoff 0
+    setprop sys.gammaos.nano.app_launched 0
+    setprop sys.gammaos.nano.overlay_wallpaper 1
+    setprop sys.gammaos.nano.show_overlay 1
+    start gammaos-nano-overlay
+
 # GammaOS Nano: hand off to the gammaos-ota flasher for a themed System Update. nano browses +
 # confirms the package itself (owning the DRM panel). On Install, nano sets
 # sys.gammaos.ota.theme/package/autoinstall and then sys.gammaos.ota.prestage=1, and STAYS UP on

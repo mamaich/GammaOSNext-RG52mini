@@ -47,6 +47,7 @@ cc_binary {
         "main.cpp",
         "NanoMenu.cpp",
         "NanoMenuDrm.cpp",
+        "NanoExtMirror.cpp",
         "NanoMenuRgbFollow.cpp",
         "NanoMenuXmb.cpp",
         "NanoMenuShaders.cpp",

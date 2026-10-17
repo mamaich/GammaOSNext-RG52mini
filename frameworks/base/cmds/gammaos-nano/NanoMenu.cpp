@@ -84,6 +84,8 @@ extern "C" uint32_t __system_property_serial(const prop_info* __pi);
 #include <android/hardware/light/2.0/ILight.h>
 
 #include "NanoMenu.h"
+#include "NanoDisplays.h"  // GammaOS RG52 Mini: HDMI is not a nano panel
+#include "NanoExtMirror.h"  // GammaOS RG52 Mini: HDMI mirror in nano mode
 #include "NanoScreenCal.h"
 #include "NanoBootChime.h"
 #include "NanoMenuShaders.h"
@@ -234,7 +236,7 @@ void NanoMenu::initSurfaceFlingerPath() {
     mSession = new SurfaceComposerClient();
     mSession->linkToComposerDeath(this);
 
-    const std::vector<PhysicalDisplayId> ids = SurfaceComposerClient::getPhysicalDisplayIds();
+    const std::vector<PhysicalDisplayId> ids = nanoPanelDisplayIds();
     if (ids.empty()) {
         ALOGE("initSurfaceFlingerPath: no displays");
         return;
@@ -1080,14 +1082,14 @@ status_t NanoMenu::readyToRun() {
         mSession->linkToComposerDeath(this);
         tlog("SurfaceComposerClient ready");
 
-        std::vector<PhysicalDisplayId> ids = SurfaceComposerClient::getPhysicalDisplayIds();
+        std::vector<PhysicalDisplayId> ids = nanoPanelDisplayIds();
         if (ids.empty() && (mOverlayMode || nanoForceSfPath())) {
             // Displays not enumerated yet; poll until SF reports them.
             int waited = 0;
             while (ids.empty() && waited < 30000) {
                 usleep(100000);
                 waited += 100;
-                ids = SurfaceComposerClient::getPhysicalDisplayIds();
+                ids = nanoPanelDisplayIds();
             }
         }
         if (ids.empty()) { ALOGE("No displays found"); return NAME_NOT_FOUND; }
@@ -1164,6 +1166,9 @@ status_t NanoMenu::readyToRun() {
                 property_set("sys.gammaos.nano.clear_forced_size", "1");
             }
         }
+        // GammaOS RG52 Mini: the overlay instance keeps a mirror of the primary display on
+        // an external (HDMI) one - see NanoExtMirror.h.
+        if (mOverlayMode) nanoExtMirrorStart(session(), mDisplayToken);
         // Universal perf hint: vote 60fps on the overlay layer so the vendor's
         // frame-deadline DVFS (e.g. MTK FPSGo) can boost for it like a foreground
         // app. Overlay only (the home is DRM-direct). No-op where unhonored.
@@ -5588,6 +5593,23 @@ if (sRingPrimedCount >= 2) {
             // splash time gets a second chance here. Bounded to a 5-second boot
             // window by drmRescanDisplays itself. No-op post-boot (sDrmFd = -1).
             drmRescanDisplays();
+            // GammaOS RG52 Mini: the DRM home owns the display, so SurfaceFlinger cannot show
+            // anything on HDMI. When HDMI is plugged in, hand the display to SurfaceFlinger the
+            // way an app launch does; the overlay instance takes over as the home and mirrors
+            // the menu to HDMI (NanoExtMirror.h, sys.gammaos.nano.hdmi_handoff in the rc).
+            if (!mOverlayMode && sDrmActive && !mHdmiHandoff && mXmbBootCompleted
+                && !mSetupWizardActive && !mPs3BootActive
+                && property_get_bool("persist.gammaos.nano.overlay", true)) {
+                const int64_t nowMs = systemTime(SYSTEM_TIME_MONOTONIC) / 1000000LL;
+                if (nowMs - mHdmiCheckMs >= 1000) {
+                    mHdmiCheckMs = nowMs;
+                    if (nanoExtMirrorWanted() && nanoHdmiConnected()) {
+                        ALOGI("NanoMenu: HDMI connected, handing the display to SurfaceFlinger");
+                        mHdmiHandoff = true;
+                        mExitRequested = true;
+                    }
+                }
+            }
             // DRM-direct home: a kernel suspend/resume (deep-sleep tile, the sleep
             // script, the power key) brings the CRTCs back with no planes attached;
             // re-commit the modeset so the panels relight instead of staying blank.
@@ -6041,7 +6063,11 @@ if (sRingPrimedCount >= 2) {
     // InputDispatcher's queue waiting for a focused window. InputDispatcher
     // will clear drop_input itself when it processes a FOCUS entry (which
     // arrives after all stale events have been dropped).
-    if (mDrmBootPath) {
+    if (mHdmiHandoff) {
+        // No app is launching: init starts the overlay instance as the home once this
+        // process has exited (gammaos-nano.rc, sys.gammaos.nano.hdmi_handoff).
+        property_set("sys.gammaos.nano.hdmi_handoff", "1");
+    } else if (mDrmBootPath) {
         // DRM boot path: no SF surface to render loading screen on.
         // Just wait for the app to launch, then exit immediately.
         // HWC will re-acquire DRM master when our process exits.

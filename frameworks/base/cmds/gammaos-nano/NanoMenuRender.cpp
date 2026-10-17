@@ -70,6 +70,7 @@ extern "C" uint32_t __system_property_serial(const prop_info* __pi);
 
 #include "DrasticRunner.h"
 #include "NanoMenu.h"
+#include "NanoDisplays.h"  // GammaOS RG52 Mini: HDMI is not a nano panel
 #include "NanoI18n.h"      // trDyn() runtime translation of hardcoded UI strings
 #include "NanoMenuStrings.h"  // NanoLocale / LocaleInfo / nanoGetLocaleInfo (DSi language picker)
 #include "NanoMenuDrm.h"
@@ -319,7 +320,7 @@ static bool loadPngFromMemory(const uint8_t* pngData, int pngSize, GLuint* outTe
 
 GLuint NanoMenu::overlayCaptureInProcess(int* outW, int* outH) {
     const std::vector<PhysicalDisplayId> ids =
-            SurfaceComposerClient::getPhysicalDisplayIds();
+            nanoPanelDisplayIds();
     if (ids.empty()) return 0;
     DisplayId did = ids.front();
     // Prefer the configured primary display port (matches the overlay layer).
@@ -381,7 +382,7 @@ GLuint NanoMenu::overlayCaptureInProcess(int* outW, int* outH) {
 // string on a single-screen device (default capture is already correct) or if resolution fails.
 std::string NanoMenu::ccContentScreencapArg() {
     const std::vector<PhysicalDisplayId> ids =
-            SurfaceComposerClient::getPhysicalDisplayIds();
+            nanoPanelDisplayIds();
     if (ids.size() < 2) return "";                    // single physical screen: default is correct
     const uint64_t defaultVal = ids.front().value;    // == the panel screencap grabs with no -d (the CC)
     const int primaryPort = property_get_int32("persist.gammaos.nano.primary_display", 0);
@@ -4959,7 +4960,7 @@ void NanoMenu::drawTextGlow(const char* str, float px, float py, float scale,
 bool NanoMenu::hasSecondaryDisplay() {
     if (mDualScreenCache < 0)
         mDualScreenCache =
-                (SurfaceComposerClient::getPhysicalDisplayIds().size() > 1) ? 1 : 0;
+                (nanoPanelDisplayIds().size() > 1) ? 1 : 0;
     return mDualScreenCache == 1;
 }
 
@@ -4984,7 +4985,7 @@ void NanoMenu::setupSecondaryEglSurfaces() {
     int64_t t0 = systemTime(SYSTEM_TIME_MONOTONIC) / 1000000LL;
 
     const std::vector<PhysicalDisplayId> ids =
-            SurfaceComposerClient::getPhysicalDisplayIds();
+            nanoPanelDisplayIds();
     if (ids.size() <= 1) {
         return;
     }

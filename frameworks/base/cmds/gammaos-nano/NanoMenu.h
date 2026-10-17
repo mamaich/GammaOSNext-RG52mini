@@ -1360,6 +1360,10 @@ private:
     int mXmbGameScrollTop;     // First visible game in list
     bool mXmbRomScanDone;      // ROM paths have been scanned
     bool mXmbBootCompleted;    // true after sys.boot_completed=1
+    // GammaOS RG52 Mini: DRM home hands the display to SurfaceFlinger when HDMI is
+    // plugged in (NanoExtMirror.h); the overlay instance then mirrors to it.
+    bool mHdmiHandoff = false;
+    int64_t mHdmiCheckMs = 0;
 
     // ===================================================================
     // PS3 XMB layout (NanoMenuPS3Menu.cpp). A faithful PS3 XrossMediaBar:
