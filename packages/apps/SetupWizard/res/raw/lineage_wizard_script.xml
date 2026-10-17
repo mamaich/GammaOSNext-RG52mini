@@ -35,7 +35,12 @@
     <WizardAction
         wizard:uri="intent:#Intent;action=org.lineageos.setupwizard.LINEAGE_NETWORK_SETUP;end"
         id="network_setup">
-        <result wizard:action="datetime" />
+        <!-- GammaOS: after Wi-Fi no more questions - straight to the first-boot setup
+             (lineage_settings), as in the television script (raw-television) that
+             SetupWizardApp normally forces; this one is used when that switch does not
+             take effect in time. No date & time step: the time zone stays GMT until
+             the user picks one in Settings. -->
+        <result wizard:action="device_specific" />
     </WizardAction>
 
     <WizardAction
