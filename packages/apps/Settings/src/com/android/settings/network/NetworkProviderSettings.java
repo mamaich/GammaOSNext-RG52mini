@@ -179,6 +179,8 @@ public class NetworkProviderSettings extends RestrictedSettingsFragment
 
     // Enable the Next button when a Wi-Fi network is connected.
     private boolean mEnableNextOnConnection;
+    // GammaOS: whether changeNextButtonState() last saw a connection (null - not called yet).
+    private Boolean mNextConnected;
 
     private boolean mIsInSetupWizard;
 
@@ -1262,6 +1264,14 @@ public class NetworkProviderSettings extends RestrictedSettingsFragment
     void changeNextButtonState(boolean enabled) {
         if (mEnableNextOnConnection && hasNextButton()) {
             getNextButton().setEnabled(enabled);
+            // GammaOS: in the setup wizard a D-pad user had to scroll past the whole list of
+            // networks to reach Next. Once a network connects (or the page opens connected),
+            // the focus moves to Next; only on that change, so the list keeps the focus when
+            // the user goes back to it.
+            if (enabled && !Boolean.TRUE.equals(mNextConnected)) {
+                getNextButton().requestFocus();
+            }
+            mNextConnected = enabled;
         }
     }
 
