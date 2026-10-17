@@ -21,6 +21,20 @@ on property:sys.screen.state=on && property:sys.rg52.screen_was_off=1
     setprop sys.rg52.screen_was_off 0
     start rg52_hdmi_rebind
 
+# Режим nano: DRM-оболочка nano отдала экран SurfaceFlinger (запуск игры, передача
+# экрана при подключении HDMI). Если HDMI вставляли и вынимали в её главном меню, HWC
+# считает его подключённым и гасит встроенный экран - см. rg52-hdmi-unplug.sh nano.
+on property:init.svc.gammaos-nano=stopped && property:sys.gammaos.minimal_boot=1
+    start rg52_hdmi_nano
+
+# root: запись в /sys/class/drm/card0-HDMI-A-1/status.
+service rg52_hdmi_nano /system/bin/rg52-hdmi-unplug.sh nano
+    user root
+    group root shell wakelock
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
 # wakelock: запись в /sys/power/wake_lock (radio:wakelock 0660) на время
 # «сна-пробуждения».
 service rg52_hdmi_unplug /system/bin/rg52-hdmi-unplug.sh

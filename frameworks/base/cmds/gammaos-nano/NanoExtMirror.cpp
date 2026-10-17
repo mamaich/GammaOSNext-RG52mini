@@ -102,14 +102,28 @@ void mirrorLoop(sp<SurfaceComposerClient> session, sp<IBinder> primary) {
         applied = Placement();
     };
 
+    sp<IBinder> staleOff;  // «призрачный» дисплей, который уже выключили
     for (;;) {
         usleep(500 * 1000);
         std::optional<PhysicalDisplayId> ext = nanoExtMirrorWanted() ? externalDisplay() : std::nullopt;
         sp<IBinder> token = ext ? SurfaceComposerClient::getPhysicalDisplayToken(*ext) : nullptr;
+        // Кабель вынули, пока экраном владела DRM-оболочка: SurfaceFlinger отключения не
+        // видел и держит внешний дисплей, а включённый выход HDMI гасит встроенный экран
+        // (rk628 - один выход). Верим разъёму: нет кабеля - дисплея нет, и его выключаем.
+        if (token != nullptr && !nanoHdmiConnected()) {
+            drop("HDMI cable is not connected");
+            if (staleOff != token) {
+                SurfaceComposerClient::setDisplayPowerMode(token, kPowerOff);
+                staleOff = token;
+                ALOGI("ext mirror: stale external %" PRIu64 " without a cable, powered off", ext->value);
+            }
+            continue;
+        }
         if (token == nullptr) {
             drop("no external display");
             continue;
         }
+        staleOff.clear();
         if (extToken != nullptr && extToken != token) drop("external display changed");
 
         // Экран выключили - гасим и HDMI, иначе копия держала бы его включённым.
