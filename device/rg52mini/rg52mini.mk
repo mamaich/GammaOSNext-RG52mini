@@ -263,6 +263,16 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-bios.sh:system/bin/rg52-bios.sh \
     device/rg52mini/rg52-bios.rc:system/etc/init/rg52-bios.rc
 
+# Папки и платформы dArkOS в базе Daijishō системы, обновлённой по воздуху (исходная
+# база из daijisho.tar.zst распаковывается только при установке). SQL и список обоев
+# собирает device/rg52mini/tools/daijisho/build.sh. См. rg52-daijisho.sh.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-daijisho.sh:system/bin/rg52-daijisho.sh \
+    device/rg52mini/rg52-daijisho.rc:system/etc/init/rg52-daijisho.rc \
+    device/rg52mini/daijisho/aliases.sql:system/etc/rg52-daijisho/aliases.sql \
+    device/rg52mini/daijisho/platforms.sql:system/etc/rg52-daijisho/platforms.sql \
+    device/rg52mini/daijisho/walls.txt:system/etc/rg52-daijisho/walls.txt
+
 # Загрузочная анимация GammaOS с кадром 480x480 вместо 2880x2880: на экране он
 # всё равно 480x480, а исходный занимал 32 МиБ памяти GPU и перечитывался с
 # шестикратным уменьшением 60 раз в секунду - пока анимация держит экран до

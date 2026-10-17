@@ -8,7 +8,10 @@
 # Выдаёт SQL; повторный запуск ничего не меняет (платформа с таким unique_id
 # пропускается). Номера платформ фиксированные - по ним названы файлы обоев
 # platform_wallpapers/<id>.png; соответствие номер -> обои пишется в walls.json.
-#   platforms.py <Daijishou.db (только чтение)> <каталог с *.json> <walls.json> > platforms.sql
+# С двумя последними аргументами ещё и SQL переноса на уже установленную систему
+# (rg52-daijisho.sh): без фиксированных номеров - у пользователя могут быть свои
+# платформы, - и список <unique_id> <номер обоев в архиве> для обоев.
+#   platforms.py <Daijishou.db (только чтение)> <каталог с *.json> <walls.json> #       [<migrate.sql> <walls.txt>] > platforms.sql
 import json
 import os
 import re
@@ -16,6 +19,7 @@ import sqlite3
 import sys
 
 DB, DJP, WALLS = sys.argv[1], sys.argv[2], sys.argv[3]
+MIGRATE, MWALLS = (sys.argv[4], sys.argv[5]) if len(sys.argv) > 5 else (None, None)
 
 TREE = "content://com.android.externalstorage.documents/tree/"
 EXT = ["00000000-0000-0000-0000-00000000000%d" % n for n in range(1, 6)]
@@ -123,9 +127,35 @@ def js(v):
     return json.dumps(v, separators=(",", ":"), ensure_ascii=False)
 
 
-pid, plid = FIRST_PLATFORM_ID, FIRST_PLAYER_ID
-walls = {}
-print("BEGIN;")
+COLS = ("unique_id, name, shortname, description, is_visible, "
+        "scrape_preview_media, wallpaper_path, thumbnail_path, color_theme, color_on_theme, "
+        "accept_filename_regex, default_player_id, player_id_list, scraper_source_list, "
+        "box_art_aspect_ratio_id, use_custom_box_art_aspect_ratio, custom_box_art_aspect_ratio, "
+        "screen_aspect_ratio_id, use_custom_screen_aspect_ratio, custom_screen_aspect_ratio, "
+        "items_sync_tree_uri_list, retro_achievements_console_id_list, extra")
+PCOLS = ("unique_id, player, name, description, am_start_arguments, "
+         "kill_package_processes, kill_package_processes_warning, accepted_filename_regex, extra")
+
+
+def player_vals(pl):
+    return "%s, 1, %s, %s, %s, %s, %s, %s, %s" % (
+        q(pl["uniqueId"]), q(pl["name"]), q(pl.get("description")),
+        q(gammaos_ra(pl["amStartArguments"])), q(bool(pl["killPackageProcesses"])),
+        q(bool(pl["killPackageProcessesWarning"])), q(pl["acceptedFilenameRegex"]), q(pl.get("extra") or ""))
+
+
+def platform_vals(p, name, regex, wallpaper, default_id, id_list, paths):
+    return "%s, %s, %s, %s, %d, 1, %s, NULL, NULL, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s" % (
+        q(p["uniqueId"]), q(name), q(p["shortname"]), q(p.get("description")),
+        0 if p["shortname"] in HIDDEN else 1, wallpaper, q(regex or ANY), default_id, id_list,
+        q(js(p["scraperSourceList"])),
+        q(p["boxArtAspectRatioId"]), q(bool(p["useCustomBoxArtAspectRatio"])), q(p["customBoxArtAspectRatio"]),
+        q(p["screenAspectRatioId"]), q(bool(p["useCustomScreenAspectRatio"])), q(p["customScreenAspectRatio"]),
+        q(js(paths)), q(js(p["retroAchievementsConsoleIdList"])), q(p.get("extra") or ""))
+
+
+# все платформы с номерами, как в исходной базе
+plan, pid = [], FIRST_PLATFORM_ID
 for src, name, folders, default, regex, wall in SPECS:
     j = json.load(open(os.path.join(DJP, src + ".json"), encoding="utf-8"))
     p = j["platform"]
@@ -134,45 +164,59 @@ for src, name, folders, default, regex, wall in SPECS:
         players.insert(0, EMUCOREX_GIT)
     if p["shortname"] in SKIP_IDS:
         pid = SKIP_IDS[p["shortname"]]
+    # в официальных описаниях бывают две записи с одним uniqueId (flycast: uri и path) - берутся обе
+    di = [i for i, pl in enumerate(players) if pl["uniqueId"] == default]
+    assert di, (name, default)
+    plan.append((pid, p, name, players, di[0], [u for f in folders for u in uris(f)], regex, wall))
+    pid += 1
+
+# исходная база (build.sh): номера фиксированные
+plid, walls = FIRST_PLAYER_ID, {}
+print("BEGIN;")
+for pid, p, name, players, di, paths, regex, wall in plan:
     if p["uniqueId"] in existing:
         print("-- skip %s: already present" % p["uniqueId"])
-        pid += 1
         continue
-    ids, default_id = [], None
-    for pl in players:
-        # в официальных описаниях бывают две записи с одним uniqueId (flycast: uri и path) - берутся обе
-        print("INSERT INTO PlayerEntity (id, unique_id, player, name, description, am_start_arguments, "
-              "kill_package_processes, kill_package_processes_warning, accepted_filename_regex, extra) VALUES "
-              "(%d, %s, 1, %s, %s, %s, %s, %s, %s, %s);" % (
-                  plid, q(pl["uniqueId"]), q(pl["name"]), q(pl.get("description")),
-                  q(gammaos_ra(pl["amStartArguments"])), q(bool(pl["killPackageProcesses"])),
-                  q(bool(pl["killPackageProcessesWarning"])), q(pl["acceptedFilenameRegex"]), q(pl.get("extra") or "")))
-        ids.append(plid)
-        if pl["uniqueId"] == default and default_id is None:
-            default_id = plid
-        plid += 1
-    assert default_id, (name, default)
-    paths = [u for f in folders for u in uris(f)]
-    print("INSERT INTO PlatformEntity (id, unique_id, name, shortname, description, is_visible, "
-          "scrape_preview_media, wallpaper_path, thumbnail_path, color_theme, color_on_theme, "
-          "accept_filename_regex, default_player_id, player_id_list, scraper_source_list, "
-          "box_art_aspect_ratio_id, use_custom_box_art_aspect_ratio, custom_box_art_aspect_ratio, "
-          "screen_aspect_ratio_id, use_custom_screen_aspect_ratio, custom_screen_aspect_ratio, "
-          "items_sync_tree_uri_list, retro_achievements_console_id_list, extra) VALUES "
-          "(%d, %s, %s, %s, %s, %d, 1, %s, NULL, NULL, NULL, %s, %d, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);" % (
-              pid, q(p["uniqueId"]), q(name), q(p["shortname"]), q(p.get("description")),
-              0 if p["shortname"] in HIDDEN else 1,
-              q(WALL % pid), q(regex or ANY), default_id, q(js(ids)), q(js(p["scraperSourceList"])),
-              q(p["boxArtAspectRatioId"]), q(bool(p["useCustomBoxArtAspectRatio"])), q(p["customBoxArtAspectRatio"]),
-              q(p["screenAspectRatioId"]), q(bool(p["useCustomScreenAspectRatio"])), q(p["customScreenAspectRatio"]),
-              q(js(paths)), q(js(p["retroAchievementsConsoleIdList"])), q(p.get("extra") or "")))
+    ids = list(range(plid, plid + len(players)))
+    for i, pl in zip(ids, players):
+        print("INSERT INTO PlayerEntity (id, %s) VALUES (%d, %s);" % (PCOLS, i, player_vals(pl)))
+    plid += len(players)
+    print("INSERT INTO PlatformEntity (id, %s) VALUES (%d, %s);" % (
+        COLS, pid, platform_vals(p, name, regex, q(WALL % pid), str(ids[di]), q(js(ids)), paths)))
     walls[pid] = wall
     print("-- %d %s: %d players, default %d, %d paths%s" % (
-        pid, name, len(ids), default_id, len(paths), ", hidden" if p["shortname"] in HIDDEN else ""))
-    pid += 1
+        pid, name, len(ids), ids[di], len(paths), ", hidden" if p["shortname"] in HIDDEN else ""))
 # и для платформ, добавленных прежним запуском (GameCube скрыт позже, чем добавлен)
 print("UPDATE PlatformEntity SET is_visible = 0 WHERE shortname IN (%s) AND is_visible = 1;"
       % ", ".join(q(s) for s in sorted(HIDDEN)))
 print("COMMIT;")
 if walls:
     json.dump(walls, open(WALLS, "w"))
+
+# перенос на установленную систему: номера раздаёт сама база. Новые эмуляторы получают
+# номера больше всех прежних, по ним платформа и собирает свой список; платформа и её
+# эмуляторы добавляются, только если платформы с таким unique_id ещё нет.
+if MIGRATE:
+    with open(MIGRATE, "w", encoding="utf-8", newline="\n") as o, \
+            open(MWALLS, "w", encoding="utf-8", newline="\n") as w:
+        o.write("-- generated by device/rg52mini/tools/daijisho/platforms.py, do not edit\n")
+        o.write("CREATE TEMP TABLE IF NOT EXISTS rg52_m (k TEXT PRIMARY KEY, v INTEGER);\n")
+        new = "(SELECT id FROM PlayerEntity WHERE id > (SELECT v FROM rg52_m WHERE k = 'base') ORDER BY id)"
+        for pid, p, name, players, di, paths, regex, wall in plan:
+            uid = q(p["uniqueId"])
+            o.write("\n-- %s\nBEGIN;\n" % name)
+            o.write("INSERT OR REPLACE INTO rg52_m VALUES ('base', (SELECT COALESCE(MAX(id), 0) FROM PlayerEntity)), "
+                    "('add', (SELECT COUNT(*) = 0 FROM PlatformEntity WHERE unique_id = %s));\n" % uid)
+            for pl in players:
+                o.write("INSERT INTO PlayerEntity (%s) SELECT %s WHERE (SELECT v FROM rg52_m WHERE k = 'add');\n"
+                        % (PCOLS, player_vals(pl)))
+            o.write("INSERT INTO PlatformEntity (%s) SELECT %s WHERE (SELECT v FROM rg52_m WHERE k = 'add');\n" % (
+                COLS, platform_vals(
+                    p, name, regex, "NULL",
+                    "(%s LIMIT 1 OFFSET %d)" % (new[1:-1], di),
+                    "(SELECT json_group_array(id) FROM %s)" % new, paths)))
+            o.write("UPDATE PlatformEntity SET wallpaper_path = "
+                    "'/data/user/0/com.magneticchen.daijishou/files/platform_wallpapers/' || id || '.png' "
+                    "WHERE unique_id = %s AND wallpaper_path IS NULL;\n" % uid)
+            o.write("COMMIT;\n")
+            w.write("%s %d\n" % (p["uniqueId"], pid))

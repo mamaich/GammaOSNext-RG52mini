@@ -1,0 +1,16 @@
+fbneo 23
+mame 24
+cps1 25
+cps2 26
+cps3 27
+neogeo 28
+atomiswave 29
+tg16 30
+tgcd 31
+sega32x 32
+segacd 33
+atari2600 34
+lynx 35
+cpc 36
+gc 38
+ps2 39

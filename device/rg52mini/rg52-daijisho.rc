@@ -1,0 +1,17 @@
+# Папки и платформы dArkOS в уже установленной базе Daijishō, см. rg52-daijisho.sh.
+# Один раз на установку (persist.rg52.daijisho_rev): на загрузке - для систем,
+# обновлённых по воздуху, и по окончании setup.sh (на новой установке база уже из
+# нового архива - скрипт только ставит отметку).
+
+service rg52_daijisho /system/bin/rg52-daijisho.sh
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+on property:sys.boot_completed=1
+    start rg52_daijisho
+
+on property:persist.gammaos.setupwizard_done=1 && property:sys.boot_completed=1
+    start rg52_daijisho
