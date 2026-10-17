@@ -10,6 +10,22 @@
         <item name="sudUsePartnerHeavyTheme">true</item>
     </style>
 
+    <!-- GammaOS: date and time pickers with number wheels, which work with the D-pad,
+         instead of the clock face and the calendar (DateTimeActivity). -->
+    <style name="DateTimePickerDialog" parent="@android:style/ThemeOverlay.Material.Dialog.Alert">
+        <item name="android:timePickerStyle">@style/DateTimePickerDialog.TimePicker</item>
+        <item name="android:datePickerStyle">@style/DateTimePickerDialog.DatePicker</item>
+    </style>
+
+    <style name="DateTimePickerDialog.TimePicker" parent="@android:style/Widget.Material.TimePicker">
+        <item name="android:timePickerMode">spinner</item>
+    </style>
+
+    <style name="DateTimePickerDialog.DatePicker" parent="@android:style/Widget.Material.DatePicker">
+        <item name="android:datePickerMode">spinner</item>
+        <item name="android:calendarViewShown">false</item>
+    </style>
+
     <style name="SpinnerItem">
         <item name="android:textSize">15sp</item>
         <item name="android:paddingLeft">@dimen/content_margin_left</item>

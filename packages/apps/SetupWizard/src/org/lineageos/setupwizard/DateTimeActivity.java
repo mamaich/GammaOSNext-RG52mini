@@ -7,19 +7,23 @@
 package org.lineageos.setupwizard;
 
 import android.app.AlarmManager;
+import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.Dialog;
 import android.app.TimePickerDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.format.DateFormat;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.AdapterView;
+import android.widget.Button;
 import android.widget.DatePicker;
 import android.widget.SimpleAdapter;
 import android.widget.Spinner;
@@ -48,6 +52,8 @@ public class DateTimeActivity extends BaseSetupWizardActivity implements
     private static final String KEY_OFFSET = "offset"; // value: int (Integer)
 
     private TimeZone mCurrentTimeZone;
+    private Spinner mTimeZoneSpinner;
+    private int mShownTzPosition = -1;
     private TextView mDateTextView;
     private TextView mTimeTextView;
 
@@ -67,6 +73,7 @@ public class DateTimeActivity extends BaseSetupWizardActivity implements
         getGlifLayout().setDescriptionText(getString(R.string.date_time_summary));
 
         final Spinner spinner = findViewById(R.id.timezone_list);
+        mTimeZoneSpinner = spinner;
         final SimpleAdapter adapter = constructTimezoneAdapter(this);
         mCurrentTimeZone = TimeZone.getDefault();
         View dateView = findViewById(R.id.date_item);
@@ -77,15 +84,21 @@ public class DateTimeActivity extends BaseSetupWizardActivity implements
         mTimeTextView = findViewById(R.id.time_text);
         // Pre-select current/default timezone
         mHandler.post(() -> {
-            int tzIndex = getTimeZoneIndex(adapter, mCurrentTimeZone);
+            // GammaOS: the spinner reports this initial selection as if the user had picked
+            // it, so only a different entry is applied. A fresh install is on GMT, which is
+            // not in the list, and used to end up on its first entry, Midway (GMT-11), as
+            // soon as this page was shown; now an entry with the same offset is shown.
+            mShownTzPosition = getTimeZoneIndex(adapter, mCurrentTimeZone);
             spinner.setAdapter(adapter);
-            if (tzIndex != -1) {
-                spinner.setSelection(tzIndex);
-            }
+            spinner.setSelection(mShownTzPosition);
             spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
                 @Override
                 public void onItemSelected(AdapterView<?> adapterView, View view, int position,
                         long id) {
+                    if (position == mShownTzPosition) {
+                        return;
+                    }
+                    mShownTzPosition = position;
                     final Map<?, ?> map = (Map<?, ?>) adapterView.getItemAtPosition(position);
                     final String tzId = (String) map.get(KEY_ID);
                     if (mCurrentTimeZone != null && !mCurrentTimeZone.getID().equals(tzId)) {
@@ -102,6 +115,8 @@ public class DateTimeActivity extends BaseSetupWizardActivity implements
                 public void onNothingSelected(AdapterView<?> adapterView) {
                 }
             });
+            // GammaOS: start on the time zone list rather than on Next, see dispatchKeyEvent().
+            spinner.requestFocus();
         });
         // Pre-select current/default date if epoch
         mHandler.post(() -> {
@@ -139,6 +154,44 @@ public class DateTimeActivity extends BaseSetupWizardActivity implements
     public void onPause() {
         super.onPause();
         unregisterReceiver(mIntentReceiver);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        // GammaOS: A/Center/Enter always mean Next in the wizard (BaseSetupWizardActivity),
+        // so the time zone, date and time here could only be changed with a mouse. On these
+        // items A opens them; anywhere else it still goes to the next page.
+        if (isSelectKey(event.getKeyCode())) {
+            final View focus = getCurrentFocus();
+            if (focus != null && (focus == mTimeZoneSpinner
+                    || focus.getId() == R.id.date_item || focus.getId() == R.id.time_item)) {
+                if (event.getAction() == KeyEvent.ACTION_UP) {
+                    focus.performClick();
+                }
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    private static boolean isSelectKey(int keyCode) {
+        return keyCode == KeyEvent.KEYCODE_BUTTON_A || keyCode == KeyEvent.KEYCODE_DPAD_CENTER
+                || keyCode == KeyEvent.KEYCODE_ENTER;
+    }
+
+    // GammaOS: the pickers show number wheels (R.style.DateTimePickerDialog) instead of the
+    // clock face and the calendar: up/down change a field, left/right move between fields.
+    // A confirms the dialog - on a wheel it would open the on-screen keyboard instead.
+    private static void confirmWithA(AlertDialog dialog) {
+        dialog.setOnKeyListener((d, keyCode, event) -> {
+            if (!isSelectKey(keyCode) || dialog.getCurrentFocus() instanceof Button) {
+                return false;
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                dialog.getButton(DialogInterface.BUTTON_POSITIVE).performClick();
+            }
+            return true;
+        });
     }
 
     @Override
@@ -211,7 +264,25 @@ public class DateTimeActivity extends BaseSetupWizardActivity implements
                 return i;
             }
         }
-        return -1;
+        // GammaOS: not in the list (GMT on a fresh install) - an entry with the same
+        // current offset shows the same time. One with the same standard offset is
+        // preferred: for GMT that is UTC rather than the Azores on summer time.
+        final Integer offset = tz.getOffset(System.currentTimeMillis());
+        int sameOffset = -1;
+        for (int i = 0; i < listSize; i++) {
+            final Map<?, ?> map = (Map<?, ?>) adapter.getItem(i);
+            if (!offset.equals(map.get(KEY_OFFSET))) {
+                continue;
+            }
+            final String id = (String) map.get(KEY_ID);
+            if (TimeZone.getTimeZone(id).getRawOffset() == tz.getRawOffset()) {
+                return i;
+            }
+            if (sameOffset < 0) {
+                sameOffset = i;
+            }
+        }
+        return Math.max(sameOffset, 0);
     }
 
     private static void setDate(Context context, int year, int month, int day) {
@@ -288,12 +359,15 @@ public class DateTimeActivity extends BaseSetupWizardActivity implements
         @Override
         public Dialog onCreateDialog(Bundle savedInstanceState) {
             final Calendar calendar = Calendar.getInstance();
-            return new TimePickerDialog(
+            final TimePickerDialog dialog = new TimePickerDialog(
                     getActivity(),
+                    R.style.DateTimePickerDialog,
                     this,
                     calendar.get(Calendar.HOUR_OF_DAY),
                     calendar.get(Calendar.MINUTE),
                     DateFormat.is24HourFormat(getActivity()));
+            confirmWithA(dialog);
+            return dialog;
         }
     }
 
@@ -315,12 +389,15 @@ public class DateTimeActivity extends BaseSetupWizardActivity implements
         @Override
         public Dialog onCreateDialog(Bundle savedInstanceState) {
             final Calendar calendar = Calendar.getInstance();
-            return new DatePickerDialog(
+            final DatePickerDialog dialog = new DatePickerDialog(
                     getActivity(),
+                    R.style.DateTimePickerDialog,
                     this,
                     calendar.get(Calendar.YEAR),
                     calendar.get(Calendar.MONTH),
                     calendar.get(Calendar.DAY_OF_MONTH));
+            confirmWithA(dialog);
+            return dialog;
         }
     }
 }
