@@ -54,4 +54,18 @@
          bluetooth_manager). Пустое имя - KeyboardUI ничего не делает. Проверка:
          cmd overlay lookup android android:string/config_packagedKeyboardName -->
     <string name="config_packagedKeyboardName" translatable="false"></string>
+
+    <!-- Наушники в гнезде 3,5 мм - через событие ввода.
+
+         Гнездо видит драйвер звуковой карты (rockchip_multicodecs, hp-det-gpio
+         GPIO0_A7): он сообщает о наушниках через snd_soc_jack, то есть
+         устройством ввода «rockchip-rk817 Headset» с SW_HEADPHONE_INSERT и
+         SW_MICROPHONE_INSERT. Ни switch h2w, ни extcon наушников у нас нет, а RRO из
+         vendor ставит false - и WiredAccessoryManager о наушниках не узнавал вовсе:
+         звук оставался на маршруте Speaker, аудио-HAL держал Playback Path = SPK, и
+         кодек rk817 не выключал усилитель динамика (spk-ctl-gpios GPIO3_C3), пока
+         вставлены наушники. С true система переключает вывод на проводные наушники,
+         HAL ставит HP/HP_NO_MIC, и rk817_digital_mute_dac() гасит усилитель сам.
+         Проверка: cmd overlay lookup android android:bool/config_useDevInputEventForAudioJack -->
+    <bool name="config_useDevInputEventForAudioJack">true</bool>
 </resources>
