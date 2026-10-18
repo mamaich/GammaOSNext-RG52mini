@@ -510,6 +510,15 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-perf.sh:system/bin/rg52-perf.sh \
     device/rg52mini/rg52-perf.rc:system/etc/init/rg52-perf.rc
 
+# Почти пустая батарея: при напряжении около 3,66 В пик тока всех ядер вместе с
+# включением усилителя динамика перезапускает консоль (так и выглядела
+# перезагрузка при отключении USB на ревизии A). Служба выключает звук зарядки и
+# при низком напряжении просит у rg52-perf.sh потолок процессора. Разбор - в
+# rg52-lowbat.sh.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-lowbat.sh:system/bin/rg52-lowbat.sh \
+    device/rg52mini/rg52-lowbat.rc:system/etc/init/rg52-lowbat.rc
+
 # Размер zram. Vendor заводит его на 100 % памяти (fstab.rk30board,
 # zramsize=100%), и при таком объёме ядро набивает только его, а до файла
 # подкачки очередь не доходит никогда: сжатые страницы продолжают занимать ту же

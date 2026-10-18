@@ -68,4 +68,17 @@
          HAL ставит HP/HP_NO_MIC, и rk817_digital_mute_dac() гасит усилитель сам.
          Проверка: cmd overlay lookup android android:bool/config_useDevInputEventForAudioJack -->
     <bool name="config_useDevInputEventForAudioJack">true</bool>
+
+    <!-- Одна громкость на все звуки.
+
+         Ни телефонии, ни android.software.leanback у устройства нет, поэтому
+         AudioService выбирал раскладку потоков обычного устройства: кнопки
+         громкости меняют только музыку, а системные звуки, уведомления и будильник
+         живут на своих громкостях (STREAM_SYSTEM сведён к STREAM_RING). Отсюда
+         звук зарядки на полную громкость при музыке на нуле. С true потоки
+         сводятся к STREAM_MUSIC (раскладка телевизора): один ползунок управляет
+         всем, Settings и SystemUI сами прячут лишние ползунки. Режимы звонка
+         (без звука, вибрация) при этом не действуют - на консоли они не нужны.
+         Проверка: dumpsys audio | grep mIsSingleVolume -->
+    <bool name="config_single_volume">true</bool>
 </resources>

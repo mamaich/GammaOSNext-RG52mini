@@ -1,0 +1,12 @@
+# RG52 Mini: защита от перезапуска на почти пустой батарее - выключение звука
+# зарядки и потолок процессора при низком напряжении. Разбор - в rg52-lowbat.sh.
+#
+# Служба не oneshot: цикл живёт всё время, а если умрёт, init его перезапустит.
+service rg52_lowbat /system/bin/rg52-lowbat.sh
+    user root
+    group root system
+    disabled
+    seclabel u:r:shell:s0
+
+on property:sys.boot_completed=1
+    start rg52_lowbat

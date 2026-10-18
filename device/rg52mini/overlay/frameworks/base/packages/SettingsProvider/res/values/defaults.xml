@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Без звука зарядки.
+
+         Самого звука в образе нет (/system/product/media/audio/ui/ChargingStarted.ogg
+         отсутствует), но при смене питания Android всё равно открывает поток на
+         динамик, и включается усилитель. При отключении кабеля на почти пустой
+         батарее (около 3,66 В) это совпадает с пиком нагрузки на процессор, и
+         консоль перезапускается - разбор в device/rg52mini/rg52-lowbat.sh. Значение
+         действует на чистой установке; при обновлении по воздуху настройку один раз
+         выключает rg52-lowbat.sh. Проверка: settings get secure charging_sounds_enabled -->
+    <bool name="def_charging_sounds_enabled">false</bool>
+</resources>

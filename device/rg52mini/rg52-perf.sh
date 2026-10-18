@@ -267,6 +267,18 @@ for f in $(cat "$CPU/scaling_available_frequencies" "$CPU/scaling_boost_frequenc
 done
 [ "$CPU_MAX" = max ] && CPU_MAX=$CPU_TOP
 [ "$CPU_MIN" = max ] && CPU_MIN=$CPU_TOP
+# Почти пустая батарея (sys.rg52.lowbat=1 ставит rg52-lowbat.sh): потолок
+# процессора persist.rg52.lowbat.cpu_khz в любом режиме, пол не выше потолка.
+# Иначе пик тока всех ядер вместе с включением усилителя динамика роняет vcc_sys,
+# и PMIC перезапускает консоль. Разбор - в rg52-lowbat.sh.
+LOWBAT=0
+LB_CAP=$(getprop persist.rg52.lowbat.cpu_khz 1416000)
+case "$LB_CAP" in ''|*[!0-9]*) LB_CAP=0 ;; esac
+if [ "$(getprop sys.rg52.lowbat)" = 1 ] && [ "$LB_CAP" -gt 0 ]; then
+    LOWBAT=1
+    { [ -z "$CPU_MAX" ] || [ "$CPU_MAX" -gt "$LB_CAP" ]; } && CPU_MAX=$LB_CAP
+    [ -n "$CPU_MIN" ] && [ "$CPU_MIN" -gt "$LB_CAP" ] && CPU_MIN=$LB_CAP
+fi
 [ -n "$CPU_MAX" ] && w "$CPU/scaling_max_freq" "$CPU_MAX"
 [ -n "$CPU_MIN" ] && w "$CPU/scaling_min_freq" "$CPU_MIN"
 [ -n "$GPU_GOV" ] && [ -n "$GPU" ] && w "$GPU/governor" "$GPU_GOV"
@@ -358,4 +370,4 @@ done
 log -t rg52-perf "mode $MODE: cpu $(cat $CPU/scaling_governor 2>/dev/null) \
 $(cat $CPU/scaling_min_freq 2>/dev/null)-$(cat $CPU/scaling_max_freq 2>/dev/null), \
 gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null) max $(cat ${GPU:-/dev/null}/max_freq 2>/dev/null), boost $(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null), thermal $(cat ${TZ:-/dev/null}/trip_point_0_temp 2>/dev/null)/$(cat ${TZ:-/dev/null}/trip_point_1_temp 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/governor 2>/dev/null) $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null), \
-joypad poll ${JOY} ms"
+joypad poll ${JOY} ms, lowbat ${LOWBAT}"
