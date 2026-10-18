@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Приоритет выше TvWifiOverlay из device/google/atv (0). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.gammaos.rg52.overlay.wifi.resources"
+    android:versionCode="1"
+    android:versionName="1.0">
+
+    <application android:hasCode="false" />
+
+    <overlay
+        android:targetPackage="com.android.wifi.resources"
+        android:targetName="WifiCustomization"
+        android:priority="1"
+        android:isStatic="true" />
+
+</manifest>

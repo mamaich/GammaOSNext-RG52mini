@@ -1,0 +1,8 @@
+// Настройки службы Wi-Fi для RG52 Mini, см. res/values/config.xml.
+runtime_resource_overlay {
+    name: "Rg52WifiOverlay",
+    certificate: "platform",
+    resource_dirs: ["res"],
+    product_specific: true,
+    sdk_version: "current",
+}

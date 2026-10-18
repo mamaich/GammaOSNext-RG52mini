@@ -402,6 +402,13 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 # в /system/product/overlay), а не вкомпилируется в framework-res.
 PRODUCT_PACKAGE_OVERLAYS += device/rg52mini/overlay
 
+# Настройки службы Wi-Fi (её ресурсы живут в апексе com.android.wifi, поэтому
+# отдельный RRO, а не каталог overlay): после аварийного перезапуска Wi-Fi
+# подключается сам, а не через 5 минут. Подробности - в
+# wifi-overlay/res/values/config.xml.
+PRODUCT_PACKAGES += \
+    Rg52WifiOverlay
+
 # Пределы низкопамятного убийцы подобраны под zram без файла подкачки -
 # заводской режим этого устройства. Замерено на TMNT (нужно около 2 ГБ
 # при 1,95 ГБ памяти), одинаковые отрезки, zram 100 % на zstd:
