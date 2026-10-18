@@ -1166,6 +1166,12 @@
             android:summary="@string/gammaos_toolbox_reboot_emmc_summary"
             android:defaultValue="0" />
 
+        <SwitchPreference
+            android:key="persist.rg52.lowbat.vol_limit"
+            android:title="@string/gammaos_toolbox_lowbat_vol_limit_title"
+            android:summary="@string/gammaos_toolbox_lowbat_vol_limit_summary"
+            android:defaultValue="1" />
+
     </PreferenceCategory>
 
     <!-- ==================== RetroArch & Emulation ==================== -->

@@ -91,6 +91,8 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         DEFAULTS.put("persist.rg52.zram.backing_mb", "0");
         DEFAULTS.put("persist.rg52.zram.wb_threshold_mb", "300");
         DEFAULTS.put("persist.rg52.reboot_emmc", "0");
+        // AudioService reads it with getInt, so "1"/"0" (see device/rg52mini/rg52-lowbat.sh).
+        DEFAULTS.put("persist.rg52.lowbat.vol_limit", "1");
         // Matches the build default in device/rg52mini/rg52mini.mk.
         DEFAULTS.put("persist.rg52.fixed_rotation", "1");
         DEFAULTS.put("persist.gammaos.immersive", "0");
@@ -870,6 +872,12 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
                 android.provider.Settings.Secure.putInt(
                         getActivity().getContentResolver(),
                         "gamma_phone_taskbar_toggle", val ? 1 : 0);
+            }
+            // RG52: AudioService re-reads the speaker volume ceiling on this broadcast;
+            // otherwise the switch would act only on the next battery update.
+            if ("persist.rg52.lowbat.vol_limit".equals(key)) {
+                getActivity().sendBroadcast(
+                        new android.content.Intent("org.gammaos.rg52.action.LOWBAT_CHANGED"));
             }
             return true;
         });

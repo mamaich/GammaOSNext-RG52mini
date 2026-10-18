@@ -713,6 +713,32 @@ public class AudioService extends IAudioService.Stub
     // taking down system_server (and with it storage). Single-threaded, so onReceive ordering is kept.
     private final HandlerThread mReceiverThread = new HandlerThread("AudioService.Receiver");
 
+    // RG52 Mini: speaker volume ceiling at a near-empty battery. Below about 3.7 V the battery
+    // cannot supply the current peaks of the external speaker amplifier at high volume: VSYS
+    // drops under the PMIC under-voltage threshold and the RK817 restarts the whole console
+    // (ON_SOURCE RESTART_RESETB, no kernel panic). The cut-off is shared with dArkOS on the
+    // same hardware; there the codec DAC defaults to -20 dB, so it never gets there. Measured
+    // on the console: at 3.64 V the speaker survives about 13.5 dB below index 25, hence the
+    // default ceiling of 12 of 25 (-15.8 dB on the vendor speaker curve with DRC).
+    // device/rg52mini/rg52-lowbat.sh sets sys.rg52.lowbat from the battery voltage and sends
+    // ACTION_RG52_LOWBAT_CHANGED; the broadcast only makes us re-read the properties, so a
+    // spoofed one changes nothing. persist.rg52.lowbat.vol_limit=0 (GammaOS Toolbox) turns
+    // the ceiling off, persist.rg52.lowbat.vol_max sets it. Headphones and HDMI are not
+    // limited: only the STREAM_MUSIC index of DEVICE_OUT_SPEAKER is clamped, and with
+    // config_single_volume every stream is an alias of STREAM_MUSIC.
+    private static final String ACTION_RG52_LOWBAT_CHANGED =
+            "org.gammaos.rg52.action.LOWBAT_CHANGED";
+    private static final int RG52_DEFAULT_VOL_MAX = 12;
+    private volatile boolean mRg52LowBatLimitActive = false;
+    private volatile int mRg52LowBatMaxIndex = Integer.MAX_VALUE; // internal units (x10)
+    private long mRg52LowBatToastTime = 0;
+    private final BroadcastReceiver mRg52LowBatReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            updateRg52LowBatteryLimit();
+        }
+    };
+
     private IMediaProjectionManager mProjectionService; // to validate projection token
 
     /** Interface for UserManagerService. */
@@ -1541,6 +1567,13 @@ public class AudioService extends IAudioService.Stub
         // system_server and cascade to a FUSE teardown (see mReceiverThread for the full rationale).
         mReceiverThread.start();
         mContext.registerReceiverAsUser(mReceiver, UserHandle.ALL, intentFilter, null,
+                new Handler(mReceiverThread.getLooper()), Context.RECEIVER_EXPORTED);
+
+        // RG52: speaker volume ceiling at a near-empty battery (see mRg52LowBatLimitActive).
+        // ACTION_BATTERY_CHANGED is sticky, so this also evaluates the state right away.
+        IntentFilter lowBatFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+        lowBatFilter.addAction(ACTION_RG52_LOWBAT_CHANGED);
+        mContext.registerReceiverAsUser(mRg52LowBatReceiver, UserHandle.ALL, lowBatFilter, null,
                 new Handler(mReceiverThread.getLooper()), Context.RECEIVER_EXPORTED);
 
         SubscriptionManager subscriptionManager = mContext.getSystemService(
@@ -5043,6 +5076,42 @@ public class AudioService extends IAudioService.Stub
                     streamState,
                     0);
         }
+    }
+
+    // RG52: re-read the low battery state and, when the ceiling comes on, bring the speaker
+    // volume down to it. Runs on mReceiverThread. It never raises the volume back.
+    private void updateRg52LowBatteryLimit() {
+        final VolumeStreamState music = mStreamStates[AudioSystem.STREAM_MUSIC];
+        final boolean active = SystemProperties.getInt("persist.rg52.lowbat.vol_limit", 1) != 0
+                && "1".equals(SystemProperties.get("sys.rg52.lowbat"));
+        int max = SystemProperties.getInt("persist.rg52.lowbat.vol_max", RG52_DEFAULT_VOL_MAX)
+                * 10;
+        max = Math.max(music.getMinIndex(), Math.min(max, music.getMaxIndex()));
+        final boolean wasActive = mRg52LowBatLimitActive;
+        mRg52LowBatMaxIndex = max;
+        mRg52LowBatLimitActive = active;
+        if (active != wasActive) {
+            Log.i(TAG, "RG52 low battery speaker volume limit "
+                    + (active ? "on, max " + (max + 5) / 10 : "off"));
+        }
+        if (active && music.getIndex(AudioSystem.DEVICE_OUT_SPEAKER) > max) {
+            setStreamVolumeInt(AudioSystem.STREAM_MUSIC, max, AudioSystem.DEVICE_OUT_SPEAKER,
+                    false, "rg52-lowbat", true);
+            showRg52LowBatToast();
+        }
+    }
+
+    // RG52: called by VolumeStreamState.setIndex when the ceiling cut a speaker volume.
+    // At most one toast every 5 seconds, so a held volume key does not queue a pile of them.
+    private void showRg52LowBatToast() {
+        final long now = SystemClock.uptimeMillis();
+        if (now - mRg52LowBatToastTime < 5000) {
+            return;
+        }
+        mRg52LowBatToastTime = now;
+        final int max = (mRg52LowBatMaxIndex + 5) / 10;
+        new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(mContext,
+                "Battery low: speaker volume limited to " + max, Toast.LENGTH_SHORT).show());
     }
 
     /** get stream mute state. */
@@ -8894,10 +8963,19 @@ public class AudioService extends IAudioService.Stub
             boolean changed;
             int oldIndex;
             final boolean isCurrentDevice;
+            boolean rg52Limited = false;
             synchronized (mSettingsLock) {
                 synchronized (VolumeStreamState.class) {
                     oldIndex = getIndex(device);
                     index = getValidIndex(index, hasModifyAudioSettings);
+                    // RG52: speaker volume ceiling at a near-empty battery
+                    // (see mRg52LowBatLimitActive).
+                    if (mRg52LowBatLimitActive && mStreamType == AudioSystem.STREAM_MUSIC
+                            && device == AudioSystem.DEVICE_OUT_SPEAKER
+                            && index > mRg52LowBatMaxIndex) {
+                        index = mRg52LowBatMaxIndex;
+                        rg52Limited = true;
+                    }
                     // for STREAM_SYSTEM_ENFORCED, do not sync aliased streams on the enforced index
                     int aliasIndex = index;
                     if ((mStreamType == AudioSystem.STREAM_SYSTEM_ENFORCED) && mCameraSoundForced) {
@@ -8940,6 +9018,9 @@ public class AudioService extends IAudioService.Stub
                         }
                     }
                 }
+            }
+            if (rg52Limited) {
+                showRg52LowBatToast();
             }
             if (changed) {
                 // If associated to volume group, update group cache
