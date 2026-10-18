@@ -269,10 +269,12 @@ done
 [ "$CPU_MIN" = max ] && CPU_MIN=$CPU_TOP
 # Почти пустая батарея (sys.rg52.lowbat=1 ставит rg52-lowbat.sh): потолок
 # процессора persist.rg52.lowbat.cpu_khz в любом режиме, пол не выше потолка.
-# Иначе пик тока всех ядер вместе с включением усилителя динамика роняет vcc_sys,
-# и PMIC перезапускает консоль. Разбор - в rg52-lowbat.sh.
+# По умолчанию выключен (решение владельца: на слабой батарее ограничивается
+# только громкость динамика). Ручной запас на случай, если и при потолке
+# громкости пик тока всех ядер вместе с усилителем динамика уронит vcc_sys.
+# Разбор - в rg52-lowbat.sh.
 LOWBAT=0
-LB_CAP=$(getprop persist.rg52.lowbat.cpu_khz 1416000)
+LB_CAP=$(getprop persist.rg52.lowbat.cpu_khz 0)
 case "$LB_CAP" in ''|*[!0-9]*) LB_CAP=0 ;; esac
 if [ "$(getprop sys.rg52.lowbat)" = 1 ] && [ "$LB_CAP" -gt 0 ]; then
     LOWBAT=1
