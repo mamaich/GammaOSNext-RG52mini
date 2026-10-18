@@ -45,6 +45,7 @@ Flycast, DraStic, mupen64plus, Daijishō, и вырезана телефония
 
 | Выпуск | Дата | Коротко |
 |---|---|---|
+| [v1.12](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.12) — [подробности](doc/rg52mini/release-v1.12.md) | 18.10.2026 | Нет перезапуска на слабой батарее от громкого звука (потолок громкости динамика); Wi-Fi сам подключается после аварийного перезапуска; одна громкость для всех звуков |
 | [v1.11](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.11) — [подробности](doc/rg52mini/release-v1.11.md) | 17.10.2026 | Сила вибрации; Daijishō видит папки и платформы dArkOS, BIOS общие в `ROMs/bios`; HDMI в оболочке nano; наушники 3,5 мм; мастер настройки без лишних шагов |
 | [v1.10](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.10) — [подробности](doc/rg52mini/release-v1.10.md) | 14.10.2026 | Геймпад: скорость курсора и прокрутки, понятные переключатели режима мыши; экран Gamepad не закрывается; вибрация в играх не залипает |
 | [v1.9](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.9) — [подробности](doc/rg52mini/release-v1.9.md) | 08.10.2026 | Загрузчик с меню выбора системы для общей карты dArkOS + GammaOS; на обычной карте всё как раньше |
