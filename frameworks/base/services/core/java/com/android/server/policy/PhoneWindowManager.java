@@ -7912,7 +7912,13 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                 AudioManager.STREAM_RING, AudioManager.STREAM_NOTIFICATION,
                 AudioManager.STREAM_ALARM,
             };
+            // RG52 Mini: on a single-volume build (the TV base: every stream is an alias of
+            // MUSIC) each call below set MUSIC again, rescaled from that stream's own 0..7
+            // range, and the last one (ALARM) won: a step up from 0 or 1 of 25 landed back on
+            // 0, and the volume stuck there. MUSIC alone carries every stream then.
+            final boolean singleVolume = android.media.AudioSystem.isSingleVolume(mContext);
             for (int s : streams) {
+                if (singleVolume && s != AudioManager.STREAM_MUSIC) continue;
                 int sMax = am.getStreamMaxVolume(s);
                 int v = Math.round(frac * sMax);
                 if (v < 0) v = 0; else if (v > sMax) v = sMax;
