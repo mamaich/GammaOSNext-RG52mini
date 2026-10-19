@@ -202,6 +202,8 @@ status_t OtaMenu::readyToRun() {
           mTheme == THEME_PS3 ? "ps3" : mTheme == THEME_DSI ? "dsi" : "default",
           themeProp.c_str());
 
+    // RG52 Mini: a stale nano DRM gate would keep SurfaceFlinger from showing anything of ours.
+    OtaFlasher::releaseStaleNanoGate("OtaMenu start");
     mSession = new SurfaceComposerClient();
 
     // Get display info

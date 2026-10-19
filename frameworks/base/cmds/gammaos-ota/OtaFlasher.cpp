@@ -201,6 +201,30 @@ void OtaFlasher::pokeUserActivity() {
     }
 }
 
+// RG52 Mini: SurfaceFlinger presents nothing while sys.gammaos.nano.drm_active=1 (a nano
+// DRM-direct renderer owns the panel). The owner clears it as it lets the panel go; 19.10.2026
+// it stayed set after the console left nano for Android, with nobody on DRM. Our progress
+// window then waited in eglSwapBuffers for a buffer that never came back, holding the render
+// lock, and the display handover waited for that lock: the flash hung before writing. With
+// none of the DRM-direct renderers running the flag is stale: clear it and have SurfaceFlinger
+// compose again (1004: the debug "repaint everything" call), which frees the waiting swap.
+void OtaFlasher::releaseStaleNanoGate(const char* when) {
+    if (!android::base::GetBoolProperty("sys.gammaos.nano.drm_active", false)) return;
+    for (const char* svc : {"gammaos-nano", "azahar-nano", "drastic-nano"}) {
+        if (android::base::GetProperty(std::string("init.svc.") + svc, "") == "running") return;
+    }
+    property_set("sys.gammaos.nano.drm_active", "0");
+    sp<IBinder> sf = defaultServiceManager()->checkService(String16("SurfaceFlinger"));
+    status_t st = NO_INIT;
+    if (sf != nullptr) {
+        Parcel data, reply;
+        data.writeInterfaceToken(sf->getInterfaceDescriptor());   // as `service call` does
+        st = sf->transact(1004, data, &reply);
+    }
+    logToFile("WARN", "%s: sys.gammaos.nano.drm_active was left set with no DRM-direct "
+                      "renderer running, cleared it (repaint %d)", when, st);
+}
+
 bool OtaFlasher::isRunningFromTmpfs() {
     return getenv("GAMMAOS_OTA_STAGED") != nullptr;
 }
@@ -918,6 +942,7 @@ void OtaFlasher::restoreDisplayServices() {
 // картинки: без прогресса прошивка неприятна, без прошивки - бесполезна.
 void OtaFlasher::handoverDisplay() {
     if (mDisplayHandover) {
+        releaseStaleNanoGate("Display handover");
         logToFile("INFO", "Display handover: asking the menu to release EGL");
         mDisplayHandover();
     }

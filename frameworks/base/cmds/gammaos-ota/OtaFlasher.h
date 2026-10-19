@@ -134,6 +134,10 @@ public:
     static void initLogFile();
     static void logToFile(const char* level, const char* fmt, ...) __attribute__((format(printf, 2, 3)));
 
+    // RG52 Mini: clears sys.gammaos.nano.drm_active when no DRM-direct renderer is running
+    // and makes SurfaceFlinger present again (see OtaFlasher.cpp). `when` goes to the log.
+    static void releaseStaleNanoGate(const char* when);
+
 private:
     void notifyStatus(FlashPhase phase, const std::string& partition = "",
                       int idx = 0, int count = 0, int progress = 0,
