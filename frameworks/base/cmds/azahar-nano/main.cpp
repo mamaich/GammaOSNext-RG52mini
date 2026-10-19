@@ -519,7 +519,12 @@ void seedConfig(const std::string& userDir) {
         changed = true;
     }
     if (configValue(userDir, "Renderer", "resolution_factor").empty()) {
-        gCore.set_config_value("Renderer", "resolution_factor", "2");
+        // RG52 Mini: внутреннее разрешение по умолчанию тоже от устройства
+        // (ro.gammaos.azahar_nano.resolution_factor): у апстрима 2x, у нас Native (1x) -
+        // решение владельца 19.10.2026 (быстрее на Mali-G52).
+        char factor[PROPERTY_VALUE_MAX] = {};
+        property_get("ro.gammaos.azahar_nano.resolution_factor", factor, "2");
+        gCore.set_config_value("Renderer", "resolution_factor", factor);
         changed = true;
     }
     // Performance defaults for a handheld: no right-eye render (no 3D screen here)

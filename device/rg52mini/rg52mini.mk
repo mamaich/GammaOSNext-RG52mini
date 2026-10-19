@@ -420,9 +420,12 @@ PRODUCT_PACKAGES += \
 #     у Duo Lite, под который ядро рисует повёрнутую раскладку: без доворота на 180
 #     градусов картинка шла вверх ногами (DrmWindows.cpp, panelMountDeg);
 #   ro.gammaos.azahar_nano.gles=false - OpenGL ES убран из меню эмулятора: драйвер
-#     Mali-G52 не собирает программы шейдеров ядра для GLES, игра не рисует ни кадра.
+#     Mali-G52 не собирает программы шейдеров ядра для GLES, игра не рисует ни кадра;
+#   ro.gammaos.azahar_nano.resolution_factor=1 - внутреннее разрешение при первом
+#     запуске Native (1x), у апстрима 2x (решение владельца 19.10.2026).
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.gammaos.azahar_nano.layout_option=2 \
+    ro.gammaos.azahar_nano.resolution_factor=1 \
     ro.gammaos.azahar_nano.top_turn=180 \
     ro.gammaos.azahar_nano.gles=false \
     ro.gammaos.hdmi_shares_panel_port=true
