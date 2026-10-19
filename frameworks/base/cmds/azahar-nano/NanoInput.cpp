@@ -320,17 +320,20 @@ void NanoInput::handlePad(Node& n, uint16_t type, uint16_t code, int32_t value) 
     switch (code) {
     case ABS_X: mLx = norm; leftStick(); break;
     case ABS_Y: mLy = norm; leftStick(); break;
+    // Some pads report the triggers on ABS_Z / ABS_RZ. RG52 Mini: gammapad's pad ("Xbox
+    // Wireless Controller") has its right stick there (signed range) and the triggers on
+    // ABS_BRAKE / ABS_GAS; read as triggers, the stick pressed ZL and ZR and never moved the
+    // C-stick or the touch cursor. Z / RZ are triggers only when their range starts at 0.
     case ABS_RX:
     case ABS_Z:
-        if (code == ABS_Z && !n.hasAbs[ABS_RX]) {
-            // Some pads report the left trigger on ABS_Z.
+        if (code == ABS_Z && !n.hasAbs[ABS_RX] && n.absMin[ABS_Z] >= 0) {
             if (mCb.analogButton) mCb.analogButton(AZN_BUTTON_ZL, unit);
             break;
         }
         mRx = norm; rightStick(); break;
     case ABS_RY:
     case ABS_RZ:
-        if (code == ABS_RZ && !n.hasAbs[ABS_RY]) {
+        if (code == ABS_RZ && !n.hasAbs[ABS_RY] && n.absMin[ABS_RZ] >= 0) {
             if (mCb.analogButton) mCb.analogButton(AZN_BUTTON_ZR, unit);
             break;
         }

@@ -111,7 +111,7 @@ void TouchCursor::setPressed(bool pressed) {
     std::lock_guard<std::mutex> g(mLock);
     if (!mRun || !mRect.ok || pressed == mPressed) return;
     mPressed = pressed;
-    if (mH.touch) mH.touch(mX, mY, pressed);
+    touchCore(pressed);
     mActiveNs = nowNs();
     mVisible = true;
     mSeq++;
@@ -121,8 +121,24 @@ void TouchCursor::release() {
     std::lock_guard<std::mutex> g(mLock);
     if (!mPressed) return;
     mPressed = false;
-    if (mH.touch) mH.touch(mX, mY, false);
+    touchCore(false);
     mSeq++;
+}
+
+// The point as seen -> the core's window pixels. An upright layout turns the picture by 90
+// degrees: the core reads touch_x = 1 - (y - bottom.top) / height and touch_y = (x -
+// bottom.left) / width (EmuWindow::TouchPressed, !is_rotated), the inverse of the turn
+// bottomRect makes, so the seen x runs down the window's rows from its bottom edge.
+void TouchCursor::touchCore(bool pressed) {
+    if (!mH.touch) return;
+    if (mRect.turned) mH.touch(mY, mRect.fbH - 1.0f - mX, pressed);
+    else mH.touch(mX, mY, pressed);
+}
+
+void TouchCursor::moveCore() {
+    if (!mH.touchMoved) return;
+    if (mRect.turned) mH.touchMoved(mY, mRect.fbH - 1.0f - mX);
+    else mH.touchMoved(mX, mY);
 }
 
 TouchCursor::State TouchCursor::state() const {
@@ -134,8 +150,8 @@ TouchCursor::State TouchCursor::state() const {
     s.y = mY;
     // About the 3DS stylus tip: 7 of the bottom screen's 240 rows, at least 6 pixels.
     s.radius = std::max(6.0f, (mRect.b - mRect.t) * 7.0f / 240.0f);
-    s.winW = mWinW;
-    s.winH = mWinH;
+    s.winW = mViewW;
+    s.winH = mViewH;
     s.seq = mSeq;
     return s;
 }
@@ -150,14 +166,14 @@ float TouchCursor::curve(float v) const {
     return v < 0 ? -sp : sp;
 }
 
-// The bottom screen in window pixels, from the same layout call the core makes for its window
-// (EmuWindow::UpdateCurrentFramebufferLayout, landscape, one window).
+// The bottom screen as seen, from the same layout call the core makes for its window
+// (EmuWindow::UpdateCurrentFramebufferLayout, one window). An upright layout is turned back:
+// the window's rows become the seen columns, its bottom edge the seen left.
 TouchCursor::Rect TouchCursor::bottomRect(uint32_t w, uint32_t h) {
     Rect out;
     if (w == 0 || h == 0 || !mH.config) return out;
     auto cfg = [this](const char* key) { return mH.config("Layout", key); };
-    // An upright layout turns the screens; the stick would have to turn with them.
-    if (cfg("upright_screen") == "true") return out;
+    const bool upright = mH.upright ? mH.upright() : cfg("upright_screen") == "true";
     const bool swap = cfg("swap_screen") == "true";
     // The Android config reader's defaults: Large Screen, proportion 2.25, top right.
     std::string v = cfg("layout_option");
@@ -169,25 +185,35 @@ TouchCursor::Rect TouchCursor::bottomRect(uint32_t w, uint32_t h) {
     const uint32_t position = v.empty() ? 0u : (uint32_t)atoi(v.c_str());
     RawLayout L;
     switch (option) {
-    case 1: L = ((Fn4)mSingle)(w, h, swap, false); break;
-    case 2: L = ((FnLarge)mLarge)(w, h, swap, false, proportion, position); break;
-    case 3: L = ((FnLarge)mLarge)(w, h, swap, false, 1.0f, kMiddleRight); break;
+    case 1: L = ((Fn4)mSingle)(w, h, swap, upright); break;
+    case 2: L = ((FnLarge)mLarge)(w, h, swap, upright, proportion, position); break;
+    case 3: L = ((FnLarge)mLarge)(w, h, swap, upright, 1.0f, kMiddleRight); break;
     // Android numbering (no SeparateWindows): 4 Hybrid, 5 Custom.
     case 4:
         if (!mHybrid) return out;
-        L = ((Fn4)mHybrid)(w, h, swap, false);
+        L = ((Fn4)mHybrid)(w, h, swap, upright);
         break;
     case 5:
-        if (!mCustom) return out;
+        // The custom layout has no upright form (its last argument is the portrait mode).
+        if (!mCustom || upright) return out;
         L = ((Fn4)mCustom)(w, h, swap, false);
         break;
-    default: L = ((Fn4)mDefault)(w, h, swap, false); break;
+    default: L = ((Fn4)mDefault)(w, h, swap, upright); break;
     }
     if (!L.botOn || !rectInside(L.bot, w, h)) return out;
-    out.l = (float)L.bot[0];
-    out.t = (float)L.bot[1];
-    out.r = (float)L.bot[2];
-    out.b = (float)L.bot[3];
+    if (upright) {
+        out.l = (float)(h - L.bot[3]);
+        out.r = (float)(h - L.bot[1]);
+        out.t = (float)L.bot[0];
+        out.b = (float)L.bot[2];
+        out.turned = true;
+        out.fbH = (float)h;
+    } else {
+        out.l = (float)L.bot[0];
+        out.t = (float)L.bot[1];
+        out.r = (float)L.bot[2];
+        out.b = (float)L.bot[3];
+    }
     out.ok = true;
     return out;
 }
@@ -213,9 +239,11 @@ void TouchCursor::loop() {
         if (relayout) {
             mWinW = winW;
             mWinH = winH;
+            mViewW = rect.turned ? winH : winW;
+            mViewH = rect.turned ? winW : winH;
             if (!rect.ok) {
                 if (mRect.ok) ALOGI("touch cursor: no bottom screen in this layout");
-                if (mPressed && mH.touch) mH.touch(mX, mY, false);
+                if (mPressed) touchCore(false);
                 mPressed = false;
                 if (mRect.ok || mVisible) mSeq++;
                 mRect = rect;
@@ -235,13 +263,16 @@ void TouchCursor::loop() {
                 mY = rect.t + fy * (rect.b - rect.t);
                 mSeq++;
             }
-            if (!mRect.ok) ALOGI("touch cursor: bottom screen %.0f,%.0f-%.0f,%.0f in %ux%u", rect.l,
-                                 rect.t, rect.r, rect.b, winW, winH);
+            if (!mRect.ok) ALOGI("touch cursor: bottom screen %.0f,%.0f-%.0f,%.0f in %ux%u%s",
+                                 rect.l, rect.t, rect.r, rect.b, mViewW, mViewH,
+                                 rect.turned ? " (upright window, turned back)" : "");
             mRect = rect;
         }
         if (!mRect.ok) continue;
-        // Mouse mode moves panelW pixels in the time this moves across the bottom screen.
-        const float k = panelW ? mSpeedMult * (mRect.r - mRect.l) / (float)panelW : 0.0f;
+        // Mouse mode moves across the panel's seen width in the time this moves across the
+        // bottom screen.
+        const uint32_t seenW = mRect.turned ? panelH : panelW;
+        const float k = seenW ? mSpeedMult * (mRect.r - mRect.l) / (float)seenW : 0.0f;
         const float dx = curve(sx) * k, dy = curve(sy) * k;
         if (dx != 0.0f || dy != 0.0f) {
             const float nx = std::clamp(mX + dx, mRect.l, mRect.r - 1.0f);
@@ -250,7 +281,7 @@ void TouchCursor::loop() {
             if (nx != mX || ny != mY) {
                 mX = nx;
                 mY = ny;
-                if (mPressed && mH.touchMoved) mH.touchMoved(mX, mY);
+                if (mPressed) moveCore();
                 mSeq++;
             }
         }

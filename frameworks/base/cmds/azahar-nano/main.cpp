@@ -795,6 +795,13 @@ int main(int argc, char** argv) {
             property_set((std::string("sys.gammaos.azahar_nano.") + key).c_str(), v.c_str());
         }
     }
+    // RG52 Mini: the async GPU worker (on by default on Mali) runs the PICA commands on a
+    // thread of its own, which has no GL context: with the OpenGL ES renderer its first
+    // glCreateShader failed and the core crashed seconds into the game. Vulkan only.
+    if (configGet("Renderer", "graphics_api") == "1") {
+        property_set("sys.gammaos.azahar_nano.async_gpu", "0");
+        ALOGI("OpenGL ES renderer: async GPU off");
+    }
     // DRM direct by default (the presenter that paces both panels at 60 flips a second);
     // the SurfaceFlinger backend takes over below when the DRM panels do not come up.
     std::string backend = prop("persist.gammaos.azahar_nano.backend", "drm");
@@ -954,10 +961,12 @@ int main(int argc, char** argv) {
     // A DRM top panel that is physically landscape but scans out portrait (the
     // Duo Lite DSI, install rotation 90) gets the layout rendered upright. The
     // SurfaceFlinger backend hands the core the already-rotated logical window.
+    static int sCoreUpright = -1;   // RG52 Mini: what the touch cursor lays out (-1: config.ini)
     if (drmActive) {
         const bool upright = drm.isPortrait(0) &&
                              prop("persist.gammaos.azahar_nano.drm_upright", "1") == "1";
         gCore.set_upright(upright ? 1 : 0);
+        sCoreUpright = upright ? 1 : 0;
         // A top panel mounted upside down (persist.gsf.rot.<port>=180, the RG DS) whose
         // plane does not rotate: the core draws the primary window turned, the way the
         // home turns its own frames there.
@@ -1229,10 +1238,9 @@ int main(int argc, char** argv) {
         if (v == "cursor") mode = azahar_nano::kRightStickCursor;
         else if (v == "both") mode = azahar_nano::kRightStickBoth;
         else if (v != "cstick" && !(sInput && sInput->hasTouchscreen())) mode = azahar_nano::kRightStickCursor;
-        if (mode != azahar_nano::kRightStickCStick && sDrm && sDrm->isPortrait(0)) {
-            ALOGW("touch cursor: not on an upright panel");
-            mode = azahar_nano::kRightStickCStick;
-        }
+        // An upright window is turned back by the cursor. A panel mounted turned by 180 degrees
+        // needs nothing more: the core draws the window turned (azn_set_primary_turn) and the
+        // HUD draws turned too, so both cancel the mount and the player sees the upright layout.
         if (mode != azahar_nano::kRightStickCStick && !sCursor.running()) {
             azahar_nano::TouchCursor::Hooks h;
             h.touch = [](float x, float y, bool p) { gCore.touch(x, y, p); };
@@ -1246,6 +1254,10 @@ int main(int argc, char** argv) {
                 *wh = (uint32_t)std::lround(sPanelH[0] * k);
             };
             h.config = [](const char* s, const char* k) { return configGet(s, k); };
+            h.upright = [] {
+                return sCoreUpright >= 0 ? sCoreUpright == 1
+                                         : configGet("Layout", "upright_screen") == "true";
+            };
             if (!sCursor.start(gCore.handle, h)) mode = azahar_nano::kRightStickCStick;
         } else if (mode == azahar_nano::kRightStickCStick) {
             sCursor.stop();
