@@ -121,6 +121,7 @@ struct DrmPanel {
     bool geometrySet = false;
     uint32_t srcW = 0, srcH = 0;
     uint64_t latCount = 0;
+    int64_t recommitNs = 0;   // RG52 Mini: the last time recommit() brought the panel back
 };
 
 class DrmWindows {
@@ -198,6 +199,9 @@ private:
     bool testScaledScanout(DrmPanel& p, uint32_t w, uint32_t h, const DrmPanel* retire = nullptr);
     bool switchToScalingPlane(DrmPanel& p);
     bool flip(DrmPanel& p, android::BufferItem& item);
+    // RG52 Mini: modeset()'s takeover again for one panel, after the composer had the CRTC
+    // (screen off and on). Presenter thread only; skipped while the screen is off.
+    bool recommit(DrmPanel& p, const char* why);
     void eventLoop();
     void panelLoop(int idx);
     void onFlipDone(unsigned int crtcId, int64_t tsNs);

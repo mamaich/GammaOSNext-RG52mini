@@ -415,9 +415,13 @@ PRODUCT_PACKAGES += \
 #     по умолчанию 1 - только верхний, нижний уходит на вторую панель);
 #   ro.gammaos.hdmi_shares_panel_port=true - HDMI (мост rk628) делит со встроенным
 #     экраном единственный видеопорт: с подключённым HDMI сеанс идёт через
-#     SurfaceFlinger на телевизор (frameworks/base/cmds/azahar-nano, SfWindows.cpp).
+#     SurfaceFlinger на телевизор (frameworks/base/cmds/azahar-nano, SfWindows.cpp);
+#   ro.gammaos.azahar_nano.top_turn=180 - панель стоит в корпусе другой стороной, чем
+#     у Duo Lite, под который ядро рисует повёрнутую раскладку: без доворота на 180
+#     градусов картинка шла вверх ногами (DrmWindows.cpp, panelMountDeg).
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.gammaos.azahar_nano.layout_option=2 \
+    ro.gammaos.azahar_nano.top_turn=180 \
     ro.gammaos.hdmi_shares_panel_port=true
 
 # Пределы низкопамятного убийцы подобраны под zram без файла подкачки -

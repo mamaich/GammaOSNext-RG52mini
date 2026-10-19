@@ -189,6 +189,12 @@ static int panelMountDeg(int port) {
     };
     char val[PROPERTY_VALUE_MAX] = {};
     int deg = 0;
+    // RG52 Mini: the upright layout turns the picture the way the Duo Lite panel needs; the
+    // RG52 panel sits the other way round (also an ORIENTATION_90 install), so its picture came
+    // out upside down. The device says so itself: ro.gammaos.azahar_nano.top_turn=180.
+    if (port <= 0 && property_get("ro.gammaos.azahar_nano.top_turn", val, "") > 0) {
+        return toDeg(val) == 180 ? 180 : 0;
+    }
     if (port <= 0) {
         if (property_get("ro.surface_flinger.primary_display_orientation", val, "") > 0) deg = toDeg(val);
     } else {
@@ -1190,6 +1196,23 @@ bool DrmWindows::flip(DrmPanel& p, BufferItem& item) {
     const uint32_t flags = mBlockingCommits ? 0u : (DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT);
     int rc = drmModeAtomicCommit(mFd, req, flags, reinterpret_cast<void*>((uintptr_t)p.crtcId));
     int err = errno;
+    // RG52 Mini: when the screen goes off the composer powers the CRTC down, and on the way
+    // back it binds the CRTC again with its own state; every flip of ours was refused from then
+    // on (EINVAL) and the panel stayed black behind a lit backlight. Bring the panel back and
+    // drop this frame: the next one goes up with the whole plane state. At most once a second,
+    // so a refusal the recommit does not cure still reaches the HUD fallback below.
+    if (rc != 0 && err == EINVAL && monoNs() - p.recommitNs > 1000000000LL) {
+        drmModeAtomicFree(req);
+        if (fenceFd >= 0) close(fenceFd);
+        p.hudInCommit = false;
+        {
+            std::lock_guard<std::mutex> lk(*p.mu);
+            p.hasPending = false;
+            p.flipPending = false;
+        }
+        recommit(p, "flip refused");
+        return false;
+    }
     if (rc != 0 && p.hudInCommit) {
         // The HUD plane state was refused: drop the HUD for this session (the panel
         // must keep flipping) and retry the same frame without it.
@@ -1237,6 +1260,96 @@ bool DrmWindows::flip(DrmPanel& p, BufferItem& item) {
         // keeps the next commit out of that window.
         if (!p.isDsi && mDpPostFlipUs > 0) usleep(mDpPostFlipUs);
     }
+    return true;
+}
+
+// RG52 Mini: one panel taken over again the way modeset() did it at the start: the CRTC on in
+// our mode, our plane on its black frame with the whole state, the HUD plane off and whatever
+// the composer put on this CRTC switched off. The frames that were on the planes are free again
+// and the next flip sets the whole plane state. Nothing is done while the screen is off: the
+// framework turned the panel off then and the frames wait for the wake.
+bool DrmWindows::recommit(DrmPanel& p, const char* why) {
+    p.recommitNs = monoNs();
+    char screen[PROPERTY_VALUE_MAX] = {};
+    property_get("sys.screen.state", screen, "on");
+    if (strcmp(screen, "off") == 0) {
+        ALOGW("DRM: crtc %u %s with the screen off, left for the wake", p.crtcId, why);
+        return false;
+    }
+    const size_t idx = (size_t)(&p - mPanels.data());
+    const uint32_t black = idx < mBlackFbs.size() ? mBlackFbs[idx] : 0;
+    drmModeAtomicReqPtr req = drmModeAtomicAlloc();
+    drmModeAtomicAddProperty(req, p.crtcId, p.cActive, 1);
+    drmModeAtomicAddProperty(req, p.crtcId, p.cModeId, p.modeBlob);
+    drmModeAtomicAddProperty(req, p.connId, p.connCrtcId, p.crtcId);
+    if (black) {
+        drmModeAtomicAddProperty(req, p.planeId, p.pFbId, black);
+        drmModeAtomicAddProperty(req, p.planeId, p.pCrtcId, p.crtcId);
+        drmModeAtomicAddProperty(req, p.planeId, p.pSrcX, 0);
+        drmModeAtomicAddProperty(req, p.planeId, p.pSrcY, 0);
+        drmModeAtomicAddProperty(req, p.planeId, p.pSrcW, (uint64_t)p.width << 16);
+        drmModeAtomicAddProperty(req, p.planeId, p.pSrcH, (uint64_t)p.height << 16);
+        drmModeAtomicAddProperty(req, p.planeId, p.pCrtcX, 0);
+        drmModeAtomicAddProperty(req, p.planeId, p.pCrtcY, 0);
+        drmModeAtomicAddProperty(req, p.planeId, p.pCrtcW, p.width);
+        drmModeAtomicAddProperty(req, p.planeId, p.pCrtcH, p.height);
+        if (p.pRotation && p.rotationValue) {
+            drmModeAtomicAddProperty(req, p.planeId, p.pRotation, p.rotationValue);
+        }
+    }
+    if (p.hudPlaneId) {
+        drmModeAtomicAddProperty(req, p.hudPlaneId, p.hPFbId, 0);
+        drmModeAtomicAddProperty(req, p.hudPlaneId, p.hPCrtcId, 0);
+    }
+    if (p.retirePlaneId) {
+        drmModeAtomicAddProperty(req, p.retirePlaneId, p.retireFbProp, 0);
+        drmModeAtomicAddProperty(req, p.retirePlaneId, p.retireCrtcProp, 0);
+    }
+    int foreign = 0;
+    if (drmModePlaneResPtr pr = drmModeGetPlaneResources(mFd)) {
+        for (uint32_t i = 0; i < pr->count_planes; i++) {
+            drmModePlanePtr pl = drmModeGetPlane(mFd, pr->planes[i]);
+            if (!pl) continue;
+            const uint32_t id = pl->plane_id, crtc = pl->crtc_id;
+            drmModeFreePlane(pl);
+            if (crtc != p.crtcId || id == p.planeId || id == p.hudPlaneId || id == p.retirePlaneId) {
+                continue;
+            }
+            const uint32_t fbProp = findProp(mFd, id, DRM_MODE_OBJECT_PLANE, "FB_ID");
+            const uint32_t crtcProp = findProp(mFd, id, DRM_MODE_OBJECT_PLANE, "CRTC_ID");
+            if (!fbProp || !crtcProp) continue;
+            drmModeAtomicAddProperty(req, id, fbProp, 0);
+            drmModeAtomicAddProperty(req, id, crtcProp, 0);
+            foreign++;
+        }
+        drmModeFreePlaneResources(pr);
+    }
+    const int rc = drmModeAtomicCommit(mFd, req, DRM_MODE_ATOMIC_ALLOW_MODESET, nullptr);
+    const int err = errno;
+    drmModeAtomicFree(req);
+    if (rc != 0) {
+        ALOGE("DRM: crtc %u %s, recommit failed: %s", p.crtcId, why, strerror(err));
+        return false;
+    }
+    ALOGW("DRM: crtc %u %s, panel brought back (%d plane(s) of the composer switched off)",
+          p.crtcId, why, foreign);
+    std::lock_guard<std::mutex> lk(*p.mu);
+    if (p.hasOnScreen) {
+        (p.onScreenIsOverlay ? p.ovConsumer : p.consumer)->releaseBuffer(p.onScreen);
+        p.hasOnScreen = false;
+    }
+    if (p.hasPending) {
+        (p.pendingIsOverlay ? p.ovConsumer : p.consumer)->releaseBuffer(p.pending);
+        p.hasPending = false;
+    }
+    p.flipPending = false;
+    if (p.hudHasOnScreen) {
+        p.hudConsumer->releaseBuffer(p.hudOnScreen);
+        p.hudHasOnScreen = false;
+    }
+    p.hudCleared = true;
+    p.retirePlaneId = 0;
+    p.geometrySet = false;
     return true;
 }
 
@@ -1396,6 +1509,12 @@ void DrmWindows::panelLoop(int idx) {
         {
             std::lock_guard<std::mutex> lk(*p.mu);
             pending = p.flipPending;
+        }
+        // RG52 Mini: a flip whose event never came (the CRTC went down under it as the screen
+        // turned off) would hold the panel for good. Once the screen is on again, take it back.
+        if (pending && monoNs() - p.commitNs > 500000000LL &&
+            monoNs() - p.recommitNs > 1000000000LL && recommit(p, "flip never completed")) {
+            pending = false;
         }
         int pickFd = -1;
         if (!pending && !ready.empty()) {
