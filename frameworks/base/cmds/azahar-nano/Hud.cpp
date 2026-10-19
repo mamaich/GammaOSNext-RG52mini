@@ -100,6 +100,7 @@ void Hud::render(const Frame& f) {
     }
     if (f.ff) drawFastForward(f.speedPct);
     if (f.toastAlpha > 0.0f) drawToast(std::min(f.toastAlpha, 1.0f), f.spin);
+    if (f.cursor) drawCursor(f);
     mGfx.endFrame();
     eglSwapBuffers(mDpy, mSurf);
     eglMakeCurrent(mDpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
@@ -132,6 +133,20 @@ void Hud::drawFastForward(float speedPct) {
     tx += tw + gap;
     mGfx.triangle(tx, ty, tx, ty + s, tx + tw, ty + s * 0.5f, amber);
     mGfx.text(label, tx + tw + 8.0f * sf, by + pad + (inner - lineH) * 0.5f, scale, amber);
+}
+
+// RG52 Mini: the touch cursor - a white disc in a dark ring (reads over light and dark
+// scenes), amber while R3 touches the screen, with a dot in the middle on the exact spot.
+void Hud::drawCursor(const Frame& f) {
+    const float W = (float)mGfx.viewportW();
+    const float H = (float)mGfx.viewportH();
+    const float cx = f.cursorX * W, cy = f.cursorY * H;
+    const float r = std::max(4.0f, f.cursorR * W);
+    const float ri = r * 0.72f, rd = std::max(1.5f, r * 0.18f);
+    mGfx.roundedRect(cx - r, cy - r, 2.0f * r, 2.0f * r, r, rgba(0.0f, 0.0f, 0.0f, 0.6f));
+    mGfx.roundedRect(cx - ri, cy - ri, 2.0f * ri, 2.0f * ri, ri,
+                     f.cursorPressed ? rgba(1.0f, 0.75f, 0.2f, 0.9f) : rgba(1.0f, 1.0f, 1.0f, 0.75f));
+    mGfx.roundedRect(cx - rd, cy - rd, 2.0f * rd, 2.0f * rd, rd, rgba(0.0f, 0.0f, 0.0f, 0.9f));
 }
 
 // Spinner (a ring of dots with a fading tail) and "Compiling shaders" in the bottom

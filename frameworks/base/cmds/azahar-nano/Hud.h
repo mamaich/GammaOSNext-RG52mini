@@ -32,6 +32,10 @@ public:
         // caller fades it) and the spinner angle in turns.
         float toastAlpha = 0.0f;
         float spin = 0.0f;
+        // RG52 Mini: the touch cursor (TouchCursor.h) - centre and radius as fractions of the
+        // HUD's width (x, r) and height (y); amber while R3 touches.
+        bool cursor = false, cursorPressed = false;
+        float cursorX = 0.0f, cursorY = 0.0f, cursorR = 0.0f;
     };
     // Draws the frame and presents it.
     void render(const Frame& f);
@@ -41,6 +45,7 @@ private:
     bool makeCurrent();
     void drawToast(float alpha, float spin);
     void drawFastForward(float speedPct);
+    void drawCursor(const Frame& f);
     EGLDisplay mDpy = EGL_NO_DISPLAY;
     EGLSurface mSurf = EGL_NO_SURFACE;
     EGLContext mCtx = EGL_NO_CONTEXT;

@@ -604,6 +604,12 @@ void Overlay::buildPages() {
             {{"Off", "0"}, {"On", "1"}},
             "On: the left stick presses the d-pad and the d-pad moves the circle pad (the menu keeps the d-pad)",
             [this](const std::string& v) { if (mA.setStickDpadSwap) mA.setStickDpadSwap(v == "1"); }));
+        // RG52 Mini: no touchscreen - the right stick moves a cursor over the bottom screen.
+        pg.rows.push_back(propChoice("Right Stick", "persist.gammaos.azahar_nano.right_stick", "auto",
+            {{"Auto", "auto"}, {"Touch Cursor", "cursor"}, {"C-Stick + Cursor", "both"}, {"C-Stick", "cstick"}},
+            "Touch Cursor: the stick moves a pointer over the bottom screen, R3 touches it, Back + R3 "
+            "fast forwards. Auto: the cursor without a touchscreen",
+            [this](const std::string& v) { if (mA.setRightStick) mA.setRightStick(v); }));
     }
     // ---- Import GPU Driver ----
     {

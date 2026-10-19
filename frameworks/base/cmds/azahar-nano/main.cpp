@@ -52,6 +52,7 @@
 #include "DrmWindows.h"
 #include "Overlay.h"
 #include "Hud.h"
+#include "TouchCursor.h"
 #include "Brightness.h"
 #include "../gammaos-nano/NanoBacklight.h"
 #include <sys/system_properties.h>
@@ -996,6 +997,10 @@ int main(int argc, char** argv) {
     static azahar_nano::SfWindows* sSf = nullptr;
     static bool sOverlayReady = false;
     static azahar_nano::OverlayActions sOa;   // state hooks use the same actions
+    // RG52 Mini: the touch cursor on the right stick (TouchCursor.h) and the hook that applies
+    // persist.gammaos.azahar_nano.right_stick (set up with the input below).
+    static azahar_nano::TouchCursor sCursor;
+    static std::function<void(const std::string&)> sApplyRightStick;
     {
         if (drmActive) {
             sDrm = &drm;
@@ -1064,6 +1069,7 @@ int main(int argc, char** argv) {
                 sInput->setStickDpadSwap(
                     azahar_nano::settings::getBool("persist.gammaos.azahar_nano.stick_dpad_swap", false));
             }
+            if (sApplyRightStick) sApplyRightStick(prop("persist.gammaos.azahar_nano.right_stick", "auto"));
             if (sOa.setLcdShader) {
                 sOa.setLcdShader(0, atoi(prop("persist.gammaos.azahar_nano.lcd_top", "0").c_str()));
                 sOa.setLcdShader(1, atoi(prop("persist.gammaos.azahar_nano.lcd_bottom", "0").c_str()));
@@ -1073,6 +1079,7 @@ int main(int argc, char** argv) {
         };
         oa.setNintendoLayout = [](bool on) { if (sInput) sInput->setNintendoLayout(on); };
         oa.setStickDpadSwap = [](bool on) { if (sInput) sInput->setStickDpadSwap(on); };
+        oa.setRightStick = [](const std::string& v) { if (sApplyRightStick) sApplyRightStick(v); };
         oa.setScreenAa = [](bool on) {
             if (gCore.set_screen_aa) gCore.set_screen_aa(on ? 1 : 0);
         };
@@ -1185,6 +1192,7 @@ int main(int argc, char** argv) {
         }
         ALOGI("menu open");
         if (gStallScreenOn.exchange(false)) ALOGI("stall screen closed for the menu");
+        sCursor.release();   // RG52 Mini: no touch stays down behind the menu
         gCore.pause(true);
         overlay.open();
         // Switch the panel to the overlay source first: a frame rendered before
@@ -1204,7 +1212,51 @@ int main(int argc, char** argv) {
         ALOGI("lid %s -> shell %s", closed ? "closed" : "open", closed ? "closed" : "open");
         if (gCore.setShellOpen) gCore.setShellOpen(closed ? 0 : 1);
     };
+    // RG52 Mini: the right stick as the touch cursor. Nothing moves or touches behind the menu
+    // or the loading screen.
+    icb.cursorStick = [](float x, float y) {
+        if (overlay.isOpen() || gLoadScreenOn) sCursor.setStick(0.0f, 0.0f);
+        else sCursor.setStick(x, y);
+    };
+    icb.cursorPress = [](bool p) {
+        if (p && (overlay.isOpen() || gLoadScreenOn)) return;
+        sCursor.setPressed(p);
+    };
+    // persist.gammaos.azahar_nano.right_stick: auto (the cursor when no touchscreen was found),
+    // cursor, both (cursor and C-stick) or cstick.
+    sApplyRightStick = [](const std::string& v) {
+        int mode = azahar_nano::kRightStickCStick;
+        if (v == "cursor") mode = azahar_nano::kRightStickCursor;
+        else if (v == "both") mode = azahar_nano::kRightStickBoth;
+        else if (v != "cstick" && !(sInput && sInput->hasTouchscreen())) mode = azahar_nano::kRightStickCursor;
+        if (mode != azahar_nano::kRightStickCStick && sDrm && sDrm->isPortrait(0)) {
+            ALOGW("touch cursor: not on an upright panel");
+            mode = azahar_nano::kRightStickCStick;
+        }
+        if (mode != azahar_nano::kRightStickCStick && !sCursor.running()) {
+            azahar_nano::TouchCursor::Hooks h;
+            h.touch = [](float x, float y, bool p) { gCore.touch(x, y, p); };
+            h.touchMoved = [](float x, float y) { gCore.touch_moved(x, y); };
+            // The core's window is the panel times its render scale (toWindow above).
+            h.sizes = [](uint32_t* ww, uint32_t* wh, uint32_t* pw, uint32_t* ph) {
+                const float k = sDrm ? sDrm->renderScale(0) : 1.0f;
+                *pw = sPanelW[0];
+                *ph = sPanelH[0];
+                *ww = (uint32_t)std::lround(sPanelW[0] * k);
+                *wh = (uint32_t)std::lround(sPanelH[0] * k);
+            };
+            h.config = [](const char* s, const char* k) { return configGet(s, k); };
+            if (!sCursor.start(gCore.handle, h)) mode = azahar_nano::kRightStickCStick;
+        } else if (mode == azahar_nano::kRightStickCStick) {
+            sCursor.stop();
+        }
+        if (sInput) sInput->setRightStickMode(mode);
+        ALOGI("right stick: %s -> %s", v.c_str(),
+              mode == azahar_nano::kRightStickCursor ? "touch cursor"
+              : mode == azahar_nano::kRightStickBoth ? "C-stick and touch cursor" : "C-stick");
+    };
     input.start(icb, bottom != nullptr, bottom ? 1 : 0);
+    sApplyRightStick(prop("persist.gammaos.azahar_nano.right_stick", "auto"));
 
     // Core performance stats every 2 s while running (persist.gammaos.azahar_nano.perf_log=1
     // or always during bring-up).
@@ -1232,6 +1284,7 @@ int main(int argc, char** argv) {
             const bool off = strcmp(v, "off") == 0;
             if (off && !asleep) {
                 asleep = true;
+                sCursor.release();   // RG52 Mini: no touch stays down through the sleep
                 pausedForSleep = !overlay.isOpen();
                 if (pausedForSleep) {
                     gSleepPaused = true;
@@ -1386,6 +1439,7 @@ int main(int argc, char** argv) {
         bool hudOn = false;
         uint32_t lastRegions = 0;
         uint64_t lastSeq = ~0ull;
+        uint64_t lastCursorSeq = ~0ull;
         float toast = 0.0f, spin = 0.0f;
         int64_t stallSinceNs = 0;
         int64_t idleSinceNs = 0;
@@ -1455,12 +1509,17 @@ int main(int argc, char** argv) {
             else spin = 0.0f;
             const bool fps = live && wantFps;
             const bool ff = live && sFastForward.load();
-            const bool want = fps || ff || toast > 0.0f;
+            // RG52 Mini: the touch cursor goes anywhere, so the whole HUD shows while it does.
+            const azahar_nano::TouchCursor::State cur = sCursor.state();
+            const bool cursorOn = live && cur.visible && cur.winW && cur.winH;
+            const bool want = fps || ff || toast > 0.0f || cursorOn;
             const uint32_t regions = (fps || ff ? azahar_nano::kHudTop : 0u) |
-                                     (toast > 0.0f ? azahar_nano::kHudBottom : 0u);
+                                     (toast > 0.0f ? azahar_nano::kHudBottom : 0u) |
+                                     (cursorOn ? azahar_nano::kHudTop | azahar_nano::kHudBottom : 0u);
             const uint64_t seq = sHudStatsSeq.load();
             const bool animating = toast > 0.0f;
-            if (want && (animating || seq != lastSeq || regions != lastRegions || !hudOn)) {
+            if (want && (animating || seq != lastSeq || regions != lastRegions || !hudOn ||
+                         (cursorOn && cur.seq != lastCursorSeq))) {
                 azahar_nano::Hud::Frame f;
                 f.fps = fps;
                 f.blitFps = sHudBlitFps.load();
@@ -1470,6 +1529,14 @@ int main(int argc, char** argv) {
                 f.speedPct = sHudSpeed.load();
                 f.toastAlpha = toast;
                 f.spin = spin;
+                if (cursorOn) {
+                    f.cursor = true;
+                    f.cursorPressed = cur.pressed;
+                    f.cursorX = cur.x / (float)cur.winW;
+                    f.cursorY = cur.y / (float)cur.winH;
+                    f.cursorR = cur.radius / (float)cur.winW;
+                }
+                lastCursorSeq = cur.seq;
                 hud.render(f);
                 if (sDrm) {
                     sDrm->setHudRegions(0, regions);
@@ -1486,7 +1553,8 @@ int main(int argc, char** argv) {
                 hudOn = false;
                 lastRegions = 0;
             }
-            usleep(animating || gStallScreenOn ? 33 * 1000 : 100 * 1000);
+            // The touch cursor follows the stick at the panel rate (its own tick is 16 ms).
+            usleep(sCursor.running() ? 16 * 1000 : animating || gStallScreenOn ? 33 * 1000 : 100 * 1000);
         }
     });
 
@@ -1497,6 +1565,7 @@ int main(int argc, char** argv) {
     pushConfigOverrides();
     const int result = gCore.run(rom.c_str());
     gExitRequested = true;
+    sCursor.stop();
     perfThread.join();
     hudThread.join();
     ALOGI("core returned %d", result);

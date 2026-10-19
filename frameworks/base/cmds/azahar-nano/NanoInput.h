@@ -32,7 +32,14 @@ struct InputCallbacks {
     std::function<bool()> menuOpen;
     // The device's physical lid (EV_SW SW_LID): reported at start and on every change.
     std::function<void(bool closed)> lid;
+    // RG52 Mini: the right stick as the touchscreen cursor (setRightStickMode, TouchCursor.h):
+    // the stick position -1..1 and R3 (the touch).
+    std::function<void(float x, float y)> cursorStick;
+    std::function<void(bool pressed)> cursorPress;
 };
+
+// What the right stick drives (persist.gammaos.azahar_nano.right_stick).
+enum RightStickMode { kRightStickCStick = 0, kRightStickCursor = 1, kRightStickBoth = 2 };
 
 class NanoInput {
 public:
@@ -45,6 +52,11 @@ public:
     // Left stick and d-pad swapped: the stick presses the d-pad and the d-pad moves the
     // circle pad (at full deflection). Switchable live from the menu.
     void setStickDpadSwap(bool on) { mSwapStickDpad = on; }
+    // RG52 Mini: the right stick drives the C-stick, the touch cursor or both (RightStickMode);
+    // in a cursor mode R3 touches and Back + R3 toggles fast forward. Switchable live.
+    void setRightStickMode(int mode);
+    // A touchscreen digitizer was found (the "auto" right stick mode picks the cursor without).
+    bool hasTouchscreen() const { return mHasTouch.load(); }
     // From a button callback: true when Back is held, and that Back press then no longer
     // opens the menu or fires its long press (it was used as a combo modifier).
     bool consumeBackHeld() {
@@ -77,6 +89,7 @@ private:
     bool swapActive();
     void physicalDpad(Dir d, bool pressed);
     void leftStick();
+    void rightStick();
     void sendDir(Dir d, bool pressed);
 
     InputCallbacks mCb;
@@ -101,6 +114,9 @@ private:
     std::atomic<int64_t> mBackHoldNs{400LL * 1000000LL};   // see backHoldNs (NanoInput.cpp)
     bool mBackLongFired = false;
     bool mBackCombo = false;  // this Back press was used as a combo modifier
+    std::atomic<int> mRightStick{kRightStickCStick};
+    std::atomic<bool> mHasTouch{false};
+    bool mR3Touch = false;    // the R3 press went to the cursor (its release goes there too)
 };
 
 } // namespace azahar_nano

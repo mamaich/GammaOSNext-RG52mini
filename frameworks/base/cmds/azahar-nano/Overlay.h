@@ -41,6 +41,8 @@ struct OverlayActions {
     std::function<std::string(const char* prop, const char* def)> getProp;
     std::function<void(bool nintendo)> setNintendoLayout;
     std::function<void(bool on)> setStickDpadSwap;
+    // RG52 Mini: persist.gammaos.azahar_nano.right_stick changed (auto, cursor, both, cstick).
+    std::function<void(const std::string& mode)> setRightStick;
     std::function<void(int screen, int shader)> setLcdShader;  // 0 top, 1 bottom
     std::function<void(bool on)> setScreenAa;                   // FXAA on both screens
     // Per-game override (AzaharSettings.h): config.ini as the file holds it (never the

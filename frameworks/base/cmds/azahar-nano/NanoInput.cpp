@@ -156,6 +156,8 @@ void NanoInput::scan() {
         }
         ALOGI("input node %s '%s' pad=%d touch=%d panel=%d", p.c_str(), name, n.pad, n.touch,
               n.panel);
+        // RG52 Mini: gammapad's touchscreen (mouse and screen map modes) is no digitizer.
+        if (n.touch && strcmp(name, "GammaOS Virtual Touchscreen") != 0) mHasTouch = true;
         mNodes.push_back(n);
     }
     closedir(d);
@@ -164,6 +166,22 @@ void NanoInput::scan() {
 namespace {
 constexpr int kDirButton[4] = {AZN_DPAD_LEFT, AZN_DPAD_RIGHT, AZN_DPAD_UP, AZN_DPAD_DOWN};
 } // namespace
+
+void NanoInput::setRightStickMode(int mode) {
+    if (mode < kRightStickCStick || mode > kRightStickBoth) mode = kRightStickCStick;
+    // The C-stick no longer follows the stick: leave it centred, not at the last deflection.
+    if (mode == kRightStickCursor && mRightStick.exchange(mode) != kRightStickCursor) {
+        if (mCb.joystick) mCb.joystick(AZN_STICK_C, 0.0f, 0.0f);
+    }
+    mRightStick = mode;
+}
+
+// RG52 Mini: the right stick feeds the C-stick, the touch cursor or both (setRightStickMode).
+void NanoInput::rightStick() {
+    const int mode = mRightStick.load();
+    if (mode != kRightStickCStick && mCb.cursorStick) mCb.cursorStick(mRx, mRy);
+    if (mode != kRightStickCursor && mCb.joystick) mCb.joystick(AZN_STICK_C, mRx, -mRy);
+}
 
 // The swap applies while the menu is closed. A change (menu opened or closed, the option
 // switched) first releases whatever was held under the old mapping, so nothing sticks.
@@ -263,6 +281,17 @@ void NanoInput::handlePad(Node& n, uint16_t type, uint16_t code, int32_t value) 
         case BTN_DPAD_LEFT: physicalDpad(kLeft, pressed); return;
         case BTN_DPAD_RIGHT: physicalDpad(kRight, pressed); return;
         case BTN_THUMBR:
+            // RG52 Mini: with the right stick as the touch cursor R3 is the touch, and Back + R3
+            // toggles fast forward instead.
+            if (mRightStick.load() != kRightStickCStick) {
+                if (pressed && consumeBackHeld()) {
+                    if (mCb.fastForwardToggle) mCb.fastForwardToggle();
+                } else if (pressed || mR3Touch) {
+                    mR3Touch = pressed;
+                    if (mCb.cursorPress) mCb.cursorPress(pressed);
+                }
+                return;
+            }
             // R3 toggles fast forward (the 3DS has no stick click to pass on).
             if (pressed && mCb.fastForwardToggle) mCb.fastForwardToggle();
             return;
@@ -298,14 +327,14 @@ void NanoInput::handlePad(Node& n, uint16_t type, uint16_t code, int32_t value) 
             if (mCb.analogButton) mCb.analogButton(AZN_BUTTON_ZL, unit);
             break;
         }
-        mRx = norm; if (mCb.joystick) mCb.joystick(AZN_STICK_C, mRx, -mRy); break;
+        mRx = norm; rightStick(); break;
     case ABS_RY:
     case ABS_RZ:
         if (code == ABS_RZ && !n.hasAbs[ABS_RY]) {
             if (mCb.analogButton) mCb.analogButton(AZN_BUTTON_ZR, unit);
             break;
         }
-        mRy = norm; if (mCb.joystick) mCb.joystick(AZN_STICK_C, mRx, -mRy); break;
+        mRy = norm; rightStick(); break;
     case ABS_BRAKE: if (mCb.analogButton) mCb.analogButton(AZN_BUTTON_ZL, unit); break;
     case ABS_GAS: if (mCb.analogButton) mCb.analogButton(AZN_BUTTON_ZR, unit); break;
     case ABS_HAT0X:
