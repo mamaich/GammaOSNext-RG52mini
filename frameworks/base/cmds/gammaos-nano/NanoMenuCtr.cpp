@@ -953,7 +953,13 @@ bool NanoMenu::ctrEnsure() {
     {
         // text fields and the top screen's rebuilt icons follow the panel's magnification of the
         // 400 x 240 top screen (known before the layouts load; ctrDrawScreen refines it)
-        const float W = (float)mWidth, H = ctrDualPanel() ? (float)mHeight : mHeight * 0.5f;
+        float W = (float)mWidth, H = (float)mHeight;
+        if (!ctrDualPanel()) {   // one panel: the top screen's part of it
+            float t[4], b[4];
+            ctrSingleRects(t, b);
+            W = t[2];
+            H = t[3];
+        }
         if (W > 0 && H > 0) ctr::Font::setVectorScale((int)ceilf(std::min(W / 400.0f, H / 240.0f) - 0.1f));
         ctr::Font::setGlyphCacheDir("/data/system/nano_cache/ctr_glyphs");
         ctr::setProgramCacheDir("/data/system/nano_cache/ctr_shaders");
@@ -2871,6 +2877,30 @@ static void ctrFit(float lw, float lh, float rx, float ry, float rw, float rh, f
     *oy = ry + (rh - *oh) * 0.5f;
 }
 
+// One panel: where the two screens go. Stacked halves (the 3DS's own single screen layout) suit
+// a squarish panel; on a wide one each half is far wider than a screen, so the screens were
+// widened to 2.4:1 and still pillarboxed (RG52 Mini, 1280x720: 864x360 each at 1.5x, with bars of
+// two different colours). Side by side at their own 5:3 and 4:3, the top screen on the left, the
+// pair is larger there (1280x427 at 1.78x) with black bands above and below. Whichever is larger
+// wins: side by side once the panel is wider than 3:2.
+// persist.gammaos.nano.ctr.single_layout=side|stack picks one.
+void NanoMenu::ctrSingleRects(float* t, float* b) const {
+    const float W = (float)mWidth, H = (float)mHeight;
+    char v[PROPERTY_VALUE_MAX] = {};
+    property_get("persist.gammaos.nano.ctr.single_layout", v, "");
+    const bool side = !strcmp(v, "side") || (strcmp(v, "stack") != 0 && W > H * 1.5f);
+    if (!side) {
+        t[0] = 0; t[1] = 0;        t[2] = W; t[3] = H * 0.5f;
+        b[0] = 0; b[1] = H * 0.5f; b[2] = W; b[3] = H * 0.5f;
+        return;
+    }
+    const float s = std::min(W / 720.0f, H / 240.0f);
+    const float tw = floorf(400.0f * s), bw = floorf(320.0f * s), h = floorf(240.0f * s);
+    const float x = floorf((W - tw - bw) * 0.5f), y = floorf((H - h) * 0.5f);
+    t[0] = x;      t[1] = y; t[2] = tw; t[3] = h;
+    b[0] = x + tw; b[1] = y; b[2] = bw; b[3] = h;
+}
+
 void NanoMenu::ctrBottomRect(float& rx, float& ry, float& rw, float& rh) const {
     // the bottom screen's own panel (dual) or its part of this one
     float x = 0, y = 0, w = (float)mWidth, h = (float)mHeight;
@@ -2883,9 +2913,10 @@ void NanoMenu::ctrBottomRect(float& rx, float& ry, float& rw, float& rh) const {
             h = (float)mSecondaryCreatedSize[0].second;
         }
         ctrTestScreenRect(w, h, &x, &y, &w, &h);
-    } else {   // one panel: the two screens stacked, the bottom one in the lower half
-        y = h * 0.5f;
-        h *= 0.5f;
+    } else {   // one panel: the bottom screen's part of it
+        float t[4], b[4];
+        ctrSingleRects(t, b);
+        x = b[0]; y = b[1]; w = b[2]; h = b[3];
     }
     const float lw = ctrScreenWidth(false, w, h);
     ctrFit(lw, 240, x, y, w, h, &rx, &ry, &rw, &rh);
@@ -3087,8 +3118,15 @@ void NanoMenu::renderCtrPrimary() {
         float bx, by, bw, bh;
         ctrBottomRect(bx, by, bw, bh);
         botW = ctrScreenWidth(false, bw, bh);
-        float tx = 0, ty = 0, tw = W, th = ctrDualPanel() ? H : H * 0.5f;
-        if (ctrDualPanel()) ctrTestTopRect(W, H, &tx, &ty, &tw, &th);
+        float tx = 0, ty = 0, tw = W, th = H;
+        if (ctrDualPanel()) {
+            ctrTestTopRect(W, H, &tx, &ty, &tw, &th);
+        } else {
+            float t[4], b[4];
+            ctrSingleRects(t, b);
+            tw = t[2];
+            th = t[3];
+        }
         topW = ctrScreenWidth(true, tw, th);
         mCtrHome->setScreenWidths(topW, botW);
         mCtrHome->setTopHeight(ctrTopHeight(tw, th));
@@ -3113,10 +3151,13 @@ void NanoMenu::renderCtrPrimary() {
         ctrDrawScreen(true, tx, ty, tw, th);
         if (sCtrPerf.mode) sCtrPerf.top += CtrPerf::ms(perfUpdated, sCtrPerf.mark());
     } else {
-        // one panel, any aspect: the top screen over the bottom one (the usual single screen
-        // layout of the 3DS), each widened to its half like the screens of a dual panel device
-        ctrDrawScreen(true, 0, 0, W, H * 0.5f);
-        ctrDrawScreen(false, 0, H * 0.5f, W, H * 0.5f);
+        // one panel: the top screen over the bottom one (the usual single screen layout of the
+        // 3DS) or beside it on a wide panel (ctrSingleRects), on black outside the two screens
+        float t[4], b[4];
+        ctrSingleRects(t, b);
+        if (t[0] > 0 || t[1] > 0) drawQuad(0, 0, W, H, 0, 0, 0, 1);
+        ctrDrawScreen(true, t[0], t[1], t[2], t[3]);
+        ctrDrawScreen(false, b[0], b[1], b[2], b[3]);
     }
     // nano's screens the 3DS style does not cover yet (pickers, keyboard, wizard, players) keep
     // the shared XMB chrome; lists, option menus and dialogs are the 3DS panel and dialog

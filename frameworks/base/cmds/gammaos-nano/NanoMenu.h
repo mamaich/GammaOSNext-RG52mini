@@ -1679,6 +1679,8 @@ private:
     void ctrDrawScreen(bool top, float rx, float ry, float rw, float rh);
     bool ctrDualPanel() const;
     void ctrBottomRect(float& rx, float& ry, float& rw, float& rh) const;
+    // One panel: the rectangles of the top and the bottom screen on it (side by side or stacked).
+    void ctrSingleRects(float* t, float* b) const;   // each {x, y, w, h}
     bool ctrLaunchItem(const Ps3Item& it);        // a title chosen on the 3DS grid
     void ctrAppletBar(int button);                // an applet bar button (opens a nano category list)
     // nano's lists, option menus and dialogs in the 3DS style (NanoCtrPanel): the HOME Menu

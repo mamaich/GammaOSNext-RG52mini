@@ -1241,9 +1241,15 @@ void NanoMenu::renderCtrBoot(bool primary) {
     drawQuad(0.0f, 0.0f, W, H, 0.0f, 0.0f, 0.0f, 1.0f);
     const bool dual = ctrDualPanel();
     const double leaveAt = mDsiBootPhase >= DSI_ENTERING ? mDsiEnterStart : -1.0;
-    if (primary) {
-        ctrBootLogo(0.0f, 0.0f, W, dual ? H : H * 0.5f, leaveAt);
-        if (!dual) ctrBootNotice(0.0f, H * 0.5f, W, H * 0.5f, false);
+    if (primary && dual) {
+        ctrBootLogo(0.0f, 0.0f, W, H, leaveAt);
+    } else if (primary) {
+        // one panel: the screens where the HOME Menu puts them (stacked, or side by side on a
+        // wide panel - ctrSingleRects)
+        float t[4], b[4];
+        ctrSingleRects(t, b);
+        ctrBootLogo(t[0], t[1], t[2], t[3], leaveAt);
+        ctrBootNotice(b[0], b[1], b[2], b[3], false);
     } else if (dual) {
         float x = 0, y = 0, w = W, h = H;
         ctrTestScreenRect(W, H, &x, &y, &w, &h);   // test hook: a smaller screen
