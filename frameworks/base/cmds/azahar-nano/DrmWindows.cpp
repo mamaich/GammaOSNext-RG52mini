@@ -1353,6 +1353,14 @@ bool DrmWindows::recommit(DrmPanel& p, const char* why) {
     return true;
 }
 
+void DrmWindows::takeReadyWaits(int idx, std::vector<int32_t>& out) {
+    out.clear();
+    if (idx < 0 || idx >= (int)mPanels.size()) return;
+    DrmPanel& p = mPanels[idx];
+    std::lock_guard<std::mutex> lk(*p.mu);
+    out.swap(*p.readyWaitsUs);
+}
+
 void DrmWindows::onFlipDone(unsigned int crtcId, int64_t tsNs) {
     for (auto& p : mPanels) {
         if (p.crtcId != crtcId) continue;
@@ -1391,6 +1399,11 @@ void DrmWindows::onFlipDone(unsigned int crtcId, int64_t tsNs) {
             }
         }
         p.lastFlipNs = tsNs;
+        {
+            const int64_t readyNs = std::max(p.signalNs, p.queuedNs);
+            if (readyNs > 0 && tsNs > readyNs && tsNs - readyNs < 200000000LL && p.readyWaitsUs->size() < 512)
+                p.readyWaitsUs->push_back((int32_t)((tsNs - readyNs) / 1000));
+        }
         // The buffer that was on screen is now free.
         if (p.hasOnScreen) {
             (p.onScreenIsOverlay ? p.ovConsumer : p.consumer)->releaseBuffer(p.onScreen);
