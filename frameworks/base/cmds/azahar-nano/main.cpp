@@ -795,13 +795,6 @@ int main(int argc, char** argv) {
             property_set((std::string("sys.gammaos.azahar_nano.") + key).c_str(), v.c_str());
         }
     }
-    // RG52 Mini: the async GPU worker (on by default on Mali) runs the PICA commands on a
-    // thread of its own, which has no GL context: with the OpenGL ES renderer its first
-    // glCreateShader failed and the core crashed seconds into the game. Vulkan only.
-    if (configGet("Renderer", "graphics_api") == "1") {
-        property_set("sys.gammaos.azahar_nano.async_gpu", "0");
-        ALOGI("OpenGL ES renderer: async GPU off");
-    }
     // DRM direct by default (the presenter that paces both panels at 60 flips a second);
     // the SurfaceFlinger backend takes over below when the DRM panels do not come up.
     std::string backend = prop("persist.gammaos.azahar_nano.backend", "drm");
@@ -858,6 +851,23 @@ int main(int argc, char** argv) {
     }
     sStatesDir = dataDir + "/states";
     seedConfig(userDir);
+    // RG52 Mini: the Mali-G52 driver refuses to link the core's OpenGL ES programs (its
+    // nameless uniform blocks share member names between the stages), so the game never
+    // draws a frame there. ro.gammaos.azahar_nano.gles=false takes OpenGL ES off the menu
+    // and turns a setting left on it (config.ini or the game's override) back to Vulkan.
+    if (!property_get_bool("ro.gammaos.azahar_nano.gles", true) &&
+        configGet("Renderer", "graphics_api") == "1") {
+        if (azahar_nano::settings::setConfig("Renderer", "graphics_api", "2")) pushConfigOverrides();
+        else gCore.set_config_value("Renderer", "graphics_api", "2");
+        ALOGW("OpenGL ES does not run on this GPU: graphics API set back to Vulkan");
+    }
+    // The async GPU worker (on by default on Mali) runs the PICA commands on a thread of its
+    // own, which has no GL context: with the OpenGL ES renderer its first glCreateShader
+    // failed and the core crashed seconds into the game. Vulkan only.
+    if (configGet("Renderer", "graphics_api") == "1") {
+        property_set("sys.gammaos.azahar_nano.async_gpu", "0");
+        ALOGI("OpenGL ES renderer: async GPU off");
+    }
 
     // GPU driver: the adrenotools hook libraries ship next to the core; a custom
     // driver is an unpacked adrenotools package under <user>/gpu_drivers/<name>/.

@@ -418,10 +418,13 @@ PRODUCT_PACKAGES += \
 #     SurfaceFlinger на телевизор (frameworks/base/cmds/azahar-nano, SfWindows.cpp);
 #   ro.gammaos.azahar_nano.top_turn=180 - панель стоит в корпусе другой стороной, чем
 #     у Duo Lite, под который ядро рисует повёрнутую раскладку: без доворота на 180
-#     градусов картинка шла вверх ногами (DrmWindows.cpp, panelMountDeg).
+#     градусов картинка шла вверх ногами (DrmWindows.cpp, panelMountDeg);
+#   ro.gammaos.azahar_nano.gles=false - OpenGL ES убран из меню эмулятора: драйвер
+#     Mali-G52 не собирает программы шейдеров ядра для GLES, игра не рисует ни кадра.
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.gammaos.azahar_nano.layout_option=2 \
     ro.gammaos.azahar_nano.top_turn=180 \
+    ro.gammaos.azahar_nano.gles=false \
     ro.gammaos.hdmi_shares_panel_port=true
 
 # Пределы низкопамятного убийцы подобраны под zram без файла подкачки -

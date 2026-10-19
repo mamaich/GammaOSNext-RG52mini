@@ -20,6 +20,7 @@
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
 #include <android/native_window.h>
+#include <cutils/properties.h>
 #include <log/log.h>
 
 using android::drastic_gfx::Color;
@@ -509,8 +510,12 @@ void Overlay::buildPages() {
             "Keep compiled shaders between sessions", true));
         pg.rows.push_back(configToggle("Hardware Shaders", "Renderer", "use_hw_shader",
             "Run vertex shaders on the GPU", true));
-        pg.rows.push_back(configChoice("Graphics API", "Renderer", "graphics_api",
-            {{"Vulkan", "2"}, {"OpenGL ES", "1"}}, "Renderer backend", true));
+        // RG52 Mini: no OpenGL ES where the GPU cannot run it (ro.gammaos.azahar_nano.gles,
+        // see main.cpp); the row stays off the page with Vulkan as the only choice.
+        if (property_get_bool("ro.gammaos.azahar_nano.gles", true)) {
+            pg.rows.push_back(configChoice("Graphics API", "Renderer", "graphics_api",
+                {{"Vulkan", "2"}, {"OpenGL ES", "1"}}, "Renderer backend", true));
+        }
         {
             Row r;
             r.label = "GPU Driver";
