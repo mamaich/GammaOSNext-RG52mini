@@ -193,34 +193,50 @@ Core::System::ResultStatus RunCore(const std::string& filepath) {
         }
     });
 
+    // RG52 Mini: a single panel (no secondary surface) gets no secondary window. One built
+    // around a null surface made the Vulkan renderer create a present window for it and abort
+    // ("Presentation not supported on this platform"); every user of secondary_window checks
+    // it for null, and both screens then go to the primary window's layout.
+    const bool has_secondary = s_secondary_surface != nullptr;
+    if (!has_secondary) {
+        LOG_INFO(Frontend, "no secondary surface: one window, both screens in its layout");
+    }
     const auto graphics_api = Settings::GetWorkingGraphicsAPI();
     switch (graphics_api) {
 #ifdef ENABLE_OPENGL
     case Settings::GraphicsAPI::OpenGL: {
         window = std::make_unique<EmuWindow_Android_OpenGL>(system, s_surface, false);
         EGLContext* shared_context = window->GetEGLContext();
-        secondary_window = std::make_unique<EmuWindow_Android_OpenGL>(system, s_secondary_surface,
-                                                                      true, shared_context);
+        if (has_secondary) {
+            secondary_window = std::make_unique<EmuWindow_Android_OpenGL>(
+                system, s_secondary_surface, true, shared_context);
+        }
         break;
     }
 #endif
 #ifdef ENABLE_VULKAN
     case Settings::GraphicsAPI::Vulkan:
         window = std::make_unique<EmuWindow_Android_Vulkan>(s_surface, vulkan_library, false);
-        secondary_window =
-            std::make_unique<EmuWindow_Android_Vulkan>(s_secondary_surface, vulkan_library, true);
+        if (has_secondary) {
+            secondary_window = std::make_unique<EmuWindow_Android_Vulkan>(s_secondary_surface,
+                                                                          vulkan_library, true);
+        }
         break;
 #endif
     default:
         LOG_CRITICAL(Frontend, "Unsupported graphics API {}, using the default", graphics_api);
 #ifdef ENABLE_VULKAN
         window = std::make_unique<EmuWindow_Android_Vulkan>(s_surface, vulkan_library, false);
-        secondary_window =
-            std::make_unique<EmuWindow_Android_Vulkan>(s_secondary_surface, vulkan_library, true);
+        if (has_secondary) {
+            secondary_window = std::make_unique<EmuWindow_Android_Vulkan>(s_secondary_surface,
+                                                                          vulkan_library, true);
+        }
 #else
         window = std::make_unique<EmuWindow_Android_OpenGL>(system, s_surface, false);
-        secondary_window = std::make_unique<EmuWindow_Android_OpenGL>(
-            system, s_secondary_surface, true, window->GetEGLContext());
+        if (has_secondary) {
+            secondary_window = std::make_unique<EmuWindow_Android_OpenGL>(
+                system, s_secondary_surface, true, window->GetEGLContext());
+        }
 #endif
         break;
     }
