@@ -409,6 +409,17 @@ PRODUCT_PACKAGE_OVERLAYS += device/rg52mini/overlay
 PRODUCT_PACKAGES += \
     Rg52WifiOverlay
 
+# azahar-nano - эмулятор 3DS из апстрима (сеанс в режиме nano):
+#   ro.gammaos.azahar_nano.layout_option=2 - раскладка по умолчанию Large Screen:
+#     экран у консоли один и без сенсора, нужны оба экрана 3DS сразу (у апстрима
+#     по умолчанию 1 - только верхний, нижний уходит на вторую панель);
+#   ro.gammaos.hdmi_shares_panel_port=true - HDMI (мост rk628) делит со встроенным
+#     экраном единственный видеопорт: с подключённым HDMI сеанс идёт через
+#     SurfaceFlinger на телевизор (frameworks/base/cmds/azahar-nano, SfWindows.cpp).
+PRODUCT_PRODUCT_PROPERTIES += \
+    ro.gammaos.azahar_nano.layout_option=2 \
+    ro.gammaos.hdmi_shares_panel_port=true
+
 # Пределы низкопамятного убийцы подобраны под zram без файла подкачки -
 # заводской режим этого устройства. Замерено на TMNT (нужно около 2 ГБ
 # при 1,95 ГБ памяти), одинаковые отрезки, zram 100 % на zstd:

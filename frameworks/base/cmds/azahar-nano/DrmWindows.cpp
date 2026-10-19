@@ -261,8 +261,14 @@ bool DrmWindows::enumerate() {
     for (int i = 0; i < res->count_connectors; i++) {
         drmModeConnectorPtr c = drmModeGetConnector(mFd, res->connectors[i]);
         if (!c) continue;
+        // RG52 Mini: HDMI - не панель, как и у nano (NanoDisplays.h): на RK3562 он делит со
+        // встроенным экраном единственный CRTC, а внешний дисплей ведёт DisplayManager.
+        // С подключённым HDMI сеанс идёт через SurfaceFlinger (main.cpp, SfWindows).
+        const bool external = c->connector_type == DRM_MODE_CONNECTOR_HDMIA ||
+                              c->connector_type == DRM_MODE_CONNECTOR_HDMIB ||
+                              c->connector_type == DRM_MODE_CONNECTOR_WRITEBACK;
         if (c->connection == DRM_MODE_CONNECTED && c->count_modes > 0 &&
-            c->connector_type != DRM_MODE_CONNECTOR_VIRTUAL) {
+            c->connector_type != DRM_MODE_CONNECTOR_VIRTUAL && !external) {
             DrmPanel p;
             p.connId = c->connector_id;
             p.isDsi = c->connector_type == DRM_MODE_CONNECTOR_DSI;

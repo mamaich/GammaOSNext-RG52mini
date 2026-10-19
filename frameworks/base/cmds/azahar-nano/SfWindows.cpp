@@ -12,6 +12,7 @@
 #include <ui/DisplayMode.h>
 #include <ui/DisplayState.h>
 #include <ui/Rotation.h>
+#include <ui/StaticDisplayInfo.h>
 
 using namespace android;
 
@@ -98,6 +99,27 @@ int SfWindows::create() {
         ALOGE("no physical displays");
         return 0;
     }
+    // RG52 Mini: панели - встроенные дисплеи, внешний (HDMI) ведёт DisplayManager, как у nano
+    // (NanoDisplays.h). Но когда HDMI делит видеопорт со встроенным экраном
+    // (ro.gammaos.hdmi_shares_panel_port, мост rk628 на RK3562), с подключённым HDMI
+    // встроенный экран погашен, и показать игру можно только на HDMI: панель одна - он.
+    {
+        std::vector<PhysicalDisplayId> internal, external;
+        for (const auto& id : ids) {
+            ui::StaticDisplayInfo info;
+            const bool ext = SurfaceComposerClient::getStaticDisplayInfo(
+                                     static_cast<int64_t>(id.value), &info) == NO_ERROR &&
+                             info.connectionType == ui::DisplayConnectionType::External;
+            (ext ? external : internal).push_back(id);
+        }
+        if (!external.empty() && property_get_bool("ro.gammaos.hdmi_shares_panel_port", false)) {
+            ids.assign(1, external[0]);
+            mExternalOnly = true;
+            ALOGI("SF backend: HDMI shares the panel's video port, the session goes to HDMI");
+        } else if (!internal.empty()) {
+            ids = internal;
+        }
+    }
     // Primary first: persist.gammaos.primary_port names its connector port; without it
     // persist.gammaos.nano.primary_display does (the home's top screen: port 1 on the
     // RG DS, where SurfaceFlinger's display 0 is the bottom panel).
@@ -120,6 +142,11 @@ int SfWindows::create() {
             mPanels.push_back(std::move(p));
         }
         if (mPanels.size() == 2) break;
+    }
+    // RG52 Mini: в режиме nano внешний дисплей включает зеркало оболочки (NanoExtMirror),
+    // а на время сеанса оболочка остановлена - включаем HDMI сами (PowerMode ON).
+    if (mExternalOnly && !mPanels.empty()) {
+        SurfaceComposerClient::setDisplayPowerMode(mPanels[0].token, 2);
     }
     ALOGI("SF backend up: %zu panel(s)", mPanels.size());
     return (int)mPanels.size();

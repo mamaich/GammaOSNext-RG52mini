@@ -323,14 +323,36 @@ void pushConfigOverrides() {
     }
 }
 
+// RG52 Mini: подключён ли HDMI (sysfs DRM, card*-HDMI-A-*/status) - как nanoHdmiConnected().
+bool hdmiConnected() {
+    DIR* d = opendir("/sys/class/drm");
+    if (d == nullptr) return false;
+    bool connected = false;
+    while (dirent* e = readdir(d)) {
+        if (strstr(e->d_name, "-HDMI-A-") == nullptr) continue;
+        std::ifstream f(std::string("/sys/class/drm/") + e->d_name + "/status");
+        std::string s;
+        if (f >> s && s == "connected") {
+            connected = true;
+            break;
+        }
+    }
+    closedir(d);
+    return connected;
+}
+
 // Re-assert the user's clock policy (persist.gammaos.performance_mode) through the
 // vendor setclock_* services, exactly like drastic-nano: the boot trigger can race
 // or never fire when the home was stopped, and this session then ran on the
 // powersave governor at 650 MHz (measured: 2-9 fps instead of 60).
 void retriggerPowerProfile() {
     const std::string mode = prop("persist.gammaos.performance_mode", "max");
+    // RG52 Mini: у rg52-perf.sh ещё режимы 3d_game и overclock со своими службами
+    // setclock_<режим> (device/rg52mini/rg52-perf.rc); без них сеанс сбрасывал их на max.
     const char* svc = mode == "stock" ? "setclock_stock"
-                    : mode == "powersave" ? "setclock_powersave" : "setclock_max";
+                    : mode == "powersave" ? "setclock_powersave"
+                    : mode == "3d_game" ? "setclock_3d_game"
+                    : mode == "overclock" ? "setclock_overclock" : "setclock_max";
     property_set("ctl.start", svc);
     ALOGI("power profile %s (mode=%s)", svc, mode.c_str());
 }
@@ -488,7 +510,11 @@ void seedConfig(const std::string& userDir) {
     // is never touched.
     bool changed = false;
     if (configValue(userDir, "Layout", "layout_option").empty()) {
-        gCore.set_config_value("Layout", "layout_option", "1");
+        // RG52 Mini: экран один, сенсора нет - нужны оба экрана 3DS сразу, раскладку по
+        // умолчанию задаёт устройство (ro.gammaos.azahar_nano.layout_option, у нас 2).
+        char layout[PROPERTY_VALUE_MAX] = {};
+        property_get("ro.gammaos.azahar_nano.layout_option", layout, "1");
+        gCore.set_config_value("Layout", "layout_option", layout);
         changed = true;
     }
     if (configValue(userDir, "Renderer", "resolution_factor").empty()) {
@@ -770,7 +796,15 @@ int main(int argc, char** argv) {
     }
     // DRM direct by default (the presenter that paces both panels at 60 flips a second);
     // the SurfaceFlinger backend takes over below when the DRM panels do not come up.
-    const std::string backend = prop("persist.gammaos.azahar_nano.backend", "drm");
+    std::string backend = prop("persist.gammaos.azahar_nano.backend", "drm");
+    // RG52 Mini: встроенный экран и HDMI сидят на одном видеопорту (мост rk628), и пока HDMI
+    // подключён, встроенный экран погашен. DRM-вывод занял бы порт под встроенный экран,
+    // поэтому с HDMI сеанс идёт через SurfaceFlinger - на телевизор (SfWindows).
+    if (backend == "drm" && property_get_bool("ro.gammaos.hdmi_shares_panel_port", false) &&
+        hdmiConnected()) {
+        ALOGI("HDMI connected on the panel's video port: SurfaceFlinger backend");
+        backend = "sf";
+    }
     ALOGI("rom=%s core=%s user=%s backend=%s", rom.c_str(), coreLib.c_str(), userDir.c_str(),
           backend.c_str());
 

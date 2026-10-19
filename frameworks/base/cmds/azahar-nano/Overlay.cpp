@@ -358,9 +358,11 @@ void Overlay::buildPages() {
         // menu: init applies each property as it changes (init.gammaos_power.rc,
         // init.gammaos_fan.rc). Performance also starts its clock service directly so picking
         // the current mode re-applies it.
+        // RG52 Mini: все пять режимов rg52-perf.sh, как в меню nano (3d_game и overclock - наши).
         pg.rows.push_back(propChoice("Performance", "persist.gammaos.performance_mode", "max",
-            {{"Max", "max"}, {"Stock", "stock"}, {"Powersave", "powersave"}},
-            "CPU and GPU clocks: Max for full speed, Powersave for battery",
+            {{"Max", "max"}, {"Stock", "stock"}, {"Powersave", "powersave"},
+             {"3D Games", "3d_game"}, {"Overclock", "overclock"}},
+            "CPU and GPU clocks: Max for full speed, Overclock above it, Powersave for battery",
             [this](const std::string& v) {
                 if (mA.setProp) mA.setProp("ctl.start", ("setclock_" + v).c_str());
             }));

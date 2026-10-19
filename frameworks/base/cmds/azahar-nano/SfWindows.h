@@ -66,6 +66,7 @@ private:
 
     android::sp<android::SurfaceComposerClient> mSession;
     std::vector<SfPanel> mPanels;
+    bool mExternalOnly = false;   // RG52 Mini: the one panel is HDMI (see create)
 };
 
 } // namespace azahar_nano
