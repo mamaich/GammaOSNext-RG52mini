@@ -330,6 +330,10 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         bindHdmiMode();
         // RG52: turning on reboot-to-eMMC offers to set up EmuELEC there.
         bindRebootEmmc();
+        // RG52: Dual-Stack Display spreads an app over two built-in panels; this console has
+        // one (HDMI is a separate output), so the section is only clutter here.
+        Preference dualStack = findPreference("category_dualstack");
+        if (dualStack != null) dualStack.setVisible(false);
     }
 
     @Override
