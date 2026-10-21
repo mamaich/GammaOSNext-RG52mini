@@ -155,7 +155,7 @@ PRODUCT_COPY_FILES += \
 # root: config, nand, system files, shader cache) and /sdcard/azahar-nano (saves, states).
 # The GammaOS Turnip Vulkan driver (github.com/TheGammaSqueeze/gammaos-turnip, adreno-610)
 # ships as a bundled adrenotools package, the default on the Adreno 610 (GpuDriverPkg.h).
-PRODUCT_PACKAGES += azahar-nano
+PRODUCT_PACKAGES += azahar-nano azahar-nano-cheats
 PRODUCT_COPY_FILES += \
     gammaos/emulators/azahar-nano-lib/libazahar-nano-core.so:system/lib64/libazahar-nano-core.so \
     gammaos/emulators/azahar-nano-lib/libc++_shared.so:system/lib64/libc++_shared.so \
