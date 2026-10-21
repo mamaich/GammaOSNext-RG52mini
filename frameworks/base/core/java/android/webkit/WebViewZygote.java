@@ -48,6 +48,31 @@ public class WebViewZygote {
     @GuardedBy("sLock")
     private static ChildZygoteProcess sZygote;
 
+    /** The ABI the running child zygote was forked for; which app zygote it is a child of. */
+    @GuardedBy("sLock")
+    private static String sZygoteAbi;
+
+    /**
+     * GammaOS lazy 32-bit zygote: the secondary zygote is about to be stopped (SIGKILL by init)
+     * because no 32-bit app process is left. A WebView child zygote forked from it would survive
+     * as an orphan and abort on its next fork request (every WebView sandbox start then fails
+     * with "Error connecting to zygote" until reboot, and apps that need a WebView token, such
+     * as SmartTube, wait out their timeouts first). Stop that child zygote with its parent; the
+     * next WebView request starts a fresh one, which brings the secondary zygote back lazily.
+     */
+    public static void onSecondaryZygoteStopping() {
+        synchronized (sLock) {
+            if (sZygote == null || sZygoteAbi == null) return;
+            for (String abi : Build.SUPPORTED_32_BIT_ABIS) {
+                if (abi.equals(sZygoteAbi)) {
+                    Log.i(LOGTAG, "Stopping the WebView child zygote with the secondary zygote");
+                    stopZygoteLocked();
+                    return;
+                }
+            }
+        }
+    }
+
     /**
      * Information about the selected WebView package. This is set from #onWebViewProviderChanged().
      * GammaOS: written under sLock, but volatile and read without it - see getPackageName().
@@ -155,6 +180,7 @@ public class WebViewZygote {
             Process.killProcess(sZygote.getPid());
             sZygote = null;
             sRunning32Bit = false;
+            sZygoteAbi = null;
         }
     }
 
@@ -219,6 +245,7 @@ public class WebViewZygote {
                     Process.FIRST_ISOLATED_UID,
                     Integer.MAX_VALUE); // TODO(b/123615476) deal with user-id ranges properly
             sRunning32Bit = abi != null && !VMRuntime.is64BitAbi(abi);
+            sZygoteAbi = abi;
             ZygoteProcess.waitForConnectionToZygote(sZygote.getPrimarySocketAddress());
             sZygote.preloadApp(sPackage.applicationInfo, abi);
         } catch (Exception e) {
