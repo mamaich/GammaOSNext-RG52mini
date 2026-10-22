@@ -465,7 +465,7 @@ int ccFanIndex() {
 }
 
 // live on-state / mode of a tile action. 0 = off/inactive; 1 = on (or perf=powersave); 2 = perf=max;
-// 3 = perf=3d_game (CPU capped, GPU left free - see device/rg52mini/rg52-perf.sh); 4 = perf=overclock.
+// 3 = perf=3d_game (CPU cap follows the GPU under thermal limiting - see device/rg52mini/rg52-gpucap.sh); 4 = perf=overclock.
 // Shader: 1 + option index while on (the label names the shader). Fan: 1 + mode index, 0 when off.
 int ccActState(int act, bool sleeping) {
     char v[PROPERTY_VALUE_MAX] = {};

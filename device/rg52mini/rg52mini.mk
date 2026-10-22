@@ -534,8 +534,12 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 # плитка быстрых настроек и оболочка nano только пишут свойство и ничего не
 # запускают. Значения частот взяты из perf_apply.sh самой SyachOS, разбор —
 # в rg52-perf.sh.
+#
+# rg52-gpucap.sh - регулятор потолка процессора в режиме 3d_game (служба
+# rg52_gpucap из rg52-perf.rc).
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-perf.sh:system/bin/rg52-perf.sh \
+    device/rg52mini/rg52-gpucap.sh:system/bin/rg52-gpucap.sh \
     device/rg52mini/rg52-perf.rc:system/etc/init/rg52-perf.rc
 
 # Почти пустая батарея: при напряжении около 3,66 В пик тока всех ядер вместе с

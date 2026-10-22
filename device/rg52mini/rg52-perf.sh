@@ -76,10 +76,13 @@
 # рекомендованные вендором (процессор 2016 МГц, графика 900 МГц), без разгона;
 # память на верхней ступени.
 #
-# Про режим 3d_game. Он снижает потолок процессора, а графику оставляет
-# свободной. Смысл в тепловом бюджете: четыре ядра съедают его заметно
-# больше, чем одно графическое, и при перегреве выгоднее придержать их, чем
-# позволить троттлингу резать кадры в игре.
+# Про режим 3d_game. Частоты как в stock, но потолок процессора ведёт регулятор
+# rg52-gpucap.sh: он опускает потолок, только когда графика занята и её держит
+# тепловая защита, и поднимает обратно, когда графика свободна или чип остыл.
+# Смысл в тепловом бюджете: при перегреве выгоднее придержать процессор, чем
+# позволить троттлингу резать частоту графики. Прежний постоянный потолок
+# 1416 МГц заодно резал игры, которые упираются в процессор (разбор и замеры - в
+# rg52-gpucap.sh). Отсюда регулятору передаётся только верх потолка.
 
 set -u
 
@@ -204,7 +207,7 @@ case "$MODE" in
     powersave) DEF=schedutil:408000:1416000:powersave::528000000:600000000 ;;
     max)       DEF=performance:1416000:2016000:performance:max: ;;
     overclock) DEF=performance:max:max:performance:max::max ;;
-    3d_game)   DEF=schedutil:408000:1416000:simple_ondemand ;;
+    3d_game)   DEF=schedutil:408000:2016000:simple_ondemand ;;
     stock|*)   MODE=stock; DEF=schedutil:408000:2016000:simple_ondemand ;;
 esac
 
@@ -280,6 +283,17 @@ if [ "$(getprop sys.rg52.lowbat)" = 1 ] && [ "$LB_CAP" -gt 0 ]; then
     LOWBAT=1
     { [ -z "$CPU_MAX" ] || [ "$CPU_MAX" -gt "$LB_CAP" ]; } && CPU_MAX=$LB_CAP
     [ -n "$CPU_MIN" ] && [ "$CPU_MIN" -gt "$LB_CAP" ] && CPU_MIN=$LB_CAP
+fi
+# Регулятор потолка для 3d_game (rg52-gpucap.sh): здесь только его верх. Файл
+# пишется и удаляется под замком, а регулятор пишет потолок под тем же замком и
+# сверяет файл, так что его шаг не ляжет поверх потолка другого режима. Остановка
+# ему не нужна: без файла он выходит сам на следующем шаге.
+GPUCAP=0
+if [ "$MODE" = 3d_game ] && [ -n "$CPU_MAX" ] && [ "$(getprop persist.rg52.gpucap 1)" != 0 ]; then
+    GPUCAP=1
+    echo "$CPU_MAX" > /dev/rg52-gpucap.top
+else
+    rm -f /dev/rg52-gpucap.top
 fi
 [ -n "$CPU_MAX" ] && w "$CPU/scaling_max_freq" "$CPU_MAX"
 [ -n "$CPU_MIN" ] && w "$CPU/scaling_min_freq" "$CPU_MIN"
@@ -369,7 +383,11 @@ for d in /sys/class/input/input*; do
     fi
 done
 
+# Уже запущенный регулятор повторный start не трогает: новый верх он возьмёт из
+# файла сам.
+[ "$GPUCAP" = 1 ] && setprop ctl.start rg52_gpucap
+
 log -t rg52-perf "mode $MODE: cpu $(cat $CPU/scaling_governor 2>/dev/null) \
 $(cat $CPU/scaling_min_freq 2>/dev/null)-$(cat $CPU/scaling_max_freq 2>/dev/null), \
 gpu $(cat ${GPU:-/dev/null}/governor 2>/dev/null) max $(cat ${GPU:-/dev/null}/max_freq 2>/dev/null), boost $(cat /sys/devices/system/cpu/cpufreq/boost 2>/dev/null), thermal $(cat ${TZ:-/dev/null}/trip_point_0_temp 2>/dev/null)/$(cat ${TZ:-/dev/null}/trip_point_1_temp 2>/dev/null), ddr $(cat ${DMC:-/dev/null}/governor 2>/dev/null) $(cat ${DMC:-/dev/null}/min_freq 2>/dev/null)-$(cat ${DMC:-/dev/null}/max_freq 2>/dev/null), \
-joypad poll ${JOY} ms, lowbat ${LOWBAT}"
+joypad poll ${JOY} ms, lowbat ${LOWBAT}, gpucap ${GPUCAP}"

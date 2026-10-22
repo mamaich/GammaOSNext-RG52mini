@@ -45,6 +45,18 @@ service setclock_overclock /system/bin/rg52-perf.sh overclock
     oneshot
     seclabel u:r:shell:s0
 
+# Регулятор потолка процессора для 3d_game. Запускает его rg52-perf.sh, а не
+# триггер по свойству: azahar-nano и drastic-nano применяют режим через
+# ctl.start setclock_<режим>, и при низком заряде режим применяется заново из
+# rg52-lowbat.sh. Выходит сам, когда режим сменился. oneshot - чтобы init не
+# перезапускал его после такого выхода. Разбор - в rg52-gpucap.sh.
+service rg52_gpucap /system/bin/rg52-gpucap.sh
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
 # Аргумент boot: скрипт сам выберет режим по источнику питания (со вставленной
 # зарядкой max, от батареи stock) и запишет его в свойство. Служба нужна ещё и
 # потому, что свойство persist.* к этому моменту уже восстановлено, но изменения
