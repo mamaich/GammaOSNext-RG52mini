@@ -29,9 +29,10 @@ constexpr const char* kGlobalProp   = "persist.gammaos.performance_mode";
 constexpr const char* kRestoreProp  = "persist.gammaos.drastic.perf_restore";
 constexpr const char* kOverrideProp = "persist.gammaos.drastic_nano.performance_mode";
 
-// RG52: режимы rg52-perf.sh - кроме трёх штатных ещё 3d_game и overclock, у каждого своя служба
+// RG52: режимы rg52-perf.sh - кроме трёх штатных ещё overclock и 3d_game, у каждого своя служба
 // setclock_<режим> (device/rg52mini/rg52-perf.rc). Прежний serviceFor запускал для них
-// setclock_max, и свойство расходилось с действующим режимом.
+// setclock_max, и свойство расходилось с действующим режимом. 3d_game из меню убран, но мог
+// остаться в настройках игры - rg52-perf.sh применяет его как stock.
 inline const char* serviceFor(const char* mode) {
     if (strcmp(mode, "stock") == 0) return "setclock_stock";
     if (strcmp(mode, "powersave") == 0) return "setclock_powersave";

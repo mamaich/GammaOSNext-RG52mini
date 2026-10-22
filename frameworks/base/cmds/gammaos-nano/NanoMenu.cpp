@@ -1336,8 +1336,9 @@ void NanoMenu::drasticPerfRestoreCheck() {
     char saved[PROPERTY_VALUE_MAX] = {};
     property_get("persist.gammaos.drastic.perf_restore", saved, "");
     if (!saved[0]) return;
-    // RG52: все пять режимов rg52-perf.sh (3d_game и overclock - наши); overclock, запаркованный
-    // до перезагрузки, rg52-perf.sh при загрузке заменяет на max.
+    // RG52: все режимы rg52-perf.sh (overclock - наш); overclock, запаркованный до перезагрузки,
+    // rg52-perf.sh при загрузке заменяет на max. 3d_game из меню убран, но запаркованным мог
+    // остаться - его rg52-perf.sh применяет как stock.
     if (strcmp(saved, "max") == 0 || strcmp(saved, "stock") == 0 || strcmp(saved, "powersave") == 0
         || strcmp(saved, "3d_game") == 0 || strcmp(saved, "overclock") == 0) {
         property_set("persist.gammaos.performance_mode", saved);

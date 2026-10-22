@@ -31,6 +31,9 @@ service setclock_powersave /system/bin/rg52-perf.sh powersave
     oneshot
     seclabel u:r:shell:s0
 
+# 3d_game из меню убран; служба и триггер оставлены для значения, которое могло
+# сохраниться (в настройках игры drastic-nano, запаркованным). rg52-perf.sh
+# применяет его как stock и переписывает свойство.
 service setclock_3d_game /system/bin/rg52-perf.sh 3d_game
     user root
     group root system
@@ -45,10 +48,11 @@ service setclock_overclock /system/bin/rg52-perf.sh overclock
     oneshot
     seclabel u:r:shell:s0
 
-# Регулятор потолка процессора для 3d_game. Запускает его rg52-perf.sh, а не
-# триггер по свойству: azahar-nano и drastic-nano применяют режим через
-# ctl.start setclock_<режим>, и при низком заряде режим применяется заново из
-# rg52-lowbat.sh. Выходит сам, когда режим сменился. oneshot - чтобы init не
+# Регулятор потолка процессора при перегреве графики (stock, max, overclock).
+# Запускает его rg52-perf.sh, а не триггер по свойству: azahar-nano и
+# drastic-nano применяют режим через ctl.start setclock_<режим>, и при низком
+# заряде режим применяется заново из rg52-lowbat.sh. Выходит сам, когда режим
+# сменился на powersave или регулятор выключили. oneshot - чтобы init не
 # перезапускал его после такого выхода. Разбор - в rg52-gpucap.sh.
 service rg52_gpucap /system/bin/rg52-gpucap.sh
     user root
@@ -119,6 +123,11 @@ service rg52_perf_apply /system/bin/rg52-perf.sh
     seclabel u:r:shell:s0
 
 on property:persist.rg52.joypad.poll_ms=* && property:sys.boot_completed=1
+    start rg52_perf_apply
+
+# Галка регулятора потолка (GammaOS Toolbox, persist.rg52.gpucap) - тоже сразу:
+# повторное применение режима запускает регулятор или убирает файл его верха.
+on property:persist.rg52.gpucap=* && property:sys.boot_completed=1
     start rg52_perf_apply
 
 # Счётчики планировщика. atrace.rc из AOSP включает их на late-init ради трасс

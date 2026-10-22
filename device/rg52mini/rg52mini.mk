@@ -535,7 +535,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
 # запускают. Значения частот взяты из perf_apply.sh самой SyachOS, разбор —
 # в rg52-perf.sh.
 #
-# rg52-gpucap.sh - регулятор потолка процессора в режиме 3d_game (служба
+# rg52-gpucap.sh - регулятор потолка процессора при перегреве графики (служба
 # rg52_gpucap из rg52-perf.rc).
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-perf.sh:system/bin/rg52-perf.sh \

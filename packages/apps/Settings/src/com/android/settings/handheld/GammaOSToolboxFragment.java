@@ -86,6 +86,8 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
     static {
         // Display
         DEFAULTS.put("persist.rg52.perf.remember_mode", "1");
+        // rg52-perf.sh reads it as "0" = off, anything else = on (device/rg52mini/rg52-gpucap.sh).
+        DEFAULTS.put("persist.rg52.gpucap", "1");
         DEFAULTS.put("persist.rg52.zram.size_pct", "100");
         DEFAULTS.put("persist.rg52.zram.algo", "zstd");
         DEFAULTS.put("persist.rg52.zram.backing_mb", "0");

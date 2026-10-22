@@ -1090,6 +1090,14 @@
             android:summary="@string/gammaos_toolbox_perf_remember_summary"
             android:defaultValue="1" />
 
+        <!-- RG52: регулятор потолка процессора при перегреве графики
+             (device/rg52mini/rg52-gpucap.sh); rg52-perf.rc применяет сразу. -->
+        <SwitchPreference
+            android:key="persist.rg52.gpucap"
+            android:title="@string/gammaos_toolbox_perf_gpucap_title"
+            android:summary="@string/gammaos_toolbox_perf_gpucap_summary"
+            android:defaultValue="1" />
+
         <EditTextPreference
             android:key="persist.gammaos.qs.override_default_tiles"
             android:title="@string/gammaos_toolbox_qs_override_title"

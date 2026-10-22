@@ -13666,8 +13666,10 @@
     <string name="gammaos_toolbox_gesture_wake_title">Wake gesture filter</string>
     <string name="gammaos_toolbox_gesture_wake_summary">Filter specific wake gestures to prevent accidental screen wake. Comma-separated gesture identifiers.</string>
     <string name="gammaos_toolbox_performance_mode_title">Performance mode</string>
-    <string name="gammaos_toolbox_performance_mode_summary">Performance profile for CPU/GPU/memory governor tuning. Options: powersave, stock, 3d_game, max, overclock.</string>
+    <string name="gammaos_toolbox_performance_mode_summary">Performance profile for CPU/GPU/memory governor tuning. Options: powersave, stock, max, overclock.</string>
     <string name="gammaos_toolbox_perf_remember_title">Remember performance mode across reboots</string>
+    <string name="gammaos_toolbox_perf_gpucap_title">Lower CPU clock when hot to keep GPU speed</string>
+    <string name="gammaos_toolbox_perf_gpucap_summary">In Normal, Max Performance and Overclock: when the chip overheats and the thermal limit slows the GPU while a game keeps it busy, the CPU clock is lowered step by step so the GPU can keep its own. It goes back up when the GPU has spare time or the chip cools down. Does nothing on a cool device. Measured in Minecraft on a hot device in Max Performance: 9% more frames.</string>
     <string name="gammaos_toolbox_zram_size_title">zRAM size (% of RAM)</string>
     <string name="gammaos_toolbox_zram_algo_title">zRAM compression</string>
     <string name="gammaos_toolbox_zram_algo_summary">How zRAM packs pages. zstd fits more into the same RAM, lz4 costs less CPU per page. Measured here on a heavy game: zstd held 268 MB in 74 MB of RAM, lz4 needed 105 MB for the same data, and the card took 17% fewer writes with zstd. Changing this rebuilds zRAM, which briefly pulls its pages back into RAM.</string>

@@ -1215,17 +1215,16 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
 
     private void showPerformanceDialog() {
         String current = SystemProperties.get("persist.gammaos.performance_mode", "stock");
-        // 3d_game придерживает процессор (потолок 1416 МГц), а графику
-        // оставляет свободной: четыре ядра съедают тепловой бюджет заметно
-        // быстрее одного графического, и при перегреве выгоднее придержать
-        // их, чем позволить троттлингу резать кадры. Названия режимов -
-        // это значения persist.gammaos.performance_mode, по ним стартуют
-        // службы setclock_<режим>. overclock - всё на верхние ступени вместе с
-        // разгонными (см. device/rg52mini/rg52-perf.sh), через перезагрузку
-        // не сохраняется. Порядок - по росту производительности, так понятнее,
+        // Названия режимов - это значения persist.gammaos.performance_mode, по ним
+        // стартуют службы setclock_<режим>. overclock - всё на верхние ступени
+        // вместе с разгонными (см. device/rg52mini/rg52-perf.sh), через
+        // перезагрузку не сохраняется. Режима 3d_game больше нет: потолок
+        // процессора при перегреве графики теперь ведёт регулятор rg52-gpucap.sh в
+        // Normal, Max и Overclock, а оставшееся значение 3d_game rg52-perf.sh
+        // заменяет на stock. Порядок - по росту производительности, так понятнее,
         // какой режим «сильнее»; неизвестное значение отмечается как Normal.
-        final String[] modes = {"powersave", "stock", "3d_game", "max", "overclock"};
-        final String[] labels = {"Power Saver", "Normal", "3D Games", "Max Performance", "Overclock"};
+        final String[] modes = {"powersave", "stock", "max", "overclock"};
+        final String[] labels = {"Power Saver", "Normal", "Max Performance", "Overclock"};
         int checkedItem = 1;
         for (int i = 0; i < modes.length; i++) {
             if (modes[i].equals(current)) {

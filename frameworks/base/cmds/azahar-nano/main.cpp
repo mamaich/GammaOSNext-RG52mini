@@ -350,6 +350,7 @@ void retriggerPowerProfile() {
     const std::string mode = prop("persist.gammaos.performance_mode", "max");
     // RG52 Mini: у rg52-perf.sh ещё режимы 3d_game и overclock со своими службами
     // setclock_<режим> (device/rg52mini/rg52-perf.rc); без них сеанс сбрасывал их на max.
+    // 3d_game из меню убран, оставшееся значение rg52-perf.sh применяет как stock.
     const char* svc = mode == "stock" ? "setclock_stock"
                     : mode == "powersave" ? "setclock_powersave"
                     : mode == "3d_game" ? "setclock_3d_game"

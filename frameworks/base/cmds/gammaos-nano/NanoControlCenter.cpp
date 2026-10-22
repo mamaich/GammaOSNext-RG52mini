@@ -465,7 +465,7 @@ int ccFanIndex() {
 }
 
 // live on-state / mode of a tile action. 0 = off/inactive; 1 = on (or perf=powersave); 2 = perf=max;
-// 3 = perf=3d_game (CPU cap follows the GPU under thermal limiting - see device/rg52mini/rg52-gpucap.sh); 4 = perf=overclock.
+// 3 = unused (perf=3d_game is retired and shows as stock - see device/rg52mini/rg52-perf.sh); 4 = perf=overclock.
 // Shader: 1 + option index while on (the label names the shader). Fan: 1 + mode index, 0 when off.
 int ccActState(int act, bool sleeping) {
     char v[PROPERTY_VALUE_MAX] = {};
@@ -474,7 +474,6 @@ int ccActState(int act, bool sleeping) {
         case A_PERF:     property_get("persist.gammaos.performance_mode", v, "stock");
                          if (!strcmp(v, "powersave")) return 1;
                          if (!strcmp(v, "max"))       return 2;
-                         if (!strcmp(v, "3d_game"))   return 3;
                          if (!strcmp(v, "overclock")) return 4;
                          return 0;
         case A_SPLITBRI: return property_get_int32("persist.gammaos.multidisplay.split_brightness", 0) ? 1 : 0;
@@ -762,7 +761,7 @@ void NanoMenu::renderCcPass(int pass) {
         bool closeTile = !mCcBottomApp.empty();
         for (int i = 0; i < 8; i++) {
             const int act = ccTileAct(i);
-            int st = ccActState(act, mCcSleeping);   // 0 off, 1 on / perf=powersave, 2 perf=max, 3 perf=3d_game, 4 overclock
+            int st = ccActState(act, mCcSleeping);   // 0 off, 1 on / perf=powersave, 2 perf=max, 4 overclock
             bool isClose = (act == A_SHOT && closeTile);
             bool on = st > 0 || isClose;
             float x, y; ccTileXY(i, x, y);
@@ -786,7 +785,7 @@ void NanoMenu::renderCcPass(int pass) {
             }
             // Performance shows its mode name; the Screenshot tile shows "Close App" while a bottom app runs.
             const char* lbl = CC_TILE[i].label;
-            if (act == A_PERF)     lbl = (st == 4) ? "Overclock" : (st == 3) ? "3D Games" : (st == 2) ? "Max"
+            if (act == A_PERF)     lbl = (st == 4) ? "Overclock" : (st == 2) ? "Max"
                                        : (st == 1) ? "Powersave" : "Stock";
             else if (act == A_SHADER && st > 0) lbl = CC_SHADERS[st].label;
             else if (act == A_FAN) lbl = st > 0 ? CC_FAN_LABEL[st - 1] : "Fan Off";
@@ -1798,13 +1797,13 @@ void NanoMenu::ccOnTap(float px, float py) {
                 case A_PERF: {
                     char v[PROPERTY_VALUE_MAX] = {};
                     property_get("persist.gammaos.performance_mode", v, "stock");
-                    // По росту производительности: powersave -> stock -> 3d_game -> max
-                    // и снова powersave. Overclock плитка не перебирает - его выбирают
-                    // осознанно в меню режимов; с него нажатие ведёт на powersave.
+                    // По росту производительности: powersave -> stock -> max и снова
+                    // powersave. Overclock плитка не перебирает - его выбирают осознанно в
+                    // меню режимов; с него нажатие ведёт на powersave. 3d_game убран и
+                    // считается stock.
                     const char* next = "stock";
                     if      (!strcmp(v, "powersave")) next = "stock";
-                    else if (!strcmp(v, "stock"))     next = "3d_game";
-                    else if (!strcmp(v, "3d_game"))   next = "max";
+                    else if (!strcmp(v, "stock") || !strcmp(v, "3d_game")) next = "max";
                     else                              next = "powersave";
                     property_set("persist.gammaos.performance_mode", next);
                     break;
