@@ -57,17 +57,20 @@ public class GamepadRemapDialogFragment extends DialogFragment {
         STANDARD_TARGETS.put("R3", 0x13e);       // BTN_THUMBR
     }
 
-    // Standard gamepad axes: display name -> evdev code
-    private static final Map<String, Integer> STANDARD_AXIS_TARGETS = new LinkedHashMap<>();
-    static {
-        STANDARD_AXIS_TARGETS.put("Left Stick X", 0x00);   // ABS_X
-        STANDARD_AXIS_TARGETS.put("Left Stick Y", 0x01);   // ABS_Y
-        STANDARD_AXIS_TARGETS.put("Left Trigger", 0x02);   // ABS_Z
-        STANDARD_AXIS_TARGETS.put("Right Stick X", 0x03);  // ABS_RX
-        STANDARD_AXIS_TARGETS.put("Right Stick Y", 0x04);  // ABS_RY
-        STANDARD_AXIS_TARGETS.put("Right Trigger", 0x05);  // ABS_RZ
-        STANDARD_AXIS_TARGETS.put("DPAD X", 0x10);         // ABS_HAT0X
-        STANDARD_AXIS_TARGETS.put("DPAD Y", 0x11);         // ABS_HAT0Y
+    // Gamepad axes: display name -> evdev code, in the preset layout (GamepadAxisLayout).
+    // Раньше коды были стандартной раскладки 0x02fd при любом пресете: при 0x0b13 «Left
+    // Trigger» (ABS_Z) - это правый стик, и перестановка уводила стик в курок.
+    private static Map<String, Integer> axisTargets() {
+        Map<String, Integer> targets = new LinkedHashMap<>();
+        targets.put("Left Stick X", GamepadAxisLayout.ABS_X);
+        targets.put("Left Stick Y", GamepadAxisLayout.ABS_Y);
+        targets.put("Left Trigger", GamepadAxisLayout.leftTrigger());
+        targets.put("Right Stick X", GamepadAxisLayout.rightStickX());
+        targets.put("Right Stick Y", GamepadAxisLayout.rightStickY());
+        targets.put("Right Trigger", GamepadAxisLayout.rightTrigger());
+        targets.put("DPAD X", GamepadAxisLayout.ABS_HAT0X);
+        targets.put("DPAD Y", GamepadAxisLayout.ABS_HAT0Y);
+        return targets;
     }
 
     // Android keycode -> evdev code mapping (standard gamepad buttons)
@@ -726,7 +729,7 @@ public class GamepadRemapDialogFragment extends DialogFragment {
         String sourceName = getDisplayName(mCapturedEvdevCode);
 
         Map<String, Integer> targets = mAxisMode
-                ? STANDARD_AXIS_TARGETS : STANDARD_TARGETS;
+                ? axisTargets() : STANDARD_TARGETS;
         List<String> names = new ArrayList<>(targets.keySet());
         List<Integer> codes = new ArrayList<>(targets.values());
         if (!mAxisMode) {
@@ -813,8 +816,9 @@ public class GamepadRemapDialogFragment extends DialogFragment {
 
     private AlertDialog buildAxisSourceDialog(Context context,
             androidx.fragment.app.FragmentManager fm) {
-        List<String> names = new ArrayList<>(STANDARD_AXIS_TARGETS.keySet());
-        List<Integer> codes = new ArrayList<>(STANDARD_AXIS_TARGETS.values());
+        Map<String, Integer> targets = axisTargets();
+        List<String> names = new ArrayList<>(targets.keySet());
+        List<Integer> codes = new ArrayList<>(targets.values());
         String[] items = names.toArray(new String[0]);
 
         return new AlertDialog.Builder(context)
@@ -832,7 +836,7 @@ public class GamepadRemapDialogFragment extends DialogFragment {
     private String getDisplayName(int evdevCode) {
         if (mAxisMode) {
             for (Map.Entry<String, Integer> entry
-                    : STANDARD_AXIS_TARGETS.entrySet()) {
+                    : axisTargets().entrySet()) {
                 if (entry.getValue() == evdevCode) return entry.getKey();
             }
             String name = AXIS_EVDEV_NAMES.get(evdevCode);

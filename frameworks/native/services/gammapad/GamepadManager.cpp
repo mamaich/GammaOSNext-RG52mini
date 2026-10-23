@@ -102,6 +102,7 @@ bool GamepadManager::init() {
         executeAction(type, arg);
     });
 
+    migrateRg52KernelCodes();
     loadConfig();
 
     // Create epoll
@@ -663,9 +664,6 @@ void GamepadManager::rebuildGlobalMaps() {
 
     LOG(INFO) << "Preset PID 0x" << std::hex << presetPid << std::dec;
 
-    // Apply user-configured role overrides to global maps
-    applyRoleMappings();
-
     // Apply user axis remaps at the global mAbsMap level
     const auto& axisRemaps = mTransformer->getAxisRemaps();
     if (!axisRemaps.empty()) {
@@ -702,6 +700,10 @@ void GamepadManager::rebuildGlobalMaps() {
         }
     }
 
+    // Роли осей - после remap_axis: диалог Axis assignment запоминает код, на котором
+    // ось выходит с виртуального геймпада, то есть уже после перестановки.
+    applyRoleMappings(presetPid);
+
     // Push the global merged maps to the transformer (used as fallback)
     mTransformer->setDeviceMaps(mAbsMap, mKeyMap);
 
@@ -712,21 +714,28 @@ void GamepadManager::rebuildGlobalMaps() {
               << mKeyMap.size() << " keyMap";
 }
 
-void GamepadManager::applyRoleMappings() {
+void GamepadManager::applyRoleMappings(int presetPid) {
     using android::base::GetProperty;
 
     // Each role property stores the current mapped code that should assume a target role.
     // E.g., role_lt=9 means "the axis currently mapped to code 9 should output as ABS_Z".
-    static const struct {
+    //
+    // Код роли - в раскладке пресета, как в normalizeToPreset. Раньше здесь всегда стояла
+    // раскладка 0x02fd (стик RX/RY, курки Z/RZ), а пресет по умолчанию 0x0b13 выводит правый
+    // стик на Z/RZ и курки на BRAKE/GAS. Назначив в диалоге LT и RT, пользователь отдавал
+    // курки на оси правого стика, а стик - на курки (жалоба после v1.12). Теперь назначение
+    // «как есть» ничего не переставляет, и уже сохранённые так роли перестают ломать стик.
+    const bool standard = (presetPid == 0x02fd);
+    const struct {
         const char* prop;
         int targetCode;
     } roles[] = {
         { "persist.gammaos.gamepad.role_lx", ABS_X },
         { "persist.gammaos.gamepad.role_ly", ABS_Y },
-        { "persist.gammaos.gamepad.role_rx", ABS_RX },
-        { "persist.gammaos.gamepad.role_ry", ABS_RY },
-        { "persist.gammaos.gamepad.role_lt", ABS_Z },
-        { "persist.gammaos.gamepad.role_rt", ABS_RZ },
+        { "persist.gammaos.gamepad.role_rx", standard ? ABS_RX : ABS_Z },
+        { "persist.gammaos.gamepad.role_ry", standard ? ABS_RY : ABS_RZ },
+        { "persist.gammaos.gamepad.role_lt", standard ? ABS_Z : ABS_BRAKE },
+        { "persist.gammaos.gamepad.role_rt", standard ? ABS_RZ : ABS_GAS },
     };
 
     // Build permutation: currentCode → desiredCode
@@ -750,6 +759,20 @@ void GamepadManager::applyRoleMappings() {
         if (completed.find(to) == completed.end()) {
             completed[to] = from;
             LOG(INFO) << "Role auto-swap: " << to << " -> " << from;
+        }
+    }
+
+    // Пер-девайсные карты тоже, как и для remap_axis: события идут через них, а при одной
+    // глобальной роли меняли лишь объявленные оси виртуального геймпада, не сами события.
+    for (auto& [fd, dev] : mDevices) {
+        (void) fd;
+        for (auto& [sc, mappedCode] : dev.absMap) {
+            auto it = completed.find(mappedCode);
+            if (it != completed.end()) {
+                LOG(INFO) << "Role applied (" << dev.name << "): sc=" << sc
+                          << " " << mappedCode << " -> " << it->second;
+                mappedCode = it->second;
+            }
         }
     }
 
@@ -1745,6 +1768,106 @@ void GamepadManager::recoverHiddenNodes() {
 
     // Clean up state file
     unlink(HIDDEN_NODES_FILE);
+}
+
+// "from:to,from:to" of a remap property; "none" and malformed pairs are skipped.
+static std::vector<std::pair<int, int>> parseRemapPairs(const std::string& value) {
+    std::vector<std::pair<int, int>> pairs;
+    std::istringstream ss(value);
+    std::string pair;
+    while (std::getline(ss, pair, ',')) {
+        size_t colon = pair.find(':');
+        if (colon == std::string::npos) continue;
+        int from = std::atoi(pair.substr(0, colon).c_str());
+        int to = std::atoi(pair.substr(colon + 1).c_str());
+        if (from != 0 && to != 0) pairs.emplace_back(from, to);
+    }
+    return pairs;
+}
+
+static std::string joinRemapPairs(const std::vector<std::pair<int, int>>& pairs) {
+    std::string value;
+    for (const auto& [from, to] : pairs) {
+        if (!value.empty()) value += ",";
+        value += std::to_string(from) + ":" + std::to_string(to);
+    }
+    return value;
+}
+
+// Кнопки: заводские пары 316:172 и 704:158 убрать - драйвер отдаёт HOME и BACK
+// сразу как KEY_HOMEPAGE и KEY_BACK. Свои назначения пользователя с этих кнопок
+// (источник 316/704) продублировать на новые коды, оставив и прежние: 316 - это
+// ещё и Guide внешних геймпадов.
+static std::vector<std::pair<int, int>> migrateRg52ButtonPairs(
+        const std::vector<std::pair<int, int>>& in) {
+    std::vector<std::pair<int, int>> out;
+    for (const auto& p : in) {
+        if ((p.first == BTN_MODE && p.second == KEY_HOMEPAGE) ||
+            (p.first == BTN_TRIGGER_HAPPY1 && p.second == KEY_BACK)) {
+            continue;
+        }
+        out.push_back(p);
+    }
+    const size_t n = out.size();
+    for (size_t i = 0; i < n; i++) {
+        int now = out[i].first == BTN_MODE ? KEY_HOMEPAGE
+                : out[i].first == BTN_TRIGGER_HAPPY1 ? KEY_BACK : 0;
+        if (now == 0) continue;
+        bool taken = std::any_of(out.begin(), out.end(),
+                                 [now](const auto& q) { return q.first == now; });
+        if (!taken) out.emplace_back(now, out[i].second);
+    }
+    return out;
+}
+
+void GamepadManager::migrateRg52KernelCodes() {
+    using android::base::GetIntProperty;
+    using android::base::GetProperty;
+    using android::base::SetProperty;
+
+    // До t21 драйвер rk3562-joystick отдавал левый курок как ABS_GAS, правый как
+    // ABS_BRAKE, HOME как BTN_MODE, BACK как BTN_TRIGGER_HAPPY1, и rg52mini.mk
+    // исправлял это свойствами remap_axis=9:10,10:9 и remap_btn=316:172,704:158.
+    // Они действовали на все геймпады: у внешнего курки менялись местами, Guide
+    // становился HOME. Теперь это делает драйвер, а значений по умолчанию нет.
+    // Но если пользователь что-то переназначал, в /data сохранилась вся строка
+    // вместе с заводскими парами, и они перевернули бы уже верные коды обратно.
+    static const char* kDone = "persist.gammaos.gamepad.rg52_kernel_codes";
+    if (GetProperty("ro.gammaos.device", "") != "rg52mini") return;
+    if (GetProperty(kDone, "") == "1") return;
+
+    auto migrateButtons = [](const std::string& prop) {
+        auto pairs = parseRemapPairs(GetProperty(prop, ""));
+        auto out = migrateRg52ButtonPairs(pairs);
+        if (out == pairs) return;
+        LOG(INFO) << "RG52 kernel codes: " << prop << " " << joinRemapPairs(pairs)
+                  << " -> " << joinRemapPairs(out);
+        SetProperty(prop, joinRemapPairs(out));
+    };
+    migrateButtons("persist.gammaos.gamepad.remap_btn");
+    int paCount = GetIntProperty("persist.gammaos.gamepad.pa_count", 0);
+    for (int i = 0; i < paCount && i < 20; i++) {
+        migrateButtons("persist.gammaos.gamepad.pa" + std::to_string(i) + "_btn");
+    }
+
+    // Курки: только заводскую перестановку целиком. Любая другая настройка 9/10 -
+    // пользовательская, её не трогаем.
+    const char* axisProp = "persist.gammaos.gamepad.remap_axis";
+    auto axes = parseRemapPairs(GetProperty(axisProp, ""));
+    auto isGas = [](const auto& p) { return p.first == ABS_GAS && p.second == ABS_BRAKE; };
+    auto isBrake = [](const auto& p) { return p.first == ABS_BRAKE && p.second == ABS_GAS; };
+    if (std::any_of(axes.begin(), axes.end(), isGas) &&
+        std::any_of(axes.begin(), axes.end(), isBrake)) {
+        std::vector<std::pair<int, int>> out;
+        for (const auto& p : axes) {
+            if (!isGas(p) && !isBrake(p)) out.push_back(p);
+        }
+        LOG(INFO) << "RG52 kernel codes: " << axisProp << " " << joinRemapPairs(axes)
+                  << " -> " << joinRemapPairs(out);
+        SetProperty(axisProp, joinRemapPairs(out));
+    }
+
+    SetProperty(kDone, "1");
 }
 
 } // namespace gammapad

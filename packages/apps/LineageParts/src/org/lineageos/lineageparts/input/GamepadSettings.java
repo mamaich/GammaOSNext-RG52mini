@@ -230,15 +230,8 @@ public class GamepadSettings extends SettingsPreferenceFragment
         BTN_NAMES.put(0x13e, "R3");
     }
 
-    // Standard axis code to name mapping (Linux ABS codes)
-    private static final Map<Integer, String> AXIS_NAMES = new HashMap<>();
-    static {
-        AXIS_NAMES.put(0x00, "LX"); AXIS_NAMES.put(0x01, "LY");
-        AXIS_NAMES.put(0x02, "LT"); AXIS_NAMES.put(0x03, "RX");
-        AXIS_NAMES.put(0x04, "RY"); AXIS_NAMES.put(0x05, "RT");
-        AXIS_NAMES.put(0x09, "GAS"); AXIS_NAMES.put(0x0a, "BRAKE");
-        AXIS_NAMES.put(0x10, "DpadX"); AXIS_NAMES.put(0x11, "DpadY");
-    }
+    // Имена осей - по раскладке пресета, см. GamepadAxisLayout: при 0x0b13 Z/RZ - правый
+    // стик, а не LT/RT, как здесь было написано для любого пресета.
 
     // Linux ABS code → Android MotionEvent AXIS constant.
     // These differ for axes beyond X/Y. The daemon works with Linux codes,
@@ -400,7 +393,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
         Preference remapAxisPref = findPreference(KEY_REMAP_AXES);
         if (remapAxisPref != null) {
             remapAxisPref.setOnPreferenceClickListener(this);
-            updateRemapSummary(remapAxisPref, PROP_REMAP_AXIS, AXIS_NAMES);
+            updateRemapSummary(remapAxisPref, PROP_REMAP_AXIS, GamepadAxisLayout.axisNames());
         }
 
         Preference axisRolesPref = findPreference(KEY_AXIS_ROLES);
@@ -843,7 +836,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
         }
         Preference remapAxisPref = findPreference(KEY_REMAP_AXES);
         if (remapAxisPref != null) {
-            updateRemapSummary(remapAxisPref, PROP_REMAP_AXIS, AXIS_NAMES);
+            updateRemapSummary(remapAxisPref, PROP_REMAP_AXIS, GamepadAxisLayout.axisNames());
         }
         Preference axisBtnPref = findPreference(KEY_AXIS_TO_BUTTON);
         if (axisBtnPref != null) {
@@ -879,7 +872,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
             if (!val.isEmpty()) {
                 try {
                     int code = Integer.parseInt(val);
-                    String name = AXIS_NAMES.getOrDefault(code,
+                    String name = GamepadAxisLayout.axisNames().getOrDefault(code,
                             "0x" + Integer.toHexString(code));
                     if (sb.length() > 0) sb.append(", ");
                     sb.append(role[1]).append("=").append(name);
@@ -914,7 +907,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 int onPct = Integer.parseInt(parts[2]);
                 int offPct = Integer.parseInt(parts[3]);
                 String mode = parts.length >= 5 ? parts[4] : "b";
-                String axisName = AXIS_NAMES.getOrDefault(axis,
+                String axisName = GamepadAxisLayout.axisNames().getOrDefault(axis,
                         "0x" + Integer.toHexString(axis));
                 String btnName = BTN_NAMES.getOrDefault(btn,
                         "0x" + Integer.toHexString(btn));
@@ -948,7 +941,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
                     int axis = Integer.parseInt(parts[0]);
                     int btn = Integer.parseInt(parts[1]);
                     String mode = parts.length >= 5 ? parts[4] : "b";
-                    String axisName = AXIS_NAMES.getOrDefault(axis,
+                    String axisName = GamepadAxisLayout.axisNames().getOrDefault(axis,
                             "0x" + Integer.toHexString(axis));
                     String btnName = BTN_NAMES.getOrDefault(btn,
                             "0x" + Integer.toHexString(btn));
@@ -1030,7 +1023,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 int btn = Integer.parseInt(p[0]);
                 int axis = Integer.parseInt(p[1]);
                 String btnName = BTN_NAMES.getOrDefault(btn, "0x" + Integer.toHexString(btn));
-                String axisName = AXIS_NAMES.getOrDefault(axis, "0x" + Integer.toHexString(axis));
+                String axisName = GamepadAxisLayout.axisNames().getOrDefault(axis, "0x" + Integer.toHexString(axis));
                 boolean keep = p.length >= 4 && !"0".equals(p[3].trim());
                 if (sb.length() > 0) sb.append(", ");
                 sb.append(btnName).append(" → ").append(axisName);
@@ -1056,7 +1049,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
                     int btn = Integer.parseInt(p[0]);
                     int axis = Integer.parseInt(p[1]);
                     String btnName = BTN_NAMES.getOrDefault(btn, "0x" + Integer.toHexString(btn));
-                    String axisName = AXIS_NAMES.getOrDefault(axis, "0x" + Integer.toHexString(axis));
+                    String axisName = GamepadAxisLayout.axisNames().getOrDefault(axis, "0x" + Integer.toHexString(axis));
                     items.add(btnName + " → " + axisName);
                 }
             }
@@ -1114,10 +1107,10 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 .setTitle(R.string.gamepad_button_to_axis_pick_button)
                 .setItems(btnLabels, (d, bi) -> {
                     final int btn = btnCodes[bi];
-                    final int[] axisCodes = {0x0a, 0x09, 0x02, 0x05};
+                    final int[] axisCodes = GamepadAxisLayout.triggerAxes();
                     String[] axisLabels = new String[axisCodes.length];
                     for (int i = 0; i < axisCodes.length; i++) {
-                        axisLabels[i] = AXIS_NAMES.getOrDefault(axisCodes[i],
+                        axisLabels[i] = GamepadAxisLayout.axisNames().getOrDefault(axisCodes[i],
                                 "0x" + Integer.toHexString(axisCodes[i]));
                     }
                     new AlertDialog.Builder(context)
@@ -1210,7 +1203,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
             onThresholds[i] = onPct;
             offThresholds[i] = offPct;
 
-            String axisName = AXIS_NAMES.getOrDefault(axis,
+            String axisName = GamepadAxisLayout.axisNames().getOrDefault(axis,
                     "0x" + Integer.toHexString(axis));
             String btnName = BTN_NAMES.getOrDefault(btn,
                     "0x" + Integer.toHexString(btn));
@@ -1324,10 +1317,13 @@ public class GamepadSettings extends SettingsPreferenceFragment
         Context context = getContext();
         if (context == null) return;
 
-        // Axis selection
-        String[] axisItems = {"LX (0)", "LY (1)", "LT (2)", "RX (3)", "RY (4)", "RT (5)",
-                              "GAS (9)", "BRAKE (10)"};
-        int[] axisCodes = {0, 1, 2, 3, 4, 5, 9, 10};
+        // Axis selection: the virtual pad's output axes for the preset layout
+        int[] axisCodes = GamepadAxisLayout.pickerAxes();
+        Map<Integer, String> axisNames = GamepadAxisLayout.axisNames();
+        String[] axisItems = new String[axisCodes.length];
+        for (int i = 0; i < axisCodes.length; i++) {
+            axisItems[i] = axisNames.get(axisCodes[i]) + " (" + axisCodes[i] + ")";
+        }
 
         new AlertDialog.Builder(context)
                 .setTitle(R.string.gamepad_axis_to_button_axis)
@@ -2101,9 +2097,9 @@ public class GamepadSettings extends SettingsPreferenceFragment
      *  - выключатель gammapad, merge, hide_source и выбор устройств - на них
      *    держится весь ввод;
      *  - личина виртуального геймпада (preset): игры узнают раскладку по ней;
-     *  - роли осей, переназначение кнопок и осей - перезаписывают наши
-     *    remap_btn (HOME/BACK) и remap_axis (перепутанные курки), а частичные
-     *    роли уводят правый стик в курки;
+     *  - роли осей и переназначение кнопок и осей больше не скрыты: с t21
+     *    курки и HOME/BACK исправлены в драйвере, своих remap_btn/remap_axis у
+     *    RG52 нет, а роли считаются в раскладке пресета;
      *  - комбинация, кнопки и скорость крестовины в режиме мыши - заданы под
      *    корпус (аккорд L3+R3, щелчки на стиках, крестовина остаётся
      *    крестовиной);
@@ -2119,7 +2115,6 @@ public class GamepadSettings extends SettingsPreferenceFragment
         String[] hidden = {
             KEY_ENABLE, KEY_MERGE, KEY_HIDE_SOURCE, KEY_DEVICES_CATEGORY,
             "gamepad_identity_category",
-            KEY_AXIS_ROLES, KEY_REMAP_BUTTONS, KEY_REMAP_AXES,
             KEY_MOUSE_COMBO, KEY_MOUSE_HOLD_TIME, KEY_MOUSE_BUTTONS,
             KEY_MOUSE_STICK_SPEED, KEY_MOUSE_DPAD_SPEED, KEY_MOUSE_BOOST,
             KEY_PWM_ENABLE, KEY_FF_DEVICE

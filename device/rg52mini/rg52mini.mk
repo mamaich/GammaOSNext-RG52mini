@@ -177,21 +177,18 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.gammaos.gamepad.mouse_btn_rclick=318 \
     persist.gammaos.gamepad.mouse_btn_back=0
 
-# Триггеры LT и RT у этого корпуса перепутаны местами. Железо отдаёт их двумя
-# аналоговыми осями, ABS_GAS (0x09) и ABS_BRAKE (0x0a), обе 0..255 - проверено
-# через getevent -p на самом джойстике; осей HAT2, о которых говорил старый
-# комментарий в нашей раскладке, у него нет вовсе. Левый триггер приходит на
-# ABS_GAS, а в Android газ - это правый триггер, отсюда и перестановка в играх.
+# Триггеры LT и RT и кнопки HOME и BACK корпуса с t21 исправлены в драйвере
+# ядра (rk3562-joystick: L2 - ABS_BRAKE, R2 - ABS_GAS, HOME - KEY_HOMEPAGE,
+# BACK - KEY_BACK). До этого здесь стояли remap_axis=9:10,10:9 и
+# remap_btn=316:172,704:158, и они действовали на все геймпады: у внешнего
+# курки менялись местами, а Guide становился HOME. Теперь значений по
+# умолчанию нет, а сохранённые прежними версиями заводские пары gammapad
+# убирает один раз (GamepadManager::migrateRg52KernelCodes).
 #
-# Меняем оси местами на выходе. Роли (role_lt/role_rt) для этого не годятся:
-# они задают распределение целиком, и частичная установка уводит оси правого
-# стика в триггеры - проверено на устройстве, стик ломается.
-#
-# Само свойство до этого не работало вовсе: перестановка применялась только к
-# запасной глобальной карте, а при обработке событий берётся пер-девайсная.
-# Исправлено в GamepadManager::rebuildGlobalMaps.
-PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
-    persist.gammaos.gamepad.remap_axis=9:10,10:9
+# Свой .kl для HOME/BACK не годился: раскладку Android ищет по VID/PID, для
+# 045e:0b13 в системе её нет, и обе стороны получают Generic.kl, где 316 -
+# BUTTON_MODE, а 704 нет вовсе. KEY_HOMEPAGE и KEY_BACK Generic.kl знает, а
+# gammapad объявляет коды физического устройства у виртуального геймпада.
 
 # Сила вибрации по умолчанию - полная. Ползунок Vibration intensity с v1.11
 # масштабирует и эффекты, которые gammapad пересылает встроенному геймпаду
@@ -280,31 +277,6 @@ PRODUCT_COPY_FILES += \
 # из vendor/lineage/bootanimation скриптом tools/bootanim-480.py; переменную
 # читает vendor/lineage/bootanimation/Android.mk.
 TARGET_BOOTANIMATION := device/rg52mini/bootanimation.zip
-
-# Кнопки HOME и BACK корпуса. Драйвер play_joystick отдаёт их как коды
-# геймпада: BTN_MODE (316) для HOME и BTN_TRIGGER_HAPPY1 (704) для BACK.
-#
-# Раскладку Android подбирает по VID/PID устройства, а не по имени файла, и
-# для 045e:0b13 подходящего Vendor_045e_Product_0b13.kl в системе нет — оба
-# устройства, и физическое, и виртуальное, получают Generic.kl. А в ней 316
-# значит BUTTON_MODE (то есть не HOME), кода 704 нет вовсе — поэтому BACK не
-# работал совсем. Наш device/rg52mini/keylayout/rk3562-joystick.kl сюда не
-# подходит: по этому имени Android раскладку не ищет.
-#
-# Своего .kl тут мало: gammapad читает ту же раскладку для физического
-# устройства и переводит коды ещё до uinput, но виртуальный геймпад объявляет
-# исходные коды, поэтому «key 704 BACK» превратился бы в KEY_BACK, которого у
-# виртуального устройства нет, и событие потерялось бы в ядре.
-#
-# Переназначение самим gammapad такой проблемы не создаёт: цели remap_btn он
-# добавляет в набор кнопок виртуального устройства (GamepadManager.cpp,
-# computeRequiredCodes). Отдаём сразу KEY_HOMEPAGE (172) и KEY_BACK (158) —
-# их Generic.kl уже знает как HOME и BACK.
-#
-# Заодно это чинит кнопку Guide на внешних Bluetooth-геймпадах: она тоже
-# BTN_MODE и тоже станет HOME.
-PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
-    persist.gammaos.gamepad.remap_btn=316:172,704:158
 
 # Root здесь даёт KernelSU-Next, вшитый в ядро (ядро само ищет /data/adb/ksud,
 # а драйвер «коронует» менеджера по подписи — проверено на устройстве:

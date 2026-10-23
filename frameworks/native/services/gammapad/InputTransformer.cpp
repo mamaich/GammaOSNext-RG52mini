@@ -493,7 +493,9 @@ bool InputTransformer::processAxisButton(int axisCode, int value) {
         // Values arrive already normalized by the transform pipeline:
         //   triggers: 0..32767, sticks: -32768..32767
         if (trigger.axisMin == 0 && trigger.axisMax == 0) {
-            if (axisCode == ABS_Z || axisCode == ABS_RZ ||
+            // Z/RZ are the right stick, not triggers, when the preset puts it there
+            // (mForceStickAxes, the native 0x0b13 layout).
+            if (((axisCode == ABS_Z || axisCode == ABS_RZ) && !mForceStickAxes.count(axisCode)) ||
                 axisCode == ABS_GAS || axisCode == ABS_BRAKE) {
                 trigger.axisMin = 0;
                 trigger.axisMax = 32767;

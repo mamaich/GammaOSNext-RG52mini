@@ -63,6 +63,9 @@ public:
 
 private:
     void loadConfig();
+    // RG52 Mini: drop the factory trigger/HOME/BACK remaps saved by older
+    // versions once the kernel reports these controls itself.
+    void migrateRg52KernelCodes();
     void scanDevices();
     bool grabDevice(const std::string& path);
     void releaseDevice(int fd);
@@ -119,7 +122,7 @@ private:
 
     // Apply user-configured role overrides (e.g., persist.gammaos.gamepad.role_rx=9)
     // to mAbsMap after .kl parsing.
-    void applyRoleMappings();
+    void applyRoleMappings(int presetPid);
 
     int mEpollFd;
     int mInotifyFd;

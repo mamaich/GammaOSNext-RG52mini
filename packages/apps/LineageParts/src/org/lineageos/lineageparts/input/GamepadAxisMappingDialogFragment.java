@@ -48,15 +48,30 @@ public class GamepadAxisMappingDialogFragment extends DialogFragment {
 
     private static final String PROP_CONFIG_VERSION = "persist.gammaos.gamepad.config_version";
 
-    // Role definitions: [0]=property key, [1]=target ABS code, [2]=display name
+    // Role definitions: [0]=property key, [1]=display name. The target ABS code of a role
+    // depends on the preset layout, see targetCode().
     private static final String[][] ROLES = {
-        { "persist.gammaos.gamepad.role_lx", "0", "Left Stick \u2194 (left/right)" },
-        { "persist.gammaos.gamepad.role_ly", "1", "Left Stick \u2195 (up/down)" },
-        { "persist.gammaos.gamepad.role_rx", "3", "Right Stick \u2194 (left/right)" },
-        { "persist.gammaos.gamepad.role_ry", "4", "Right Stick \u2195 (up/down)" },
-        { "persist.gammaos.gamepad.role_lt", "2", "Left Trigger" },
-        { "persist.gammaos.gamepad.role_rt", "5", "Right Trigger" },
+        { "persist.gammaos.gamepad.role_lx", "Left Stick \u2194 (left/right)" },
+        { "persist.gammaos.gamepad.role_ly", "Left Stick \u2195 (up/down)" },
+        { "persist.gammaos.gamepad.role_rx", "Right Stick \u2194 (left/right)" },
+        { "persist.gammaos.gamepad.role_ry", "Right Stick \u2195 (up/down)" },
+        { "persist.gammaos.gamepad.role_lt", "Left Trigger" },
+        { "persist.gammaos.gamepad.role_rt", "Right Trigger" },
     };
+
+    // Код роли на виртуальном геймпаде - тот же, что берёт gammapad
+    // (GamepadManager::applyRoleMappings). Раньше здесь стояли RX/RY для стика и Z/RZ для
+    // курков при любом пресете, а при 0x0b13 Z/RZ - это правый стик.
+    private static int targetCode(int roleIndex) {
+        switch (roleIndex) {
+            case 0: return GamepadAxisLayout.ABS_X;
+            case 1: return GamepadAxisLayout.ABS_Y;
+            case 2: return GamepadAxisLayout.rightStickX();
+            case 3: return GamepadAxisLayout.rightStickY();
+            case 4: return GamepadAxisLayout.leftTrigger();
+            default: return GamepadAxisLayout.rightTrigger();
+        }
+    }
 
     // Linux ABS code -> display name
     private static final Map<Integer, String> ABS_CODE_NAMES = new HashMap<>();
@@ -209,7 +224,7 @@ public class GamepadAxisMappingDialogFragment extends DialogFragment {
             // Role name
             TextView roleName = new TextView(ctx);
             roleName.setTextSize(18);
-            roleName.setText(ROLES[i][2]);
+            roleName.setText(ROLES[i][1]);
             roleName.setTextColor(0xFFFFFFFF);
             LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
@@ -287,7 +302,7 @@ public class GamepadAxisMappingDialogFragment extends DialogFragment {
         } else {
             String name = ABS_CODE_NAMES.getOrDefault(value, String.valueOf(value));
             mRoleValueViews[index].setText(name);
-            int targetCode = Integer.parseInt(ROLES[index][1]);
+            int targetCode = targetCode(index);
             if (value != targetCode) {
                 // Non-default assignment highlighted in accent color
                 mRoleValueViews[index].setTextColor(0xFF4CAF50);
@@ -300,7 +315,7 @@ public class GamepadAxisMappingDialogFragment extends DialogFragment {
     private void startDetection(int roleIndex) {
         mDetectingRoleIndex = roleIndex;
         mStatusText.setText(getString(R.string.gamepad_axis_roles_detecting,
-                ROLES[roleIndex][2]));
+                ROLES[roleIndex][1]));
         mStatusText.setTextColor(0xFFFF9800);
 
         // Highlight detecting row
@@ -377,9 +392,9 @@ public class GamepadAxisMappingDialogFragment extends DialogFragment {
      * and we detect ABS_RX=3, this returns 9.
      */
     private int getKlMappedCode(int detectedAbsCode) {
-        for (String[] role : ROLES) {
-            int targetCode = Integer.parseInt(role[1]);
-            String val = SystemProperties.get(role[0], "");
+        for (int i = 0; i < ROLES.length; i++) {
+            int targetCode = targetCode(i);
+            String val = SystemProperties.get(ROLES[i][0], "");
             if (!val.isEmpty()) {
                 try {
                     int sourceCode = Integer.parseInt(val);

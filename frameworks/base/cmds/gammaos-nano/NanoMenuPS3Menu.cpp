@@ -3205,19 +3205,40 @@ void NanoMenu::buildMouseSubmenu(Ps3Level& out) {
 namespace {
 struct GpCode { int code; const char* name; };
 // Linux BTN_* (KeyLayoutParser.cpp). Order = a familiar pad layout.
+// RG52 Mini: the HOME and BACK buttons of the body come as KEY_HOMEPAGE and KEY_BACK
+// (rk3562-joystick since t21); Guide is only the button of an external pad now.
 const GpCode kGpButtons[] = {
     {0x130,"A (South)"}, {0x131,"B (East)"}, {0x133,"X (West)"}, {0x134,"Y (North)"},
     {0x136,"L1"}, {0x137,"R1"}, {0x138,"L2"}, {0x139,"R2"},
     {0x13a,"Select"}, {0x13b,"Start"}, {0x13c,"Guide"}, {0x13d,"L3"}, {0x13e,"R3"},
+    {172,"Home"}, {158,"Back"},
 };
-// Linux ABS_* (KeyLayoutParser.cpp).
-const GpCode kGpAxes[] = {
+// Linux ABS_* (KeyLayoutParser.cpp) as the virtual pad outputs them. The layout follows
+// the preset (persist.gammaos.gamepad.device_pid, KeyLayoutParser::normalizeToPreset):
+// 0x02fd puts the right stick on RX/RY and the triggers on Z/RZ, every other preset
+// (0x0b13 by default) the right stick on Z/RZ and the triggers on BRAKE/GAS.
+// RG52 Mini: the old single table listed RX/RY as the right stick, and remapping or
+// binding those did nothing on 0x0b13 - the stick never comes out there.
+const GpCode kGpAxesNative[] = {
+    {0,"Left Stick X"}, {1,"Left Stick Y"}, {2,"Right Stick X"}, {5,"Right Stick Y"},
+    {10,"Left Trigger"}, {9,"Right Trigger"}, {16,"D-Pad X"}, {17,"D-Pad Y"},
+};
+const GpCode kGpAxesStandard[] = {
     {0,"Left Stick X"}, {1,"Left Stick Y"}, {3,"Right Stick X"}, {4,"Right Stick Y"},
-    {2,"Z (R-Stick X / LT)"}, {5,"RZ (R-Stick Y / RT)"},
-    {9,"Right Trigger"}, {10,"Left Trigger"}, {16,"D-Pad X"}, {17,"D-Pad Y"},
+    {2,"Left Trigger"}, {5,"Right Trigger"}, {16,"D-Pad X"}, {17,"D-Pad Y"},
 };
+inline bool gpStandardLayout() {
+    char v[PROPERTY_VALUE_MAX];
+    property_get("persist.gammaos.gamepad.device_pid", v, "0x0b13");
+    return strtol(v, nullptr, 16) == 0x02fd;
+}
 inline const GpCode* gpTable(bool axis, int& n) {
-    if (axis) { n = (int)(sizeof(kGpAxes)/sizeof(kGpAxes[0])); return kGpAxes; }
+    if (axis) {
+        if (gpStandardLayout()) {
+            n = (int)(sizeof(kGpAxesStandard)/sizeof(kGpAxesStandard[0])); return kGpAxesStandard;
+        }
+        n = (int)(sizeof(kGpAxesNative)/sizeof(kGpAxesNative[0])); return kGpAxesNative;
+    }
     n = (int)(sizeof(kGpButtons)/sizeof(kGpButtons[0])); return kGpButtons;
 }
 const char* gpCodeName(int code, bool axis) {
@@ -4320,7 +4341,9 @@ void NanoMenu::buildActionKeyList(Ps3Level& out) {
         it.iconTex = ic; it.nmapTex = nm; it.iconR = it.iconG = it.iconB = 1.0f; out.items.push_back(it); };
     actAddSearchRow(out, ic, nm);
     size_t before = out.items.size(); sect("Gamepad Buttons");
-    { int n; const GpCode* t = gpTable(false, n); for (int i = 0; i < n; i++) row(t[i].name, t[i].code); }
+    // Home/Back (keyboard-range codes, < BTN_MISC 0x100) are listed under Keys & Media below.
+    { int n; const GpCode* t = gpTable(false, n);
+      for (int i = 0; i < n; i++) if (t[i].code >= 0x100) row(t[i].name, t[i].code); }
     if (out.items.size() == before + 1) out.items.pop_back();   // no matches -> drop the header
     before = out.items.size(); sect("Keys & Media");
     for (const auto& k : kActionKeys) row(k.name, k.code);
