@@ -459,7 +459,7 @@ public class GamepadRemapDialogFragment extends DialogFragment {
         String[] itemArray = items.toArray(new String[0]);
 
         return new AlertDialog.Builder(context)
-                .setTitle(R.string.gamepad_remap_dialog_title)
+                .setTitle(dialogTitle())
                 .setItems(itemArray, (d, which) -> {
                     if (which < sourceKeys.size()) {
                         int source = sourceKeys.get(which);
@@ -814,6 +814,12 @@ public class GamepadRemapDialogFragment extends DialogFragment {
         buildAxisSourceDialog(context, fm).show();
     }
 
+    // Заголовок списка и выбора источника: в режиме осей был «Remap button».
+    private int dialogTitle() {
+        return mAxisMode ? R.string.gamepad_remap_axis_dialog_title
+                : R.string.gamepad_remap_dialog_title;
+    }
+
     private AlertDialog buildAxisSourceDialog(Context context,
             androidx.fragment.app.FragmentManager fm) {
         Map<String, Integer> targets = axisTargets();
@@ -822,7 +828,7 @@ public class GamepadRemapDialogFragment extends DialogFragment {
         String[] items = names.toArray(new String[0]);
 
         return new AlertDialog.Builder(context)
-                .setTitle(R.string.gamepad_remap_dialog_title)
+                .setTitle(dialogTitle())
                 .setItems(items, (d, which) -> {
                     mCapturedEvdevCode = codes.get(which);
                     showTargetSelection(context, fm);

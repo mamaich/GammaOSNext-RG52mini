@@ -33,6 +33,7 @@
 
     <!-- Remap dialog -->
     <string name="gamepad_remap_dialog_title">Remap button</string>
+    <string name="gamepad_remap_axis_dialog_title">Remap axis</string>
     <string name="gamepad_remap_press_source">Press the button you want to remap\u2026</string>
     <string name="gamepad_remap_choose_target">Choose the target action for %s</string>
     <string name="gamepad_remap_saved">Remap saved</string>
