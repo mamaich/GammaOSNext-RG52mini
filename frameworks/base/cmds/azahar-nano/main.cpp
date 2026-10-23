@@ -1375,6 +1375,7 @@ int main(int argc, char** argv) {
                     property_set("sys.gammaos.azahar_nano.quit", "");
                     ALOGI("quit requested");
                     gExitRequested = true;
+                    if (gCore.stop) gCore.stop();   // the core runs until told, as in onTerm
                     break;
                 }
                 // Test hooks (adb): sys.gammaos.azahar_nano.menu=1 toggles the menu,
