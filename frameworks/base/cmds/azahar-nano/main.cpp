@@ -43,6 +43,8 @@
 #include <vector>
 
 #include <cutils/properties.h>
+
+#include "NanoColorMatrix.h"
 #include <log/log.h>
 
 #include "AzaharNanoApi.h"
@@ -113,6 +115,7 @@ struct CoreApi {
     void (*set_resolution)(int) = nullptr;        // optional (newer cores)
     int (*shader_cache_rebuilding)() = nullptr;   // optional (newer cores)
     void (*set_screen_aa)(int) = nullptr;         // optional (newer cores)
+    void (*set_color_matrix)(int, const float*, int) = nullptr;   // optional (newer cores)
     void (*set_user_folder)(const char*) = nullptr;
     void (*set_config_overrides)(const char*) = nullptr;   // optional (older cores)
     int (*set_config_value)(const char*, const char*, const char*) = nullptr;
@@ -237,6 +240,8 @@ bool loadCore(const std::string& path) {
         reinterpret_cast<int (*)()>(dlsym(gCore.handle, "azn_shader_cache_rebuilding"));
     gCore.set_screen_aa =
         reinterpret_cast<void (*)(int)>(dlsym(gCore.handle, "azn_set_screen_aa"));
+    gCore.set_color_matrix = reinterpret_cast<void (*)(int, const float*, int)>(
+        dlsym(gCore.handle, "azn_set_color_matrix"));
     ok &= sym(gCore.set_user_folder, "azn_set_user_folder");
     ok &= sym(gCore.set_config_value, "azn_set_config_value");
     gCore.set_config_overrides =
@@ -1035,6 +1040,15 @@ int main(int argc, char** argv) {
     if (gCore.set_screen_aa) {
         gCore.set_screen_aa(prop("persist.gammaos.azahar_nano.screen_aa", "0") == "1");
     }
+    // The display colour transform (LiveDisplay calibration, reading mode, Night Light,
+    // saturation): the DRM path never passes through SurfaceFlinger, so the core applies the
+    // matrix the framework publishes in its present pass. Followed live by the perf thread.
+    {
+        android::colormatrix::Matrix top, bottom;
+        android::colormatrix::pollScreen(android::colormatrix::kTop, &top);
+        android::colormatrix::pollScreen(android::colormatrix::kBottom, &bottom);
+        if (gCore.set_color_matrix) { gCore.set_color_matrix(0, top.m, 12); gCore.set_color_matrix(1, bottom.m, 12); }
+    }
 
     // Panels. DRM backend: our own BufferQueues flipped straight onto the panels.
     // SurfaceFlinger backend: one opaque layer per physical display.
@@ -1551,6 +1565,18 @@ int main(int argc, char** argv) {
                     gExitRequested = true;
                     if (gCore.stop) gCore.stop();   // the core runs until told, as in onTerm
                     break;
+                }
+                {
+                    static bool sFirst = true;
+                    android::colormatrix::Matrix top, bottom;
+                    const bool t = android::colormatrix::pollScreen(android::colormatrix::kTop, &top);
+                    const bool b = android::colormatrix::pollScreen(android::colormatrix::kBottom, &bottom);
+                    if (t || b || sFirst) {
+                        sFirst = false;
+                        if (gCore.set_color_matrix) { gCore.set_color_matrix(0, top.m, 12); gCore.set_color_matrix(1, bottom.m, 12); }
+                        // the HUD and overlay are their own DRM planes: no compositor corrects them
+                        if (sDrm) { hud.setColorMatrix(top.m); overlay.setColorMatrix(top.m, bottom.m); }
+                    }
                 }
                 // Test hooks (adb): sys.gammaos.azahar_nano.menu=1 toggles the menu,
                 // sys.gammaos.azahar_nano.menu_nav=up|down|left|right|a|b presses a key.
