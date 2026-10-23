@@ -1794,10 +1794,10 @@ static std::string joinRemapPairs(const std::vector<std::pair<int, int>>& pairs)
     return value;
 }
 
-// Кнопки: заводские пары 316:172 и 704:158 убрать - драйвер отдаёт HOME и BACK
-// сразу как KEY_HOMEPAGE и KEY_BACK. Свои назначения пользователя с этих кнопок
-// (источник 316/704) продублировать на новые коды, оставив и прежние: 316 - это
-// ещё и Guide внешних геймпадов.
+// Кнопки профиля приложения: заводские пары 316:172 и 704:158 убрать - драйвер
+// отдаёт HOME и BACK сразу как KEY_HOMEPAGE и KEY_BACK. Свои назначения
+// пользователя с этих кнопок (источник 316/704) продублировать на новые коды,
+// оставив и прежние: 316 - это ещё и Guide внешних геймпадов.
 static std::vector<std::pair<int, int>> migrateRg52ButtonPairs(
         const std::vector<std::pair<int, int>>& in) {
     std::vector<std::pair<int, int>> out;
@@ -1830,44 +1830,46 @@ void GamepadManager::migrateRg52KernelCodes() {
     // исправлял это свойствами remap_axis=9:10,10:9 и remap_btn=316:172,704:158.
     // Они действовали на все геймпады: у внешнего курки менялись местами, Guide
     // становился HOME. Теперь это делает драйвер, а значений по умолчанию нет.
-    // Но если пользователь что-то переназначал, в /data сохранилась вся строка
-    // вместе с заводскими парами, и они перевернули бы уже верные коды обратно.
+    //
+    // Один раз при переходе (решение владельца 23.10.2026) сбрасываем целиком
+    // remap_btn, remap_axis и роли осей, что бы там ни стояло: переназначения
+    // заданы в прежних кодах, а роли до этой версии считались в чужой
+    // раскладке и уводили правый стик в курки. Профили приложений - явные
+    // настройки пользователя: из них убираются только заводские пары.
+    // Флаг "2": t21 ставил "1", когда чистил одни заводские пары.
     static const char* kDone = "persist.gammaos.gamepad.rg52_kernel_codes";
     if (GetProperty("ro.gammaos.device", "") != "rg52mini") return;
-    if (GetProperty(kDone, "") == "1") return;
+    if (GetProperty(kDone, "") == "2") return;
 
-    auto migrateButtons = [](const std::string& prop) {
+    static const char* kReset[] = {
+        "persist.gammaos.gamepad.remap_btn",
+        "persist.gammaos.gamepad.remap_axis",
+        "persist.gammaos.gamepad.role_lx",
+        "persist.gammaos.gamepad.role_ly",
+        "persist.gammaos.gamepad.role_rx",
+        "persist.gammaos.gamepad.role_ry",
+        "persist.gammaos.gamepad.role_lt",
+        "persist.gammaos.gamepad.role_rt",
+    };
+    for (const char* prop : kReset) {
+        std::string value = GetProperty(prop, "");
+        if (value.empty()) continue;
+        LOG(INFO) << "RG52 kernel codes: reset " << prop << " (was " << value << ")";
+        SetProperty(prop, "");
+    }
+
+    int paCount = GetIntProperty("persist.gammaos.gamepad.pa_count", 0);
+    for (int i = 0; i < paCount && i < 20; i++) {
+        std::string prop = "persist.gammaos.gamepad.pa" + std::to_string(i) + "_btn";
         auto pairs = parseRemapPairs(GetProperty(prop, ""));
         auto out = migrateRg52ButtonPairs(pairs);
-        if (out == pairs) return;
+        if (out == pairs) continue;
         LOG(INFO) << "RG52 kernel codes: " << prop << " " << joinRemapPairs(pairs)
                   << " -> " << joinRemapPairs(out);
         SetProperty(prop, joinRemapPairs(out));
-    };
-    migrateButtons("persist.gammaos.gamepad.remap_btn");
-    int paCount = GetIntProperty("persist.gammaos.gamepad.pa_count", 0);
-    for (int i = 0; i < paCount && i < 20; i++) {
-        migrateButtons("persist.gammaos.gamepad.pa" + std::to_string(i) + "_btn");
     }
 
-    // Курки: только заводскую перестановку целиком. Любая другая настройка 9/10 -
-    // пользовательская, её не трогаем.
-    const char* axisProp = "persist.gammaos.gamepad.remap_axis";
-    auto axes = parseRemapPairs(GetProperty(axisProp, ""));
-    auto isGas = [](const auto& p) { return p.first == ABS_GAS && p.second == ABS_BRAKE; };
-    auto isBrake = [](const auto& p) { return p.first == ABS_BRAKE && p.second == ABS_GAS; };
-    if (std::any_of(axes.begin(), axes.end(), isGas) &&
-        std::any_of(axes.begin(), axes.end(), isBrake)) {
-        std::vector<std::pair<int, int>> out;
-        for (const auto& p : axes) {
-            if (!isGas(p) && !isBrake(p)) out.push_back(p);
-        }
-        LOG(INFO) << "RG52 kernel codes: " << axisProp << " " << joinRemapPairs(axes)
-                  << " -> " << joinRemapPairs(out);
-        SetProperty(axisProp, joinRemapPairs(out));
-    }
-
-    SetProperty(kDone, "1");
+    SetProperty(kDone, "2");
 }
 
 } // namespace gammapad

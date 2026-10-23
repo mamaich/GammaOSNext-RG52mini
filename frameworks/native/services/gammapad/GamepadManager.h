@@ -63,8 +63,8 @@ public:
 
 private:
     void loadConfig();
-    // RG52 Mini: drop the factory trigger/HOME/BACK remaps saved by older
-    // versions once the kernel reports these controls itself.
+    // RG52 Mini: once the kernel reports triggers and HOME/BACK itself, reset the
+    // button/axis remaps and axis roles saved by older versions (one time).
     void migrateRg52KernelCodes();
     void scanDevices();
     bool grabDevice(const std::string& path);
