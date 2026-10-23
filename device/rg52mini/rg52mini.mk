@@ -403,6 +403,14 @@ PRODUCT_PRODUCT_PROPERTIES += \
     ro.gammaos.azahar_nano.gles=false \
     ro.gammaos.hdmi_shares_panel_port=true
 
+# Тот же azahar-nano из обычного Android: Daijishō запускает для 3DS прокладку AzaharSf
+# (packages/apps/AzaharSf), она передаёт эмулятору путь к ROM и запускает сеанс через
+# sys.gammaos.azahar_nano.start_app (azahar-nano.rc). Эмулятор рисует слой SurfaceFlinger
+# поверх всех окон и оболочку nano не трогает; HOME в таком сеансе достаётся ему
+# (PhoneWindowManager), по окончании прокладка закрывается и снова виден лаунчер.
+PRODUCT_PACKAGES += \
+    AzaharSf
+
 # Пределы низкопамятного убийцы подобраны под zram без файла подкачки -
 # заводской режим этого устройства. Замерено на TMNT (нужно около 2 ГБ
 # при 1,95 ГБ памяти), одинаковые отрезки, zram 100 % на zstd:

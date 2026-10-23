@@ -1,0 +1,22 @@
+// AzaharSf: the normal-Android host for azahar-nano (RG52 Mini). Daijishō starts it for
+// a 3DS ROM; it passes the path to azahar-nano, starts the session through init and holds
+// the foreground until the session ends. azahar-nano draws its own SurfaceFlinger layer
+// on top, see AzaharSfActivity.java.
+android_app {
+    name: "AzaharSf",
+
+    srcs: [
+        "java/**/*.java",
+    ],
+    manifest: "AndroidManifest.xml",
+
+    // platform certificate + android.uid.system (manifest): the host writes the ROM path
+    // to /data/system/nano_azahar_nano_rom.txt, the file azahar-nano reads, as nano does.
+    platform_apis: true,
+    certificate: "platform",
+    privileged: false,
+
+    optimize: {
+        enabled: false,
+    },
+}

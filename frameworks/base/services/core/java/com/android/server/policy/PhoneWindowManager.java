@@ -4850,6 +4850,15 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             }
         }
 
+        // RG52 Mini: azahar-nano started from normal Android (the AzaharSf host, Daijishō)
+        // reads the pad itself, and HOME, like BACK, opens its menu or, held, leaves the game.
+        // Android would put the launcher over the running session instead: leave HOME to it.
+        if (keyCode == KeyEvent.KEYCODE_HOME
+                && "1".equals(SystemProperties.get("sys.gammaos.azahar_nano.session", "0"))
+                && "app".equals(SystemProperties.get("sys.gammaos.azahar_nano.host", ""))) {
+            return true;
+        }
+
         switch (keyCode) {
             case KeyEvent.KEYCODE_HOME:
                 return handleHomeShortcuts(focusedToken, event);

@@ -23,7 +23,8 @@
 # Вывод - в logcat (тег rg52-daijisho), по-английски.
 
 TAG=rg52-daijisho
-REV=1
+# 2 - платформа Nintendo 3DS с azahar-nano (v1.14): SQL тот же, добавляется только её не было.
+REV=2
 PKG=com.magneticchen.daijishou
 DIR=${RG52_DJ_DIR:-/data/data/$PKG}
 DB=$DIR/databases/Daijishou.db

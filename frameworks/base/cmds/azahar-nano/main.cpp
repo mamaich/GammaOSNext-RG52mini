@@ -142,6 +142,10 @@ std::atomic<uint64_t> sHudStatsSeq{0};
 std::atomic<int> gDynResSettle{8};
 std::atomic<bool> gExitRequested{false};
 std::atomic<bool> gSessionDoneSent{false};
+// RG52 Mini: сеанс запущен из обычного Android (Daijishō через AzaharSf,
+// sys.gammaos.azahar_nano.host=app), а не из оболочки nano. Экран держит SurfaceFlinger,
+// подсветкой и яркостью управляет Android.
+bool gHostApp = false;
 
 template <typename T>
 bool sym(T& out, const char* name) {
@@ -804,6 +808,11 @@ int main(int argc, char** argv) {
     // DRM direct by default (the presenter that paces both panels at 60 flips a second);
     // the SurfaceFlinger backend takes over below when the DRM panels do not come up.
     std::string backend = prop("persist.gammaos.azahar_nano.backend", "drm");
+    gHostApp = prop("sys.gammaos.azahar_nano.host", "") == "app";
+    if (gHostApp) {
+        ALOGI("started from Android (AzaharSf): SurfaceFlinger backend");
+        backend = "sf";
+    }
     // RG52 Mini: встроенный экран и HDMI сидят на одном видеопорту (мост rk628), и пока HDMI
     // подключён, встроенный экран погашен. DRM-вывод занял бы порт под встроенный экран,
     // поэтому с HDMI сеанс идёт через SurfaceFlinger - на телевизор (SfWindows).
@@ -1327,12 +1336,14 @@ int main(int argc, char** argv) {
                 sinkSwapped = gCore.sleep &&
                         prop("persist.gammaos.azahar_nano.sleep_sink_swap", "0") == "1";
                 if (sinkSwapped) gCore.sleep(true);
-                android::nanobl::nanoBacklightSet(0);
+                // Из Android подсветку гасит и возвращает сам Android, а уровень nano
+                // (persist.gammaos.nano.brightness) сбил бы яркость системы.
+                if (!gHostApp) android::nanobl::nanoBacklightSet(0);
                 ALOGI("sleep: screen off, core %s, backlights off",
                       pausedForSleep ? "paused" : "left as the menu has it");
             } else if (!off && asleep) {
                 asleep = false;
-                android::nanobl::nanoBacklightSet(azahar_nano::brightnessLevel());
+                if (!gHostApp) android::nanobl::nanoBacklightSet(azahar_nano::brightnessLevel());
                 if (sinkSwapped) gCore.sleep(false);
                 sinkSwapped = false;
                 if (pausedForSleep) {
@@ -1357,6 +1368,15 @@ int main(int argc, char** argv) {
         while (!gExitRequested) {
             for (int i = 0; i < 10 && !gExitRequested; i++) {
                 usleep(100 * 1000);
+                // sys.gammaos.azahar_nano.quit=1: leave through the normal exit path (the
+                // save of the running state and session_done), as long-press Back does.
+                // AzaharSf sets it when its activity goes away mid-session.
+                if (prop("sys.gammaos.azahar_nano.quit", "") == "1") {
+                    property_set("sys.gammaos.azahar_nano.quit", "");
+                    ALOGI("quit requested");
+                    gExitRequested = true;
+                    break;
+                }
                 // Test hooks (adb): sys.gammaos.azahar_nano.menu=1 toggles the menu,
                 // sys.gammaos.azahar_nano.menu_nav=up|down|left|right|a|b presses a key.
                 if (prop("sys.gammaos.azahar_nano.menu", "") == "1") {

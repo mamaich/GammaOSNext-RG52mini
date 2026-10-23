@@ -14,3 +14,4 @@ lynx 35
 cpc 36
 gc 38
 ps2 39
+3ds 40

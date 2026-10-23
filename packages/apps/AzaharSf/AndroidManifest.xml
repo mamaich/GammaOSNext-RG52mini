@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AzaharSf: starts azahar-nano (the Nintendo 3DS emulator of the GammaOS Nano shell) from
+     normal Android. Daijishō launches it for a 3DS ROM:
+       -n com.gammaos.azaharsf/.AzaharSfActivity -e ROM {file.path} -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.gammaos.azaharsf"
+    android:sharedUserId="android.uid.system">
+
+    <application
+        android:allowBackup="false"
+        android:label="Nintendo 3DS (azahar-nano)"
+        android:hardwareAccelerated="true"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+
+        <!-- No LAUNCHER category: the frontend starts it by explicit component; there is
+             nothing to show without a ROM, so it has no drawer icon. -->
+        <activity
+            android:name=".AzaharSfActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="true"
+            android:resizeableActivity="false"
+            android:screenOrientation="nosensor"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|density|uiMode|navigation">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Новые платформы Daijishō для папок РОМов dArkOS/EmuELEC, которых в GammaOS не было
-# (решение владельца 17.10.2026). Описания платформ и списки эмуляторов - официальные,
+# (решение владельца 17.10.2026), и Nintendo 3DS с azahar-nano по умолчанию (23.10.2026). Описания платформ и списки эмуляторов - официальные,
 # из TapiocaFox/Daijishou (platforms/*.json, скачаны 17.10.2026 в platforms/ рядом).
 # Записи RetroArch переписываются в формат, в котором они уже лежат в базе GammaOS:
 # полный путь к ядру и прочие -e, шаблон - запись nes.ra64.nestopia.
@@ -64,6 +64,23 @@ EMUCOREX_GIT = {
     "extra": "",
 }
 
+AZAHAR_NANO = {
+    # azahar-nano - эмулятор 3DS оболочки GammaOS Nano, вшит в образ. Из обычного Android его
+    # запускает прокладка AzaharSf (packages/apps/AzaharSf): путь к ROM - в extra ROM.
+    # Расширения - все, что знают официальные проигрыватели 3DS, и сжатые zcci/zcxi Azahar.
+    "name": "3ds - azahar-nano (GammaOS)",
+    "uniqueId": "3ds.com.gammaos.azaharsf",
+    "description": "azahar-nano, the 3DS emulator built into GammaOS. "
+                   "Supported extensions: 3ds, 3dsx, app, axf, cci, cxi, elf, zcci, zcxi.",
+    "acceptedFilenameRegex": "^(.*)\\.(?:3ds|3dsx|app|axf|cci|cxi|elf|zcci|zcxi)$",
+    "amStartArguments": "-n com.gammaos.azaharsf/.AzaharSfActivity\n"
+                        " -a android.intent.action.MAIN\n"
+                        " -e ROM {file.path}\n",
+    "killPackageProcesses": False,
+    "killPackageProcessesWarning": True,
+    "extra": "",
+}
+
 # (описание, имя в библиотеке, папки ROMs, эмулятор по умолчанию, регулярка платформы, обои BB-1 Dark)
 # Эмуляторы по умолчанию проверены запуском на консоли 17.10.2026. Atomiswave - ядро flycast
 # RetroArch: BIOS берёт из общей ROMs/bios/dc, у отдельного Flycast своя папка данных.
@@ -91,6 +108,8 @@ SPECS = [
     # BIOS PS2 (*.bin) dArkOS держит в ROMs/ps2/bios - .bin исключён, иначе он попадёт в библиотеку.
     ("SonyPlayStation2", "Sony PlayStation 2", ["ps2"], "ps2.com.aetherplay_emulator.git",
      r"(?i)^(?!(?:\._|\.).*).*\.(?:iso|chd|cso|zso|gz|ciso|mdf|nrg|img|elf)$", "ps2"),
+    # Папки - те же, что ищет оболочка nano (NanoMenuXmb.cpp: 3ds, n3ds, nintendo3ds).
+    ("Nintendo3DS", "Nintendo 3DS", ["3ds", "n3ds", "nintendo3ds"], "3ds.com.gammaos.azaharsf", None, "3ds"),
 ]
 
 db = sqlite3.connect("file:%s?mode=ro" % DB, uri=True)
@@ -162,6 +181,8 @@ for src, name, folders, default, regex, wall in SPECS:
     players = list(j["playerList"])
     if p["shortname"] == "ps2":
         players.insert(0, EMUCOREX_GIT)
+    if p["shortname"] == "3ds":
+        players.insert(0, AZAHAR_NANO)
     if p["shortname"] in SKIP_IDS:
         pid = SKIP_IDS[p["shortname"]]
     # в официальных описаниях бывают две записи с одним uniqueId (flycast: uri и path) - берутся обе
@@ -170,8 +191,10 @@ for src, name, folders, default, regex, wall in SPECS:
     plan.append((pid, p, name, players, di[0], [u for f in folders for u in uris(f)], regex, wall))
     pid += 1
 
-# исходная база (build.sh): номера фиксированные
-plid, walls = FIRST_PLAYER_ID, {}
+# исходная база (build.sh): номера платформ фиксированные. Эмуляторы платформы, добавленной
+# позже прежних (3DS после платформ dArkOS), получают номера после всех, что уже есть в базе.
+plid = max(FIRST_PLAYER_ID, db.execute("select max(id) from PlayerEntity").fetchone()[0] + 1)
+walls = {}
 print("BEGIN;")
 for pid, p, name, players, di, paths, regex, wall in plan:
     if p["uniqueId"] in existing:
