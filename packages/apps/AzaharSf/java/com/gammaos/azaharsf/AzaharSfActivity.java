@@ -12,7 +12,9 @@
  * While the game runs we hold the foreground. azahar-nano reads the pad from evdev itself, so
  * the keys Android delivers as well must not reach the launcher under us; HOME is kept from the
  * framework for such a session in PhoneWindowManager. When the session ends we finish, and the
- * launcher is back.
+ * launcher is back. If the system takes the activity away, onDestroy asks the emulator to quit;
+ * if it kills our process outright, the emulator notices through sys.gammaos.azahar_nano.host_pid
+ * and quits by itself.
  */
 package com.gammaos.azaharsf;
 
@@ -23,6 +25,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Process;
 import android.os.SystemProperties;
 import android.util.Log;
 import android.util.TypedValue;
@@ -46,6 +49,7 @@ public class AzaharSfActivity extends Activity {
     private static final String ROM_FILE = "/data/system/nano_azahar_nano_rom.txt";
     private static final String P_SESSION = "sys.gammaos.azahar_nano.session";
     private static final String P_HOST = "sys.gammaos.azahar_nano.host";
+    private static final String P_HOST_PID = "sys.gammaos.azahar_nano.host_pid";
     // Seconds to wait for the session to come up before giving up.
     private static final int START_TIMEOUT_S = 20;
 
@@ -81,7 +85,7 @@ public class AzaharSfActivity extends Activity {
 
         String rom = romPath(getIntent());
         if (rom == null) {
-            fail("No 3DS ROM given");
+            fail("Start 3DS games from Daijisho (Nintendo 3DS) or the GammaOS Nano shell");
             return;
         }
         if (!writeRomPath(rom)) {
@@ -140,6 +144,8 @@ public class AzaharSfActivity extends Activity {
         hideSystemUi();
         if (!mStarted && !mFinishing) {
             mStarted = true;
+            // azahar-nano watches this process and quits if it is killed (no onDestroy then).
+            SystemProperties.set(P_HOST_PID, String.valueOf(Process.myPid()));
             SystemProperties.set("sys.gammaos.azahar_nano.start_app", "1");
         }
         if (!mFinishing) {

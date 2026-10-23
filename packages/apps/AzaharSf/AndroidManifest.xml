@@ -9,12 +9,11 @@
     <application
         android:allowBackup="false"
         android:label="Nintendo 3DS (azahar-nano)"
+        android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
 
-        <!-- No LAUNCHER category: the frontend starts it by explicit component; there is
-             nothing to show without a ROM, so it has no drawer icon. -->
         <activity
             android:name=".AzaharSfActivity"
             android:exported="true"
@@ -27,6 +26,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Daijishō takes the package from the player's "-n <package>/" and treats the
+                 player as installed only if that package is among the MAIN + LAUNCHER
+                 activities (DaijishouLibraryModel.getLauncherIntent, the list its Apps tab is
+                 built from); otherwise "does not exist on your device". So the host has a
+                 launcher icon; opened without a ROM it says where 3DS games start from. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
     </application>

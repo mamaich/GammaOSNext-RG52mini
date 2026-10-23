@@ -147,6 +147,20 @@ std::atomic<bool> gSessionDoneSent{false};
 // подсветкой и яркостью управляет Android.
 bool gHostApp = false;
 
+// RG52 Mini: жив ли процесс прокладки AzaharSf, номер которого она пишет в
+// sys.gammaos.azahar_nano.host_pid перед запуском сеанса. Без номера (прокладка без этой
+// записи) считаем живым. Имя сверяем, чтобы не принять за неё процесс, получивший тот же номер.
+bool hostAlive() {
+    char v[PROPERTY_VALUE_MAX] = {};
+    property_get("sys.gammaos.azahar_nano.host_pid", v, "");
+    const int pid = atoi(v);
+    if (pid <= 0) return true;
+    std::ifstream f("/proc/" + std::to_string(pid) + "/cmdline");
+    std::string name;
+    std::getline(f, name, '\0');
+    return name == "com.gammaos.azaharsf";
+}
+
 template <typename T>
 bool sym(T& out, const char* name) {
     out = reinterpret_cast<T>(dlsym(gCore.handle, name));
@@ -1365,6 +1379,7 @@ int main(int argc, char** argv) {
         uint64_t lastFlips = 0;
         int64_t lastFlipNs = 0;
         float blitFps = 0.0f;
+        int hostGone = 0;
         while (!gExitRequested) {
             for (int i = 0; i < 10 && !gExitRequested; i++) {
                 usleep(100 * 1000);
@@ -1433,6 +1448,19 @@ int main(int argc, char** argv) {
                                 : nav == "left" ? AZN_DPAD_LEFT : nav == "right" ? AZN_DPAD_RIGHT
                                 : nav == "a" ? AZN_BUTTON_A : nav == "b" ? AZN_BUTTON_B : -1;
                     if (b >= 0 && sIcb && sIcb->button) { sIcb->button(b, true); sIcb->button(b, false); }
+                }
+            }
+            // RG52 Mini: сеанс из Android держит прокладка AzaharSf. Если её процесс убит
+            // (обновление пакета, нехватка памяти), onDestroy с quit не приходит, и слой игры
+            // остался бы поверх лаунчера, а клавиши уходили бы ему. Два промаха подряд
+            // (около 2 с) - выход тем же путём, что и quit.
+            if (gHostApp && !gExitRequested) {
+                if (hostAlive()) {
+                    hostGone = 0;
+                } else if (++hostGone >= 2) {
+                    ALOGW("host AzaharSf is gone, quitting");
+                    gExitRequested = true;
+                    if (gCore.stop) gCore.stop();
                 }
             }
             if (gExitRequested || !gCore.is_running()) continue;
