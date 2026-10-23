@@ -9,10 +9,10 @@ GammaOS для оболочки GammaOS Nano, доработанный под о
 
 | | |
 |---|---|
-| Образ | `@ARCH@`, @GIB@ ГиБ (@BYTES@ байт) |
-| sha256 архива | `@ASHA@` |
-| sha256 образа | `@ISHA@` |
-| Пакет обновления | `@NAME@-ota.zip` — для тех, кто уже на v1.3–v1.12 |
+| Образ | `GammaOSCore-RG52Mini-20261023-1227.img.xz`, 1,67 ГиБ (1 790 834 444 байт) |
+| sha256 архива | `d02518d7053fffca710e02d8b6d43ebe3a2f5d65a802b7a1b66b7d454f146294` |
+| sha256 образа | `523ea1de6b898f5175ccdb901e2af2bb52e81905453a75c94cdc9efa4ab197b5` |
+| Пакет обновления | `GammaOSCore-RG52Mini-20261023-1227-ota.zip` — для тех, кто уже на v1.3–v1.12 |
 | Основа | GammaOS Next Core (вариант на базе Android TV), Android 14; изменения апстрима GammaOS Next до 1.4.4 и часть более поздних, по 18.10.2026 |
 | Ядро | Linux 5.10.226, [mamaich/kernel_rk3562_rg52mini](https://github.com/mamaich/kernel_rk3562_rg52mini), новая сборка: курки и кнопки HOME/BACK в драйвере геймпада |
 | Загрузчик | [mamaich/u-boot-rk3562-rg52mini](https://github.com/mamaich/u-boot-rk3562-rg52mini), тег `rg52mini-1.4`, тот же, что в v1.9–v1.12 |
