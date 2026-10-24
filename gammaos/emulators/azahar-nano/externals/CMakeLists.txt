@@ -227,6 +227,9 @@ else()
     set(ZSTD_LEGACY_SUPPORT OFF)
     set(ZSTD_BUILD_PROGRAMS OFF)
     set(ZSTD_BUILD_SHARED OFF)
+    # RG52 Mini: save states compress on four threads (core/savestate.cpp); zstd leaves
+    # threading off on Android by default.
+    set(ZSTD_MULTITHREAD_SUPPORT ON)
     add_subdirectory(zstd/build/cmake EXCLUDE_FROM_ALL)
 
     target_include_directories(libzstd_static INTERFACE

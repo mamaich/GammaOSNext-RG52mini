@@ -3,7 +3,6 @@
 // Refer to the license.txt file included.
 
 #include <chrono>
-#include <deque>
 #include <memory>
 #include <sstream>
 #include <streambuf>
@@ -170,57 +169,101 @@ namespace {
 // stream, its str() copy and a compressed buffer at once (a 740 MB spike for Mario Kart 7),
 // and loading held the decompressed vector, a string copy and the string stream's own copy.
 // On a 4 GB device the low memory killer took the game during saves and loads.
+//
+// RG52 Mini (2 GB): even the serialized state held in pieces did not fit. Super Mario 3D Land's
+// 299 MB took MemAvailable from 322 MB down to 41 MB and 155 MB into swap, so the serialization
+// alone paused the game for 4.7 s, and the launcher or the AzaharSf host could be killed under
+// it. The state is now compressed while the archive writes it, as the dArkOS port's libretro
+// path does (its patch 012), and only the compressed state (about 20 MB) is held.
 
-/// Output stream buffer that appends to fixed-size chunks (no reallocation, no copies).
-class ChunkOutBuf final : public std::streambuf {
+/// RG52 Mini: an output stream buffer that compresses what the archive writes as it comes,
+/// onto the end of `out` as one zstd frame. With workers the compression runs beside the
+/// serialization. The frame has no content size (it is not known in advance): the streaming
+/// reader below reads it, the whole-buffer DecompressDataZSTD does not.
+class ZstdOutBuf final : public std::streambuf {
 public:
-    static constexpr std::size_t ChunkSize = 4 << 20;
-
-    std::size_t Size() const {
-        if (chunks.empty()) {
-            return 0;
+    ZstdOutBuf(std::vector<u8>& out_, int level, int workers)
+        : out{out_}, cctx{ZSTD_createCCtx()} {
+        if (cctx) {
+            ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, level);
+            if (ZSTD_isError(ZSTD_CCtx_setParameter(cctx, ZSTD_c_nbWorkers, workers))) {
+                LOG_WARNING(Core, "save state: zstd without threads");
+            }
         }
-        return (chunks.size() - 1) * ChunkSize + static_cast<std::size_t>(pptr() - pbase());
+        buf.resize(1 << 20);
+        tmp.resize(ZSTD_CStreamOutSize());
+        setp(buf.data(), buf.data() + buf.size());
     }
-
-    /// Hands the chunks over in order; the last one is sized to its used part.
-    std::deque<std::vector<char>> Take() {
-        if (!chunks.empty()) {
-            chunks.back().resize(static_cast<std::size_t>(pptr() - pbase()));
-            chunks.back().shrink_to_fit();
-        }
-        setp(nullptr, nullptr);
-        return std::move(chunks);
+    ~ZstdOutBuf() override {
+        ZSTD_freeCCtx(cctx);
+    }
+    /// Ends the frame; call once the archive is done.
+    bool Finish() {
+        return Push(ZSTD_e_end) && !failed;
+    }
+    /// Bytes the archive wrote (the serialized size).
+    std::size_t In() const {
+        return total;
     }
 
 protected:
     int_type overflow(int_type ch) override {
-        chunks.emplace_back(ChunkSize);
-        char* base = chunks.back().data();
-        setp(base, base + ChunkSize);
+        if (!Push(ZSTD_e_continue)) {
+            return traits_type::eof();
+        }
         if (!traits_type::eq_int_type(ch, traits_type::eof())) {
             *pptr() = traits_type::to_char_type(ch);
             pbump(1);
         }
         return traits_type::not_eof(ch);
     }
-
     std::streamsize xsputn(const char* data, std::streamsize count) override {
-        std::streamsize done = 0;
-        while (done < count) {
-            if (pptr() == epptr()) {
-                overflow(traits_type::eof());
+        // big blocks (the memories) go to zstd as they are, without a copy into buf
+        if (count >= static_cast<std::streamsize>(buf.size())) {
+            if (!Push(ZSTD_e_continue) ||
+                !Feed(data, static_cast<std::size_t>(count), ZSTD_e_continue)) {
+                return 0;
             }
-            const std::streamsize n = std::min<std::streamsize>(count - done, epptr() - pptr());
-            std::memcpy(pptr(), data + done, static_cast<std::size_t>(n));
-            pbump(static_cast<int>(n));
-            done += n;
+            return count;
         }
-        return done;
+        return std::streambuf::xsputn(data, count);
     }
 
 private:
-    std::deque<std::vector<char>> chunks;
+    bool Push(ZSTD_EndDirective mode) {
+        const bool ok = Feed(pbase(), static_cast<std::size_t>(pptr() - pbase()), mode);
+        setp(buf.data(), buf.data() + buf.size());
+        return ok;
+    }
+    bool Feed(const char* data, std::size_t n, ZSTD_EndDirective mode) {
+        if (failed || !cctx) {
+            failed = true;
+            return false;
+        }
+        total += n;
+        ZSTD_inBuffer src{data, n, 0};
+        for (;;) {
+            ZSTD_outBuffer dst{tmp.data(), tmp.size(), 0};
+            const std::size_t remaining = ZSTD_compressStream2(cctx, &dst, &src, mode);
+            if (ZSTD_isError(remaining)) {
+                LOG_ERROR(Core, "save state: compression failed: {}",
+                          ZSTD_getErrorName(remaining));
+                failed = true;
+                return false;
+            }
+            out.insert(out.end(), tmp.data(), tmp.data() + dst.pos);
+            if (mode == ZSTD_e_end ? remaining == 0 : src.pos == src.size) {
+                return true;
+            }
+        }
+    }
+
+    std::vector<u8>& out;
+    ZSTD_CCtx* cctx;
+    std::vector<char> buf;
+    std::vector<u8> tmp;
+    std::size_t total = 0;
+    bool failed = false;
 };
 
 /// Input stream buffer that decompresses a zstd stream from a file as it is read.
@@ -279,53 +322,6 @@ private:
     bool failed = false;
 };
 
-/// Compresses the chunks into the file as one zstd frame (with its content size, so the
-/// whole-buffer decompressor reads it too), freeing each chunk once it is consumed.
-bool WriteCompressedChunks(FileUtil::IOFile& file, std::deque<std::vector<char>>& chunks,
-                           std::size_t total, int level, std::size_t* compressed) {
-    ZSTD_CCtx* cctx = ZSTD_createCCtx();
-    if (!cctx) {
-        return false;
-    }
-    ZSTD_CCtx_setParameter(cctx, ZSTD_c_compressionLevel, level);
-    ZSTD_CCtx_setPledgedSrcSize(cctx, total);
-    std::vector<char> out(ZSTD_CStreamOutSize());
-    bool ok = true;
-    *compressed = 0;
-    const auto drain = [&](ZSTD_inBuffer& src, ZSTD_EndDirective mode) {
-        for (;;) {
-            ZSTD_outBuffer dst{out.data(), out.size(), 0};
-            const std::size_t remaining = ZSTD_compressStream2(cctx, &dst, &src, mode);
-            if (ZSTD_isError(remaining)) {
-                LOG_ERROR(Core, "save state: compression failed: {}",
-                          ZSTD_getErrorName(remaining));
-                return false;
-            }
-            if (dst.pos > 0) {
-                if (file.WriteBytes(out.data(), dst.pos) != dst.pos) {
-                    return false;
-                }
-                *compressed += dst.pos;
-            }
-            const bool done = mode == ZSTD_e_end ? remaining == 0 : src.pos == src.size;
-            if (done) {
-                return true;
-            }
-        }
-    };
-    while (ok && !chunks.empty()) {
-        ZSTD_inBuffer src{chunks.front().data(), chunks.front().size(), 0};
-        ok = drain(src, ZSTD_e_continue);
-        chunks.pop_front();
-    }
-    if (ok) {
-        ZSTD_inBuffer empty{nullptr, 0, 0};
-        ok = drain(empty, ZSTD_e_end);
-    }
-    ZSTD_freeCCtx(cctx);
-    return ok;
-}
-
 } // namespace
 
 void System::SaveState(u32 slot) const {
@@ -338,20 +334,28 @@ void System::SaveState(u32 slot) const {
     WaitSaveWriter();
 
     // GammaOS: only serializing needs the emulation stopped (1.3 s for Kirby: Planet Robobot's
-    // 295 MB). Compressing and writing run on a writer thread; the file is written under a
-    // temporary name and renamed into place, so the slot file is never half written. Loads,
-    // the next save and shutdown wait for the writer.
+    // 295 MB). Writing runs on a writer thread; the file is written under a temporary name and
+    // renamed into place, so the slot file is never half written. Loads, the next save and
+    // shutdown wait for the writer.
+    // RG52 Mini: compressed while serializing (ZstdOutBuf), at level 1 on four threads, so the
+    // pause covers both and the writer only writes the compressed state.
     const auto t0 = std::chrono::steady_clock::now();
-    auto chunk_buf = std::make_shared<ChunkOutBuf>();
+    auto compressed = std::make_shared<std::vector<u8>>();
+    compressed->reserve(32 << 20);
+    std::size_t total = 0;
     {
-        // Serialize (the archive is finished before the chunks move to the writer)
-        std::ostream ostream{chunk_buf.get()};
-        oarchive oa{ostream};
-        oa&* this;
+        ZstdOutBuf zout{*compressed, 1, 4};
+        {
+            // Serialize (the archive is finished before the frame is ended)
+            std::ostream ostream{&zout};
+            oarchive oa{ostream};
+            oa&* this;
+        }
+        if (!zout.Finish()) {
+            throw std::runtime_error("Could not compress the savestate");
+        }
+        total = zout.In();
     }
-    const std::size_t total = chunk_buf->Size();
-    auto chunks = std::make_shared<std::deque<std::vector<char>>>(chunk_buf->Take());
-    chunk_buf.reset();
     const auto t1 = std::chrono::steady_clock::now();
 
     const u64 movie_id = movie.GetCurrentMovieID();
@@ -381,25 +385,27 @@ void System::SaveState(u32 slot) const {
     std::memcpy(header.build_version.data(), build_version.c_str(),
                 std::min(build_version.length(), sizeof(header.build_version) - 1));
 
-    gamma_save_writer = std::thread([chunks, total, header, path, t0, t1]() {
+    gamma_save_writer = std::thread([compressed, total, header, path, t0, t1]() {
         const auto ms = [](auto a, auto b) {
             return std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count();
         };
         // GammaOS: level 1 instead of the default 3 (2.4 s -> 1.2 s for 295 MB, about 10%
-        // bigger); any level loads the same. Compressed straight into the file chunk by chunk.
+        // bigger); any level loads the same.
         const std::string tmp_path = path + ".tmp";
-        std::size_t compressed = 0;
+        const std::size_t size = compressed->size();
         {
             FileUtil::IOFile file(tmp_path, "wb");
             if (!file || file.WriteBytes(&header, sizeof(header)) != sizeof(header) ||
-                !WriteCompressedChunks(file, *chunks, total, 1, &compressed)) {
+                file.WriteBytes(compressed->data(), size) != size) {
                 LOG_ERROR(Core, "save state: could not write {}", tmp_path);
-                chunks->clear();
+                compressed->clear();
                 file.Close();
                 FileUtil::Delete(tmp_path);
                 return;
             }
         }
+        compressed->clear();
+        compressed->shrink_to_fit();
         const auto t2 = std::chrono::steady_clock::now();
         if (!FileUtil::Rename(tmp_path, path)) {
             LOG_ERROR(Core, "save state: could not rename {} to {}", tmp_path, path);
@@ -408,9 +414,9 @@ void System::SaveState(u32 slot) const {
         }
         const auto t3 = std::chrono::steady_clock::now();
         LOG_INFO(Core,
-                 "save state: serialize {} ms ({} MB, emulation paused), compress and write {} ms "
-                 "({} MB), rename {} ms",
-                 ms(t0, t1), total >> 20, ms(t1, t2), compressed >> 20, ms(t2, t3));
+                 "save state: serialize and compress {} ms ({} MB to {} MB, emulation paused), "
+                 "write {} ms, rename {} ms",
+                 ms(t0, t1), total >> 20, size >> 20, ms(t1, t2), ms(t2, t3));
     });
 }
 
@@ -445,7 +451,7 @@ void System::LoadState(u32 slot) {
         throw std::runtime_error("Invalid savestate");
     }
 
-    // GammaOS: decompressed while the archive reads it (see ChunkOutBuf); the whole state is
+    // GammaOS: decompressed while the archive reads it (see ZstdOutBuf); the whole state is
     // never held in memory.
     const auto t0 = std::chrono::steady_clock::now();
     ZstdFileInBuf zbuf{file};
