@@ -1149,6 +1149,7 @@ void DrmWindows::captureAll() {
 }
 
 bool DrmWindows::flip(DrmPanel& p, BufferItem& item) {
+    if (mPanelsOff.load()) return false;   // asleep: the frame goes back, nothing is committed
     const uint32_t fb = importFb(p, item.mGraphicBuffer);
     if (!fb) return false;
     {

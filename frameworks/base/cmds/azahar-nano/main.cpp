@@ -1516,6 +1516,7 @@ int main(int argc, char** argv) {
                 sinkSwapped = gCore.sleep &&
                         prop("persist.gammaos.azahar_nano.sleep_sink_swap", "0") == "1";
                 if (sinkSwapped) gCore.sleep(true);
+                if (sInput) sInput->setParked(true);   // a Back held under the sleep must not exit
                 // Из Android подсветку гасит и возвращает сам Android, а уровень nano
                 // (persist.gammaos.nano.brightness) сбил бы яркость системы.
                 if (!gHostApp) android::nanobl::nanoBacklightSet(0);
@@ -1526,6 +1527,7 @@ int main(int argc, char** argv) {
             } else if (!off && asleep) {
                 asleep = false;
                 if (!gHostApp) android::nanobl::nanoBacklightSet(azahar_nano::brightnessLevel());
+                if (sInput) sInput->setParked(false);
                 android::nano_session_hw::holdClusterCores("sys.gammaos.azahar_nano.core_ctl_hold");
                 if (sinkSwapped) gCore.sleep(false);
                 sinkSwapped = false;
