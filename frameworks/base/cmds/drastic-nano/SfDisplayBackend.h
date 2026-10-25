@@ -62,6 +62,11 @@ public:
     // pure-SF device whose panels already belong to SurfaceFlinger).
     void setHostSurfaceMode(bool on) { mHostSurface = on; }
 
+    // RG52 Mini: the HDMI cable is in (sysfs) - wait for SurfaceFlinger to report the
+    // external display before choosing one: the composer announces it seconds after the
+    // cable, and a session restarted on the cable (main.cpp, hdmiRestartDue) got there first.
+    void setWaitExternal(bool on) { mWaitExternal = on; }
+
     // Called by the binder receiver when the activity provides its Surface.
     void onHostSurfaceReceived(const android::sp<android::Surface>& s);
 
@@ -115,6 +120,7 @@ private:
     android::sp<android::SurfaceComposerClient> mSession;
     android::sp<android::IBinder::DeathRecipient> mDeath;
 
+    bool                         mWaitExternal = false;
     // Host-surface mode (render into the DrasticSf activity's Surface).
     bool                         mHostSurface = false;
     android::sp<android::IBinder> mHostReceiver;     // the binder service we publish

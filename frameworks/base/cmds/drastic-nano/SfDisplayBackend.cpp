@@ -24,6 +24,7 @@
 #include <ui/Rect.h>
 #include <ui/Rotation.h>
 #include <ui/Size.h>
+#include <ui/StaticDisplayInfo.h>
 
 #include "NanoMenuDrm.h"   // android::getEglConfig(EGLDisplay, bool)
 #include "DrasticSettings.h"
@@ -294,6 +295,36 @@ bool SfDisplayBackend::createContext(DisplayEnv* env) {
         return false;
     }
 
+    // RG52 Mini: HDMI делит видеопорт со встроенной панелью (мост rk628), и пока он подключён,
+    // панель погашена - показать игру можно только на HDMI: дисплей один - он. Сеанс nano
+    // остановил оболочку, которая включала HDMI, поэтому питание включаем сами (как
+    // SfWindows у azahar-nano).
+    bool externalOnly = false;
+    if (property_get_bool("ro.gammaos.hdmi_shares_panel_port", false)) {
+        // Кабель вставлен, а композитор ещё не объявил HDMI (через 2-3 с после кабеля) -
+        // ждём его до 6 с, иначе слой встал бы на погашенную панель.
+        for (int wait = 0; !externalOnly; wait++) {
+            for (const PhysicalDisplayId& id : ids) {
+                android::ui::StaticDisplayInfo info;
+                if (SurfaceComposerClient::getStaticDisplayInfo(static_cast<int64_t>(id.value),
+                                                                &info) == android::NO_ERROR &&
+                    info.connectionType == android::ui::DisplayConnectionType::External) {
+                    ids.assign(1, id);
+                    externalOnly = true;
+                    ALOGI("drastic-nano: SF backend: HDMI shares the panel's video port, the session goes to HDMI (waited %d ms)",
+                          wait * 100);
+                    break;
+                }
+            }
+            if (externalOnly || !mWaitExternal || wait >= 60) break;
+            usleep(100 * 1000);
+            ids = SurfaceComposerClient::getPhysicalDisplayIds();
+        }
+        if (!externalOnly && mWaitExternal) {
+            ALOGW("drastic-nano: SF backend: HDMI cable in but no external display after 6 s");
+        }
+    }
+
     char modeProp[PROPERTY_VALUE_MAX] = {};
     android::drastic_settings::get("persist.gammaos.drastic_nano.screen_mode", modeProp, "auto");
     const bool forceSingle = (strcmp(modeProp, "single") == 0);
@@ -314,13 +345,14 @@ bool SfDisplayBackend::createContext(DisplayEnv* env) {
         if (!(id == primaryId)) { secondaryId = id; haveSecondary = true; break; }
     }
 
-    const bool wantDual = forceDual || (!forceSingle && haveSecondary);
+    const bool wantDual = !externalOnly && (forceDual || (!forceSingle && haveSecondary));
 
     if (!createDisplaySurface(primaryId, &mDisplays[0])) {
         ALOGE("drastic-nano: SF primary surface failed");
         return false;
     }
     mDisplayCount = 1;
+    if (externalOnly) SurfaceComposerClient::setDisplayPowerMode(mDisplays[0].token, 2 /*ON*/);
 
     if (wantDual && haveSecondary) {
         // SurfaceFlinger parks a second panel inactive after an SF client, so

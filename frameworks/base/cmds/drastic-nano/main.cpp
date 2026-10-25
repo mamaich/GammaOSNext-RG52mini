@@ -773,6 +773,77 @@ static std::string slot9Stem(const std::string& savestatesDir, const std::string
 volatile sig_atomic_t gTermRequested = 0;
 void termCleanup(int) { gTermRequested = 1; }
 
+// RG52 Mini: HDMI делит видеопорт со встроенной панелью (ro.gammaos.hdmi_shares_panel_port,
+// мост rk628). Пока HDMI подключён, порт ведёт композитор под телевизор, поэтому сеанс с
+// HDMI идёт своим слоем SurfaceFlinger на HDMI (SfDisplayBackend), без него - через DRM.
+// Вставили или вынули HDMI посреди игры - сохранение в слот 9 (как при любом выходе) и
+// перезапуск тем же процессом (exec; init и nano видят тот же сеанс) с qr_resume=1: новый
+// процесс выбирает вывод заново и загружает слот 9. DRM-вывод при вставленном HDMI борется
+// с композитором за CRTC и ломает его так, что после отключения панель остаётся чёрной
+// (так было у azahar-nano), поэтому с DRM выходим сразу, а с SurfaceFlinger - через 1 с
+// устойчивого нового состояния (дребезг разъёма).
+bool gHdmiWatch = false;     // общий порт, перезапуск включён
+bool gHdmiAtStart = false;   // HDMI при запуске - по нему выбран вывод
+
+bool hdmiConnected() {
+    DIR* d = opendir("/sys/class/drm");
+    if (d == nullptr) return false;
+    bool connected = false;
+    while (dirent* e = readdir(d)) {
+        if (strstr(e->d_name, "-HDMI-A-") == nullptr) continue;
+        char path[300];
+        snprintf(path, sizeof(path), "/sys/class/drm/%s/status", e->d_name);
+        char s[16] = {};
+        const int fd = open(path, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) continue;
+        const ssize_t n = read(fd, s, sizeof(s) - 1);
+        close(fd);
+        if (n > 0 && strncmp(s, "connected", 9) == 0) {
+            connected = true;
+            break;
+        }
+    }
+    closedir(d);
+    return connected;
+}
+
+// Из цикла кадров: true один раз, когда пора перезапускаться на новом выводе.
+bool hdmiRestartDue() {
+    if (!gHdmiWatch) return false;
+    static int64_t sNextMs = 0, sChangedSinceMs = 0;
+    const int64_t nowMs = android::elapsedRealtime();
+    if (nowMs < sNextMs) return false;
+    sNextMs = nowMs + 100;
+    if (hdmiConnected() == gHdmiAtStart) {
+        sChangedSinceMs = 0;
+        return false;
+    }
+    if (sChangedSinceMs == 0) sChangedSinceMs = nowMs;
+    if (gHdmiAtStart && nowMs - sChangedSinceMs < 1000) return false;
+    gHdmiWatch = false;
+    ALOGI("drastic-nano: HDMI %s mid-game, saving slot 9 to restart on the new output",
+          gHdmiAtStart ? "disconnected" : "connected");
+    return true;
+}
+
+// Дескрипторы не переходят в новый образ (ввод, binder, DRM он открывает сам).
+void restartForHdmi(int argc, char** argv) {
+    if (DIR* d = opendir("/proc/self/fd")) {
+        while (dirent* e = readdir(d)) {
+            const int fd = atoi(e->d_name);
+            if (fd > 2 && fd != dirfd(d)) fcntl(fd, F_SETFD, FD_CLOEXEC);
+        }
+        closedir(d);
+    }
+    std::vector<char*> args(argv, argv + argc);
+    args.push_back(nullptr);
+    // Как у Quick Resume: новый процесс загрузит слот 9 и при выключенной автозагрузке.
+    property_set("sys.gammaos.drastic_nano.qr_resume", "1");
+    ALOGI("drastic-nano: HDMI restart: starting again on the new output");
+    execv("/proc/self/exe", args.data());
+    ALOGE("drastic-nano: HDMI restart: exec failed: %s", strerror(errno));
+}
+
 // The clean exit tail has finished: from here on a fault is a teardown fault (static
 // destructors, driver unload) of a process that already handed its state over, so it
 // must be reported as a plain abort and never as a crashed session. With the handler
@@ -1322,6 +1393,8 @@ struct RunLoopResult {
     bool exitToHome;     // back-hold graceful exit: force the slot-9 save then take
                          // the normal return-to-launcher path (raise the overlay /
                          // DRM home). Mirrors RetroArch's back-hold ESC + app close.
+    bool hdmiRestart;    // RG52 Mini: HDMI came or went mid-game: force the slot-9 save and
+                         // restart on the new output (hdmiRestartDue, restartForHdmi).
 };
 
 // Debug screenshot. When sys.gammaos.drastic_nano.shot=1, read back the bound
@@ -2495,6 +2568,7 @@ RunLoopResult runLoop(Display* dpy, DrasticRunner* dr,
             result.exitToHome = true;
             exitRequested = true;
         }
+        if (hdmiRestartDue()) { result.hdmiRestart = true; exitRequested = true; }
         if (exitRequested) { drasticQuiesceAudio(); break; }
 
         // External load-state channel (optimization/testing): set
@@ -4823,6 +4897,7 @@ RunLoopResult runLoopSf(drastic_nano::IDisplayBackend* backend,
             result.exitToHome = true;
             exitRequested = true;
         }
+        if (hdmiRestartDue()) { result.hdmiRestart = true; exitRequested = true; }
         if (exitRequested) { drasticQuiesceAudio(); break; }
 
         // External load-state channel (parity with the DRM loop): reload a
@@ -5446,13 +5521,26 @@ int main(int argc, char** argv) {
     {
         char backendProp[PROPERTY_VALUE_MAX] = {};
         android::drastic_settings::get("persist.gammaos.drastic_nano.backend", backendProp, "auto");
-        const bool forceDrm = (strcmp(backendProp, "drm") == 0);
+        bool forceDrm = (strcmp(backendProp, "drm") == 0);
         const bool forceSf  = (strcmp(backendProp, "sf") == 0);
+
+        // RG52 Mini: с подключённым HDMI на общем порту - свой слой SurfaceFlinger на
+        // телевизоре вместо DRM (см. gHdmiWatch). Хостинг DrasticSf (backend=sf) - как был.
+        if (property_get_bool("ro.gammaos.hdmi_shares_panel_port", false) && !forceSf) {
+            gHdmiWatch = property_get_bool("persist.gammaos.drastic_nano.hdmi_restart", true);
+            gHdmiAtStart = hdmiConnected();
+            if (gHdmiAtStart) {
+                ALOGI("drastic-nano: HDMI connected on the panel's video port: SurfaceFlinger on HDMI");
+                forceDrm = false;
+                // SurfaceFlinger's composition gate: it must present the TV.
+                property_set("sys.gammaos.nano.drm_active", "0");
+            }
+        }
 
         // DRM first unless SurfaceFlinger is explicitly forced. setupDisplay grabs
         // DRM master; it succeeds on a DRM-capable panel and returns false on a
         // device with no DRM-direct path.
-        if (!forceSf) {
+        if (!forceSf && !gHdmiAtStart) {
             // Opt into the AFBC combined-buffer path (rk356x + Low Latency): only
             // drastic-nano renders both DS screens into the one 2x-tall buffer.
             android::sDrmAfbcClient = true;
@@ -5471,6 +5559,7 @@ int main(int argc, char** argv) {
             // already belong to SF) keeps the own-layer path. Set on the
             // concrete type before it is held by the IDisplayBackend pointer.
             sfb->setHostSurfaceMode(forceSf);
+            sfb->setWaitExternal(gHdmiAtStart);
             sfBackend.reset(sfb);
             drastic_nano::DisplayEnv env{};
             if (sfBackend->createContext(&env)) {
@@ -5802,6 +5891,8 @@ int main(int argc, char** argv) {
     // what the client will enforce.
     bool raHardcore = android::drastic_settings::getBool("persist.gammaos.drastic_nano.ra_enabled", false) &&
                       android::drastic_settings::getBool("persist.gammaos.drastic_nano.ra_hardcore", false);
+    // RG52 Mini: hardcore не загружает состояний - перезапуск при смене HDMI потерял бы игру.
+    if (raHardcore) gHdmiWatch = false;
     // Quick Resume boot: nano set sys.gammaos.drastic_nano.qr_resume on the resume
     // handoff. A resume loads slot 9 even if boot_fresh would otherwise force a
     // fresh boot -- but NOT under RA hardcore, which always boots fresh (below).
@@ -6068,7 +6159,7 @@ int main(int argc, char** argv) {
     // exitToHome (back-hold) is a graceful close, so save slot 9 unconditionally
     // (the point is to preserve progress on the way out), independent of the Quick
     // Resume / Auto Load toggles.
-    bool forceSlot9 = (qrPowerAction && qrEnabled) || rlr.exitToHome;
+    bool forceSlot9 = (qrPowerAction && qrEnabled) || rlr.exitToHome || rlr.hdmiRestart;
     // Silence the game the moment the exit starts: the autosave below needs the
     // emulator to keep running a few frames, but nobody should hear them.
     dr.setVolumeRuntime(0);
@@ -6193,6 +6284,17 @@ int main(int argc, char** argv) {
     // A per-game override write is coalesced on a worker; make sure the last
     // setting change of the session is on disk before we leave.
     android::drastic_settings::flush();
+
+    // RG52 Mini: HDMI came or went mid-game (hdmiRestartDue). Slot 9 was force-saved above;
+    // quitSystem writes the game's own save memory, then the same process starts again.
+    if (rlr.hdmiRestart) {
+        dr.shutdown();
+        android::drastic_perf::restoreGlobal();
+        disarmCrashHandler();
+        restartForHdmi(argc, argv);
+        property_set(kSessionDoneProp, "1");   // exec failed: back to the home
+        return 0;
+    }
 
     // Quick Resume power off / reboot. drastic-nano owns the save + power action
     // here because gammaos-nano is stopped during a DRM session (and in SF the
