@@ -29,9 +29,10 @@ Treble-совместимый (`ro.treble.enabled=true`, `ro.vndk.version=33`), 
 У RG52 Mini **нет сенсорного экрана** — только геймпад, D-pad и несколько
 кнопок. GammaOS Core (вариант на базе Android TV) рассчитан ровно на это:
 интерфейс полностью проходится с геймпада, в образ уже вшиты RetroArch, PPSSPP,
-Flycast, DraStic, mupen64plus, Daijishō, с v1.13 — эмулятор 3DS azahar-nano для
-оболочки GammaOS Nano (со следующего выпуска — и для Daijishō), и вырезана
-телефония, которой на устройстве без модема взяться неоткуда.
+Flycast, DraStic, mupen64plus, Daijishō, с v1.13 — эмулятор 3DS azahar-nano (с v1.14
+игры 3DS запускаются и из Daijishō, а игры DS в оболочке GammaOS Nano — во встроенном
+эмуляторе drastic-nano), и вырезана телефония, которой на устройстве без модема
+взяться неоткуда.
 
 ## Скачать
 
