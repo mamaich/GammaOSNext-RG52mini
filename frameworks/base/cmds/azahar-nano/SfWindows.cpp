@@ -3,6 +3,7 @@
 #include "SfWindows.h"
 
 #include <cstring>
+#include <unistd.h>
 
 #include <android/native_window.h>
 #include <binder/ProcessState.h>
@@ -105,12 +106,28 @@ int SfWindows::create() {
     // встроенный экран погашен, и показать игру можно только на HDMI: панель одна - он.
     {
         std::vector<PhysicalDisplayId> internal, external;
-        for (const auto& id : ids) {
-            ui::StaticDisplayInfo info;
-            const bool ext = SurfaceComposerClient::getStaticDisplayInfo(
-                                     static_cast<int64_t>(id.value), &info) == NO_ERROR &&
-                             info.connectionType == ui::DisplayConnectionType::External;
-            (ext ? external : internal).push_back(id);
+        // Кабель вставлен, а композитор ещё не объявил HDMI (он делает это через 2-3 с после
+        // кабеля) - ждём его до 6 с, иначе слой встал бы на погашенную панель.
+        const bool sharedPort = property_get_bool("ro.gammaos.hdmi_shares_panel_port", false);
+        for (int wait = 0;; wait++) {
+            internal.clear();
+            external.clear();
+            for (const auto& id : ids) {
+                ui::StaticDisplayInfo info;
+                const bool ext = SurfaceComposerClient::getStaticDisplayInfo(
+                                         static_cast<int64_t>(id.value), &info) == NO_ERROR &&
+                                 info.connectionType == ui::DisplayConnectionType::External;
+                (ext ? external : internal).push_back(id);
+            }
+            if (!external.empty() || !mWaitExternal || !sharedPort || wait >= 60) {
+                if (mWaitExternal && sharedPort) {
+                    ALOGI("SF backend: waited %d ms for the external display (%s)", wait * 100,
+                          external.empty() ? "none" : "found");
+                }
+                break;
+            }
+            usleep(100 * 1000);
+            ids = SurfaceComposerClient::getPhysicalDisplayIds();
         }
         if (!external.empty() && property_get_bool("ro.gammaos.hdmi_shares_panel_port", false)) {
             ids.assign(1, external[0]);

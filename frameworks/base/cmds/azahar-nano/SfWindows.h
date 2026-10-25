@@ -46,6 +46,9 @@ public:
     // Returns the number of panels (0 on failure).
     int create();
     void teardown();
+    // RG52 Mini: the HDMI cable is in - create() waits for SurfaceFlinger to report the
+    // external display (it comes seconds after the cable) before picking the panels.
+    void setWaitExternal(bool on) { mWaitExternal = on; }
 
     int count() const { return (int)mPanels.size(); }
     ANativeWindow* window(int idx) const;
@@ -67,6 +70,7 @@ private:
     android::sp<android::SurfaceComposerClient> mSession;
     std::vector<SfPanel> mPanels;
     bool mExternalOnly = false;   // RG52 Mini: the one panel is HDMI (see create)
+    bool mWaitExternal = false;
 };
 
 } // namespace azahar_nano

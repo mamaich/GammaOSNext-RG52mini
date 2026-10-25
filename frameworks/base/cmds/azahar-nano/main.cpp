@@ -1157,6 +1157,7 @@ int main(int argc, char** argv) {
         panels = drm.create();
         if (panels == 0) ALOGE("DRM backend failed, falling back to SurfaceFlinger");
     }
+    sf.setWaitExternal(gHdmiAtStart);
     if (panels == 0) panels = sf.create();
     const bool drmActive = useDrm && drm.count() > 0;
     if (panels == 0) {
