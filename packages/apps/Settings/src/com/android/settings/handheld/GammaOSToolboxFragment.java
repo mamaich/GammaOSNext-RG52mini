@@ -343,6 +343,12 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         super.onResume();
         // The TV may have been plugged in while the page was in the background.
         populateHdmiModes();
+        // Every entry into the Toolbox goes through the disclaimer: these are deep settings
+        // and the same ROM serves many devices. Declining leaves the page.
+        if (!mDisclaimerShown) {
+            mDisclaimerShown = true;
+            showEntryDisclaimer();
+        }
     }
 
     /* ------------------------------------------------------------------ */
@@ -507,17 +513,7 @@ public class GammaOSToolboxFragment extends SettingsPreferenceFragment {
         updateListSummary(lp, current);
     }
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        // Every entry into the Toolbox goes through the disclaimer: these are deep settings
-        // and the same ROM serves many devices. Declining leaves the page.
-        if (!mDisclaimerShown) {
-            mDisclaimerShown = true;
-            showEntryDisclaimer();
-        }
-    }
-
+    // shown from onResume() above (one onResume: ours refreshes the HDMI modes too)
     private boolean mDisclaimerShown = false;
 
     private void showEntryDisclaimer() {
