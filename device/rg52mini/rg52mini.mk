@@ -389,6 +389,11 @@ PRODUCT_PACKAGES += \
 #   ro.gammaos.hdmi_shares_panel_port=true - HDMI (мост rk628) делит со встроенным
 #     экраном единственный видеопорт: с подключённым HDMI сеанс идёт через
 #     SurfaceFlinger на телевизор (frameworks/base/cmds/azahar-nano, SfWindows.cpp);
+#     вставили или вынули HDMI посреди игры - эмулятор сохраняет игру в служебный слот 11 и
+#     перезапускается на новом выводе (main.cpp, kHdmiSlot);
+#   ro.gammaos.hdmi_unplug_rescue=rg52_hdmi_nano - служба, которой azahar-nano при таком
+#     перезапуске после отключения HDMI возвращает встроенный экран, если HWC не отпустил
+#     HDMI (rg52-hdmi-unplug.sh nano);
 #   ro.gammaos.azahar_nano.top_turn=180 - панель стоит в корпусе другой стороной, чем
 #     у Duo Lite, под который ядро рисует повёрнутую раскладку: без доворота на 180
 #     градусов картинка шла вверх ногами (DrmWindows.cpp, panelMountDeg);
@@ -407,7 +412,8 @@ PRODUCT_PRODUCT_PROPERTIES += \
     ro.gammaos.azahar_nano.top_turn=180 \
     ro.gammaos.azahar_nano.gles=false \
     ro.gammaos.nano.sleep_panels_off=false \
-    ro.gammaos.hdmi_shares_panel_port=true
+    ro.gammaos.hdmi_shares_panel_port=true \
+    ro.gammaos.hdmi_unplug_rescue=rg52_hdmi_nano
 
 # Тот же azahar-nano из обычного Android: Daijishō запускает для 3DS прокладку AzaharSf
 # (packages/apps/AzaharSf), она передаёт эмулятору путь к ROM и запускает сеанс через
@@ -437,11 +443,22 @@ PRODUCT_PACKAGES += \
 #
 # Разбор и остальные замеры (в том числе почему рекомендации Arch для
 # настольных машин здесь вредят) - в doc/rg52mini/02-план.md.
+#
+# pressure_after_kill_min_score=201: если после убийства фоновой программы
+# свободные страницы всё ещё ниже low watermark («min watermark is breached
+# even after kill»), lmkd по умолчанию (0) добивает и передний план. 25.10.2026
+# так дважды убит azahar-nano (RSS 1,25 ГБ) при MemAvailable около 450 МБ:
+# посреди игры вскоре после загрузки системы и посреди сохранения состояния
+# (оно берёт ещё около 200 МБ разом). Сеансы nano регистрирует init с
+# oom_score_adjust 0, как передний план. С 201 в этом случае гибнут только
+# фоновые; при настоящем голоде (critical PSI, нет места в подкачке) lmkd
+# по-прежнему может закрыть и игру.
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.sf.lcd_density=213 \
     ro.config.low_ram=false \
     ro.lmk.swap_util_max=100 \
     ro.lmk.thrashing_limit=200 \
+    ro.lmk.pressure_after_kill_min_score=201 \
     persist.gammaos.lazy32=1
 
 # Про persist.gammaos.lazy32=1 выше — 32-битный зигот по требованию.

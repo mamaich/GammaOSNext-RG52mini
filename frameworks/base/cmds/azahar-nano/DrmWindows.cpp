@@ -3,6 +3,7 @@
 #include "DrmWindows.h"
 #include "AzaharSettings.h"
 
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -38,6 +39,24 @@ using namespace android;
 namespace azahar_nano {
 
 namespace {
+
+// RG52 Mini: the HDMI cable state (sysfs DRM, card*-HDMI-A-*/status), as main.cpp's hdmiConnected().
+bool hdmiCableIn() {
+    DIR* d = opendir("/sys/class/drm");
+    if (d == nullptr) return false;
+    bool connected = false;
+    while (dirent* e = readdir(d)) {
+        if (strstr(e->d_name, "-HDMI-A-") == nullptr) continue;
+        std::ifstream f(std::string("/sys/class/drm/") + e->d_name + "/status");
+        std::string s;
+        if (f >> s && s == "connected") {
+            connected = true;
+            break;
+        }
+    }
+    closedir(d);
+    return connected;
+}
 
 uint32_t findProp(int fd, uint32_t objId, uint32_t objType, const char* name) {
     drmModeObjectPropertiesPtr props = drmModeObjectGetProperties(fd, objId, objType);
@@ -1149,6 +1168,8 @@ void DrmWindows::captureAll() {
 }
 
 bool DrmWindows::flip(DrmPanel& p, BufferItem& item) {
+    // RG52 Mini: HDMI holds the panel's video port: the frame is dropped (hdmiOnPort).
+    if (hdmiOnPort(p, false)) return false;
     const uint32_t fb = importFb(p, item.mGraphicBuffer);
     if (!fb) return false;
     {
@@ -1303,6 +1324,14 @@ bool DrmWindows::flip(DrmPanel& p, BufferItem& item) {
 // framework turned the panel off then and the frames wait for the wake.
 bool DrmWindows::recommit(DrmPanel& p, const char* why) {
     p.recommitNs = monoNs();
+    // RG52 Mini: taking the CRTC back from the composer while HDMI had the port fought it (the
+    // mode went back and forth between the panel's and the TV's), and its state broke so far
+    // that it could not let HDMI go on the unplug: the panel stayed black.
+    if (hdmiOnPort(p, true)) {
+        ALOGW("DRM: crtc %u %s while HDMI holds the video port, left to the composer", p.crtcId,
+              why);
+        return false;
+    }
     char screen[PROPERTY_VALUE_MAX] = {};
     property_get("sys.screen.state", screen, "on");
     if (strcmp(screen, "off") == 0) {
@@ -1634,8 +1663,26 @@ void DrmWindows::panelLoop(int idx) {
     for (auto& it : ready) releaseReady(it);
 }
 
+bool DrmWindows::hdmiOnPort(DrmPanel& p, bool force) {
+    if (!mHdmiSharesPort || !p.isDsi) return false;
+    const int64_t now = monoNs();
+    if (!force && now - p.hdmiCheckNs < 500000000LL) return p.hdmiYield;
+    p.hdmiCheckNs = now;
+    const bool on = hdmiCableIn();
+    if (on != p.hdmiYield) {
+        p.hdmiYield = on;
+        ALOGW("DRM: crtc %u: HDMI %s the panel's video port", p.crtcId, on ? "took" : "left");
+        // SurfaceFlinger's composition gate (see create): it drives the TV while HDMI has the port.
+        property_set("sys.gammaos.nano.drm_active", on ? "0" : "1");
+        // The cable went before the restart: the composer had the CRTC meanwhile.
+        if (!on) recommit(p, "HDMI gone");
+    }
+    return p.hdmiYield;
+}
+
 int DrmWindows::create() {
     mMinimalFlips = settings::getBool("persist.gammaos.azahar_nano.drm_minimal", true);
+    mHdmiSharesPort = property_get_bool("ro.gammaos.hdmi_shares_panel_port", false);
     if (!openDevice() || !enumerate()) return 0;
     // Optional 180 degree correction for the DSI panel (plane reflect x+y).
     char rot[PROPERTY_VALUE_MAX] = {};

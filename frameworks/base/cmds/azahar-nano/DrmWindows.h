@@ -122,6 +122,9 @@ struct DrmPanel {
     uint32_t srcW = 0, srcH = 0;
     uint64_t latCount = 0;
     int64_t recommitNs = 0;   // RG52 Mini: the last time recommit() brought the panel back
+    // RG52 Mini: HDMI holds the panel's video port, no commits until it goes (hdmiOnPort).
+    bool hdmiYield = false;
+    int64_t hdmiCheckNs = 0;
     // Frame-ready (GPU fence signalled) -> scanout wait of each shown frame since the last
     // takeReadyWaits(), for the frontend's timing steer. Guarded by mu.
     std::shared_ptr<std::vector<int32_t>> readyWaitsUs = std::make_shared<std::vector<int32_t>>();
@@ -208,6 +211,11 @@ private:
     // RG52 Mini: modeset()'s takeover again for one panel, after the composer had the CRTC
     // (screen off and on). Presenter thread only; skipped while the screen is off.
     bool recommit(DrmPanel& p, const char* why);
+    // RG52 Mini: HDMI shares the DSI panel's video port (ro.gammaos.hdmi_shares_panel_port).
+    // While it is connected the composer drives the port for the TV and the presenter keeps off
+    // it (no flips, no recommit) until the frontend restarts the session on HDMI (main.cpp,
+    // kHdmiSlot). Read twice a second, `force` reads it now. True while HDMI holds the port.
+    bool hdmiOnPort(DrmPanel& p, bool force);
     void eventLoop();
     void panelLoop(int idx);
     void onFlipDone(unsigned int crtcId, int64_t tsNs);
@@ -228,6 +236,7 @@ private:
     static constexpr size_t kMaxReady = 3;   // acquired, not yet flipped frames per panel
     std::vector<uint32_t> mBlackFbs;
     bool mMinimalFlips = true;
+    bool mHdmiSharesPort = false;
     bool mReserveScalerForFirst = false;   // two panels: the scaling pipe goes to the first (top)
     int mTraceLeft = 0;
 };

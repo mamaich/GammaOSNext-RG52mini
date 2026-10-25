@@ -667,6 +667,52 @@ std::atomic<bool> gStallScreenOn{false};
 // The core is paused for a device sleep (the menu pause is overlay.isOpen()).
 std::atomic<bool> gSleepPaused{false};
 
+// RG52 Mini: HDMI делит видеопорт со встроенным экраном, и вывод (DRM на встроенный экран или
+// SurfaceFlinger на HDMI) выбирается при запуске. Вставили или вынули HDMI посреди игры - игра
+// сохраняется в служебный слот, эмулятор перезапускается тем же процессом (exec: init, nano и
+// прокладка AzaharSf видят тот же сеанс) и загружает слот уже на новом выводе.
+constexpr int kHdmiSlot = 11;   // последний слот ядра (SaveStateSlotCount); в меню слоты 1..10
+constexpr char kHdmiResumeEnv[] = "AZAHAR_NANO_HDMI_RESUME";
+bool gHdmiWatch = false;        // сеанс следит за HDMI (общий порт)
+bool gHdmiAtStart = false;      // HDMI при запуске - по нему выбран вывод
+bool gHdmiResume = false;       // запуск после такого перезапуска: загрузить слот
+bool gHdmiRestart = false;      // слот записан, после выхода ядра - exec
+
+std::string hdmiSlotPath() {
+    char name[40];
+    snprintf(name, sizeof(name), "/%016llX.%02d.cst", (unsigned long long)gCheatTitleId, kHdmiSlot);
+    return sStatesDir + name;
+}
+
+// Дескрипторы не переходят в новый образ (DRM, binder, ввод он открывает сам).
+void restartForHdmi(const std::string& rom) {
+    // Вынули HDMI: если HWC его так и не отпустил (видеопорт остался за «телевизором»,
+    // встроенный экран чёрный - так бывает, когда разъём меняли, пока экраном владел DRM-вывод),
+    // лечит служба устройства (ro.gammaos.hdmi_unplug_rescue, у RG52 rg52_hdmi_nano; когда HWC
+    // справился сам, она выходит). Лечение действует, только пока экран ничей: старый вывод
+    // уже закрыт, новый ещё не открыт.
+    const std::string rescue = prop("ro.gammaos.hdmi_unplug_rescue", "");
+    if (!gHostApp && !rescue.empty() && !hdmiConnected()) {
+        const std::string state = "init.svc." + rescue;
+        property_set("ctl.start", rescue.c_str());
+        for (int i = 0; i < 20 && prop(state.c_str(), "") != "running"; i++) usleep(100 * 1000);
+        for (int i = 0; i < 300 && prop(state.c_str(), "") == "running"; i++) usleep(100 * 1000);
+        ALOGI("HDMI restart: %s finished", rescue.c_str());
+    }
+    ALOGI("HDMI restart: starting again on the new output");
+    if (DIR* d = opendir("/proc/self/fd")) {
+        while (dirent* e = readdir(d)) {
+            const int fd = atoi(e->d_name);
+            if (fd > 2 && fd != dirfd(d)) fcntl(fd, F_SETFD, FD_CLOEXEC);
+        }
+        closedir(d);
+    }
+    setenv(kHdmiResumeEnv, "1", 1);
+    fflush(nullptr);
+    execl("/proc/self/exe", "azahar-nano", rom.c_str(), (char*)nullptr);
+    ALOGE("HDMI restart: exec failed: %s", strerror(errno));
+}
+
 bool shaderCacheRebuilding() {
     return gCore.shader_cache_rebuilding && gCore.shader_cache_rebuilding() != 0;
 }
@@ -926,11 +972,16 @@ int main(int argc, char** argv) {
     // RG52 Mini: встроенный экран и HDMI сидят на одном видеопорту (мост rk628), и пока HDMI
     // подключён, встроенный экран погашен. DRM-вывод занял бы порт под встроенный экран,
     // поэтому с HDMI сеанс идёт через SurfaceFlinger - на телевизор (SfWindows).
-    if (backend == "drm" && property_get_bool("ro.gammaos.hdmi_shares_panel_port", false) &&
-        hdmiConnected()) {
-        ALOGI("HDMI connected on the panel's video port: SurfaceFlinger backend");
-        backend = "sf";
+    if (property_get_bool("ro.gammaos.hdmi_shares_panel_port", false)) {
+        gHdmiWatch = prop("persist.gammaos.azahar_nano.hdmi_restart", "1") == "1";
+        gHdmiAtStart = hdmiConnected();
+        if (backend == "drm" && gHdmiAtStart) {
+            ALOGI("HDMI connected on the panel's video port: SurfaceFlinger backend");
+            backend = "sf";
+        }
     }
+    gHdmiResume = getenv(kHdmiResumeEnv) != nullptr;
+    unsetenv(kHdmiResumeEnv);
     ALOGI("rom=%s core=%s user=%s backend=%s", rom.c_str(), coreLib.c_str(), userDir.c_str(),
           backend.c_str());
 
@@ -1585,6 +1636,54 @@ int main(int argc, char** argv) {
                     if (gCore.stop) gCore.stop();   // the core runs until told, as in onTerm
                     break;
                 }
+                // RG52 Mini: перезапуск при смене HDMI (см. kHdmiSlot). После перезапуска -
+                // загрузка слота через секунду после старта игры.
+                if (gHdmiResume && gCore.is_running()) {
+                    static int sWait = 0;
+                    if (++sWait >= 10) {
+                        gHdmiResume = false;
+                        ALOGI("HDMI restart: loading slot %d", kHdmiSlot);
+                        if (sOa.loadState) sOa.loadState(kHdmiSlot);
+                    }
+                }
+                if (gHdmiWatch && !gHdmiResume && gCheatTitleId && gCore.is_running() &&
+                    !gSleepPaused) {
+                    static int sPoll = 0, sChanged = 0;
+                    if (++sPoll >= 5) {
+                        sPoll = 0;
+                        sChanged = hdmiConnected() != gHdmiAtStart ? sChanged + 1 : 0;
+                    }
+                    // 1,5 с подряд в новом состоянии: дребезг разъёма игру не перезапускает.
+                    if (sChanged >= 3) {
+                        sChanged = 0;
+                        ALOGI("HDMI %s mid-game: saving to slot %d to restart on the new output",
+                              gHdmiAtStart ? "disconnected" : "connected", kHdmiSlot);
+                        // Новый файл слота (ядро пишет его под временным именем и
+                        // переименовывает) - знак, что сохранение готово.
+                        const std::string path = hdmiSlotPath();
+                        unlink(path.c_str());
+                        if (overlay.isOpen()) overlay.close();
+                        gSetOverlayActive(0, false);
+                        gCore.pause(false);
+                        gDynResSettle = 5;
+                        gCore.save_state(kHdmiSlot);
+                        bool saved = false;
+                        for (int t = 0; t < 300 && !gExitRequested && !saved; t++) {
+                            usleep(100 * 1000);
+                            saved = access(path.c_str(), F_OK) == 0;
+                        }
+                        if (saved) {
+                            gHdmiRestart = true;
+                            gExitRequested = true;
+                            if (gCore.stop) gCore.stop();
+                            break;
+                        }
+                        // Без сохранения не перезапускаем: игра идёт дальше, как есть.
+                        ALOGE("HDMI restart: slot %d was not written, staying on this output",
+                              kHdmiSlot);
+                        gHdmiWatch = false;
+                    }
+                }
                 {
                     static bool sFirst = true;
                     android::colormatrix::Matrix top, bottom;
@@ -2029,6 +2128,7 @@ int main(int argc, char** argv) {
     azahar_nano::settings::flush();
     android::nano_session_hw::releaseClusterCores();
     android::nano_session_hw::dpClkRestore();
+    if (gHdmiRestart) restartForHdmi(rom);   // возвращается, только если exec не удался
     sessionDone();
     // Leave without running static destructors: a library thread can still be running at
     // this point (the core's audio backend, log and worker threads), and destroying a
