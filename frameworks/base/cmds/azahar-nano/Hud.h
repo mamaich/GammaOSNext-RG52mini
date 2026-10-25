@@ -36,6 +36,9 @@ public:
         // HUD's width (x, r) and height (y); amber while R3 touches.
         bool cursor = false, cursorPressed = false;
         float cursorX = 0.0f, cursorY = 0.0f, cursorR = 0.0f;
+        // "Saving" notice in the same corner (a save state is being written: the frame
+        // drop it brings has a reason on screen); opacity 0..1, faded by the caller.
+        float saveAlpha = 0.0f;
     };
     // Draws the frame and presents it.
     void render(const Frame& f);
@@ -45,7 +48,7 @@ public:
 
 private:
     bool makeCurrent();
-    void drawToast(float alpha, float spin);
+    void drawToast(float alpha, float spin, const char* label);
     void drawFastForward(float speedPct);
     void drawCursor(const Frame& f);
     EGLDisplay mDpy = EGL_NO_DISPLAY;

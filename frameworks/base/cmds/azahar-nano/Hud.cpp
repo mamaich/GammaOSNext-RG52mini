@@ -99,7 +99,9 @@ void Hud::render(const Frame& f) {
                   f.slow ? rgba(1.0f, 0.35f, 0.3f, 1.0f) : rgba(0.2f, 1.0f, 0.4f, 1.0f));
     }
     if (f.ff) drawFastForward(f.speedPct);
-    if (f.toastAlpha > 0.0f) drawToast(std::min(f.toastAlpha, 1.0f), f.spin);
+    // one notice at a time in the corner: a save in progress outranks the shader one
+    if (f.saveAlpha > 0.0f) drawToast(std::min(f.saveAlpha, 1.0f), f.spin, "Saving");
+    else if (f.toastAlpha > 0.0f) drawToast(std::min(f.toastAlpha, 1.0f), f.spin, "Compiling shaders");
     if (f.cursor) drawCursor(f);
     mGfx.endFrame();
     eglSwapBuffers(mDpy, mSurf);
@@ -151,7 +153,7 @@ void Hud::drawCursor(const Frame& f) {
 
 // Spinner (a ring of dots with a fading tail) and "Compiling shaders" in the bottom
 // left corner, white with a light drop shadow so it reads over any scene.
-void Hud::drawToast(float alpha, float spin) {
+void Hud::drawToast(float alpha, float spin, const char* label) {
     const float W = (float)mGfx.viewportW();
     const float H = (float)mGfx.viewportH();
     const float sf = W / 1280.0f;
@@ -163,7 +165,6 @@ void Hud::drawToast(float alpha, float spin) {
     const float cx = margin + ringR + dot * 0.5f;
     const float textX = cx + ringR + dot + 10.0f * sf;
     const float textY = cy - lineH * 0.5f;
-    const char* label = "Compiling shaders";
     constexpr int kDots = 10;
     constexpr float kTwoPi = 6.2831853f;
     const float head = spin - std::floor(spin);
