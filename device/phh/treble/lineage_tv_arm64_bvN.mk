@@ -168,6 +168,14 @@ PRODUCT_COPY_FILES += \
     gammaos/emulators/azahar-nano-lib/gpu_drivers/gammaos-turnip-adreno-610/meta.json:system/etc/azahar-nano/gpu_drivers/gammaos-turnip-adreno-610/meta.json \
     gammaos/emulators/azahar-nano-lib/gpu_drivers/gammaos-turnip-adreno-610/vulkan.gammaos.so:system/etc/azahar-nano/gpu_drivers/gammaos-turnip-adreno-610/vulkan.gammaos.so
 
+# drastic-nano is the default DS emulator of the nano home. Upstream sets this in base.mk
+# (5fcdffc1a4e, "so all variants get it"), which this product does not inherit, so a DS ROM
+# picked in nano went to the stock DraStic app. RG52 Mini: only the gate (owner's decision,
+# 25.10.2026); the single-screen PiP preset upstream sets with it is left to drastic-nano's
+# own default (both DS screens side by side on the turned panel).
+PRODUCT_PRODUCT_PROPERTIES += \
+    persist.gammaos.nano.drastic_nano=1
+
 # GammaOS first-boot setup: data-driven app list for setup.sh, pre-installed helper apps
 # (dex-preopted at build time), the zstd decompressor for the setup payloads, and the
 # build-time replacements for setup.sh's per-app grant/allowlist commands.
