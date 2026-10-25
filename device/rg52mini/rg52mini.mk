@@ -395,12 +395,18 @@ PRODUCT_PACKAGES += \
 #   ro.gammaos.azahar_nano.gles=false - OpenGL ES убран из меню эмулятора: драйвер
 #     Mali-G52 не собирает программы шейдеров ядра для GLES, игра не рисует ни кадра;
 #   ro.gammaos.azahar_nano.resolution_factor=1 - внутреннее разрешение при первом
-#     запуске Native (1x), у апстрима 2x (решение владельца 19.10.2026).
+#     запуске Native (1x), у апстрима 2x (решение владельца 19.10.2026);
+#   ro.gammaos.nano.sleep_panels_off=false - на сон в домашнем экране nano и в drastic-nano
+#     панель не выключается (апстрим 38c57255de4/f0e49ef952a гасит CRTC и поднимает его на
+#     пробуждении modeset-ом): на первой ревизии платы панель после быстрого выкл/вкл может
+#     остаться чёрной, а мост HDMI делит с ней порт. Пока не проверено на обеих ревизиях -
+#     по-старому: чёрный кадр и подсветка 0 (NanoMenuDrm.cpp, drmPanelsPowerOff).
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.gammaos.azahar_nano.layout_option=2 \
     ro.gammaos.azahar_nano.resolution_factor=1 \
     ro.gammaos.azahar_nano.top_turn=180 \
     ro.gammaos.azahar_nano.gles=false \
+    ro.gammaos.nano.sleep_panels_off=false \
     ro.gammaos.hdmi_shares_panel_port=true
 
 # Тот же azahar-nano из обычного Android: Daijishō запускает для 3DS прокладку AzaharSf

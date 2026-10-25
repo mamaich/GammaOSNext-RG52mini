@@ -4437,6 +4437,11 @@ void drmRecoverPanelsTick() {
 static bool sDrmPanelsOff = false;
 int drmPanelsPowerOff() {
     if (sDrmFd < 0 || !sDrmActive || sDrmDisplays.empty()) return 0;
+    // RG52 Mini: ro.gammaos.nano.sleep_panels_off=false keeps the pipes as they were before this
+    // (a black frame, backlight 0): the panel of the first board revision may stay black after
+    // a quick off/on, and the HDMI bridge shares its port. Nothing is switched off then, so
+    // drmPanelsAreOff() stays false and the wake recommits nothing. Same for drastic-nano.
+    if (!property_get_bool("ro.gammaos.nano.sleep_panels_off", true)) return 0;
     ioctl(sDrmFd, DRM_IOCTL_SET_MASTER, 0);
     int failed = 0;
     for (size_t i = 0; i < sDrmDisplays.size(); i++) {
