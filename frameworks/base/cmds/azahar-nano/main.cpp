@@ -1388,7 +1388,11 @@ int main(int argc, char** argv) {
                 // sys.gammaos.azahar_nano.quit=1: leave through the normal exit path (the
                 // save of the running state and session_done), as long-press Back does.
                 // AzaharSf sets it when its activity goes away mid-session.
-                if (prop("sys.gammaos.azahar_nano.quit", "") == "1") {
+                // RG52 Mini: only once the game runs. Before that gCore.stop() does nothing,
+                // the game would start anyway and this thread would stop watching; a quit
+                // set while the game loads waits for it. A stale one from a killed session
+                // is cleared by azahar-nano.rc when the next session starts.
+                if (gCore.is_running() && prop("sys.gammaos.azahar_nano.quit", "") == "1") {
                     property_set("sys.gammaos.azahar_nano.quit", "");
                     ALOGI("quit requested");
                     gExitRequested = true;
@@ -1455,8 +1459,9 @@ int main(int argc, char** argv) {
             // RG52 Mini: сеанс из Android держит прокладка AzaharSf. Если её процесс убит
             // (обновление пакета, нехватка памяти), onDestroy с quit не приходит, и слой игры
             // остался бы поверх лаунчера, а клавиши уходили бы ему. Два промаха подряд
-            // (около 2 с) - выход тем же путём, что и quit.
-            if (gHostApp && !gExitRequested) {
+            // (около 2 с) - выход тем же путём, что и quit; как и quit, только когда игра уже
+            // идёт (до этого gCore.stop() ничего не делает).
+            if (gHostApp && !gExitRequested && gCore.is_running()) {
                 if (hostAlive()) {
                     hostGone = 0;
                 } else if (++hostGone >= 2) {

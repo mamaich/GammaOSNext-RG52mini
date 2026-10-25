@@ -13,9 +13,12 @@ service azahar-nano /system/bin/azahar-nano
 
 # Start trigger: gammaos-nano writes the ROM path to
 # /data/system/nano_azahar_nano_rom.txt, then sets this property to 1.
+# RG52 Mini: every start clears sys.gammaos.azahar_nano.quit - a session killed outright (the
+# low memory killer) never took its quit, and the next one would have read it at once.
 on property:sys.gammaos.azahar_nano.start=1
     setprop sys.gammaos.azahar_nano.start 0
     setprop sys.gammaos.azahar_nano.host nano
+    setprop sys.gammaos.azahar_nano.quit 0
     setprop sys.gammaos.azahar_nano.session_done 0
     setprop sys.gammaos.azahar_nano.session 1
     stop gammaos-nano
@@ -26,6 +29,7 @@ on property:sys.gammaos.azahar_nano.start=1
 on property:sys.gammaos.azahar_nano.start_sf=1
     setprop sys.gammaos.azahar_nano.start_sf 0
     setprop sys.gammaos.azahar_nano.host nano
+    setprop sys.gammaos.azahar_nano.quit 0
     setprop sys.gammaos.azahar_nano.session_done 0
     setprop sys.gammaos.azahar_nano.session 1
     start azahar-nano
@@ -37,6 +41,7 @@ on property:sys.gammaos.azahar_nano.start_sf=1
 on property:sys.gammaos.azahar_nano.start_app=1
     setprop sys.gammaos.azahar_nano.start_app 0
     setprop sys.gammaos.azahar_nano.host app
+    setprop sys.gammaos.azahar_nano.quit 0
     setprop sys.gammaos.azahar_nano.session_done 0
     setprop sys.gammaos.azahar_nano.session 1
     start azahar-nano
