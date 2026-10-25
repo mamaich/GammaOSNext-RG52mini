@@ -475,6 +475,20 @@ void azn_set_user_folder(const char* dir) {
     __android_log_print(ANDROID_LOG_INFO, AZN_TAG, "user folder %s", dir);
 }
 
+// RG52 Mini: the cheats folder on its own (ROMs/cheats/3ds/azahar, shared with dArkOS's
+// RetroArch Azahar core on a dual-boot card); azn_set_user_folder points it at
+// <user folder>/cheats, so this comes after it. Same '!' rule for an absolute path.
+void azn_set_cheats_folder(const char* dir) {
+    if (!dir || !*dir) return;
+    std::string full = std::string(dir);
+    while (full.size() > 1 && full.back() == '/') full.pop_back();
+    full += "/";
+    if (full[0] == '/') full = "!" + full;
+    FileUtil::CreateFullPath(full);
+    FileUtil::UpdateUserPath(FileUtil::UserPath::CheatsDir, full);
+    __android_log_print(ANDROID_LOG_INFO, AZN_TAG, "cheats folder %s", dir);
+}
+
 void azn_set_present_mode(int vsync, int swapchain_extra_images) {
     s_vsync_override = vsync;
     s_swapchain_extra = swapchain_extra_images;

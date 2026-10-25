@@ -66,13 +66,25 @@ bool writeFile(const std::string& path, const std::string& text) {
     return true;
 }
 
-void ensureDirs(const std::string& dataDir) {
-    mkdir((dataDir + "/cheats").c_str(), 0775);
-    const std::string custom = customDir(dataDir);
+// The cheats folder with its parents (ROMs/cheats/3ds/azahar may not exist yet).
+void makeDirs(const std::string& dir) {
+    for (size_t p = dir.find('/', 1); ; p = dir.find('/', p + 1)) {
+        mkdir(dir.substr(0, p).c_str(), 0775);
+        if (p == std::string::npos) break;
+    }
+}
+
+void ensureDirs(const std::string& cheatsDir) {
+    makeDirs(cheatsDir);
+    const std::string custom = customDir(cheatsDir);
+    // RG52 Mini: the folder is shared with dArkOS on a dual-boot card (its RetroArch Azahar
+    // core reads and writes the same files), and either system may write this README first.
     if (mkdir(custom.c_str(), 0775) == 0 || access((custom + "/README.txt").c_str(), F_OK) != 0) {
         writeFile(custom + "/README.txt",
-                  "Your own 3DS cheats, one file per game named by its title id, for example\n"
-                  "0004000000055D00.txt (the id is in the in-game menu under Cheats > Cheat files).\n"
+                  "Your own 3DS cheats for Azahar, one file per game named by its title id, for\n"
+                  "example 0004000000055D00.txt. This folder is shared by GammaOS (azahar-nano:\n"
+                  "the id is in the in-game menu under Cheats > Cheat files) and dArkOS (the\n"
+                  "Azahar core in RetroArch); a cheat enabled in one is enabled in the other.\n"
                   "\n"
                   "The format is the Gateway / CTRPF text format:\n"
                   "\n"
@@ -83,7 +95,8 @@ void ensureDirs(const std::string& dataDir) {
                   "D2000000 00000000\n"
                   "\n"
                   "The cheats here are merged with the built-in database when the game starts and\n"
-                  "show up first in the menu. Cheats added from the menu are written here too.\n");
+                  "show up first in the list. Cheats added from the menu are written here too.\n"
+                  "The <title id>.txt one folder up is the merged list with the enabled marks.\n");
     }
 }
 
@@ -130,6 +143,19 @@ bool parseCode(const std::string& text, std::vector<std::string>* lines, std::st
 
 bool sameCode(const Cheat& a, const Cheat& b) {
     return a.code == b.code;
+}
+
+// RG52 Mini: the custom cheats listed on their own, in the custom file's order - those that are
+// not a database cheat too (same name and code); such a copy is listed where the database has it.
+std::vector<size_t> listedCustom(const std::vector<Cheat>& custom, const std::vector<Cheat>& db) {
+    std::vector<size_t> out;
+    for (size_t i = 0; i < custom.size(); i++) {
+        const bool inDb = std::any_of(db.begin(), db.end(), [&](const Cheat& d) {
+            return lower(d.name) == lower(custom[i].name) && sameCode(d, custom[i]);
+        });
+        if (!inDb) out.push_back(i);
+    }
+    return out;
 }
 
 } // namespace
@@ -200,16 +226,16 @@ std::string databasePath() {
     return v;
 }
 
-std::string cheatFile(const std::string& dataDir, uint64_t titleId) {
-    return dataDir + "/cheats/" + tidName(titleId) + ".txt";
+std::string cheatFile(const std::string& cheatsDir, uint64_t titleId) {
+    return cheatsDir + "/" + tidName(titleId) + ".txt";
 }
 
-std::string customDir(const std::string& dataDir) {
-    return dataDir + "/cheats/custom";
+std::string customDir(const std::string& cheatsDir) {
+    return cheatsDir + "/custom";
 }
 
-std::string customFile(const std::string& dataDir, uint64_t titleId) {
-    return customDir(dataDir) + "/" + tidName(titleId) + ".txt";
+std::string customFile(const std::string& cheatsDir, uint64_t titleId) {
+    return customDir(cheatsDir) + "/" + tidName(titleId) + ".txt";
 }
 
 std::vector<Cheat> databaseCheats(uint64_t titleId) {
@@ -232,14 +258,14 @@ std::vector<Cheat> databaseCheats(uint64_t titleId) {
     return out;
 }
 
-int prepare(const std::string& dataDir, uint64_t titleId) {
-    if (titleId == 0 || dataDir.empty()) return 0;
-    ensureDirs(dataDir);
+int prepare(const std::string& cheatsDir, uint64_t titleId) {
+    if (titleId == 0 || cheatsDir.empty()) return 0;
+    ensureDirs(cheatsDir);
     std::string text;
     std::vector<Cheat> previous;
-    if (readFile(cheatFile(dataDir, titleId), &text)) previous = parseText(text);
+    if (readFile(cheatFile(cheatsDir, titleId), &text)) previous = parseText(text);
     std::vector<Cheat> custom;
-    if (readFile(customFile(dataDir, titleId), &text)) custom = parseText(text);
+    if (readFile(customFile(cheatsDir, titleId), &text)) custom = parseText(text);
     std::vector<Cheat> db = databaseCheats(titleId);
 
     // Cheats of the previous file that belong to neither list were the user's (hand written
@@ -258,18 +284,21 @@ int prepare(const std::string& dataDir, uint64_t titleId) {
             customChanged = true;
         }
     }
-    if (customChanged) writeFile(customFile(dataDir, titleId), renderText(custom));
+    if (customChanged) writeFile(customFile(cheatsDir, titleId), renderText(custom));
 
+    // RG52 Mini: the order dArkOS's RetroArch Azahar core uses for the same shared files: the
+    // user's cheats that are not database cheats too, then the whole database in its order (the
+    // upstream order put a custom copy of a database cheat at the top and left it out below).
+    // Both systems then list a cheat once, in the same place, even when their databases differ.
+    const std::vector<size_t> listed = listedCustom(custom, db);
     std::vector<Cheat> merged;
-    merged.reserve(custom.size() + db.size());
-    for (Cheat c : custom) { c.enabled = false; merged.push_back(c); }
-    for (const Cheat& c : db) {
-        // the database copy of a cheat the user also has is not listed twice
-        const bool dup = std::any_of(custom.begin(), custom.end(), [&](const Cheat& u) {
-            return lower(u.name) == lower(c.name) && sameCode(u, c);
-        });
-        if (!dup) merged.push_back(c);
+    merged.reserve(listed.size() + db.size());
+    for (size_t i : listed) {
+        Cheat c = custom[i];
+        c.enabled = false;
+        merged.push_back(c);
     }
+    for (const Cheat& c : db) merged.push_back(c);
     // enabled marks carry over by name (then by code when the name was duplicated)
     std::vector<bool> used(previous.size(), false);
     for (Cheat& m : merged) {
@@ -297,16 +326,16 @@ int prepare(const std::string& dataDir, uint64_t titleId) {
     const std::string out = renderText(merged);
     if (merged.empty()) {
         // nothing for this title: leave no empty file behind (the core logs a missing file)
-        unlink(cheatFile(dataDir, titleId).c_str());
-    } else if (!writeFile(cheatFile(dataDir, titleId), out)) {
-        ALOGE("cheats: could not write %s", cheatFile(dataDir, titleId).c_str());
+        unlink(cheatFile(cheatsDir, titleId).c_str());
+    } else if (!writeFile(cheatFile(cheatsDir, titleId), out)) {
+        ALOGE("cheats: could not write %s", cheatFile(cheatsDir, titleId).c_str());
     }
-    ALOGI("cheats: %s: %zu custom + %zu database -> %zu listed", tidName(titleId).c_str(), custom.size(),
-          db.size(), merged.size());
-    return (int)custom.size();
+    ALOGI("cheats: %s: %zu custom (%zu on their own) + %zu database -> %zu listed",
+          tidName(titleId).c_str(), custom.size(), listed.size(), db.size(), merged.size());
+    return (int)listed.size();
 }
 
-bool addCustom(const std::string& dataDir, uint64_t titleId, const std::string& name,
+bool addCustom(const std::string& cheatsDir, uint64_t titleId, const std::string& name,
                const std::string& code, std::string* err) {
     if (titleId == 0) {
         if (err) *err = "No title id for this game";
@@ -325,35 +354,37 @@ bool addCustom(const std::string& dataDir, uint64_t titleId, const std::string& 
         }
     }
     if (!parseCode(code, &c.code, err)) return false;
-    ensureDirs(dataDir);
+    ensureDirs(cheatsDir);
     std::string text;
     std::vector<Cheat> custom;
-    if (readFile(customFile(dataDir, titleId), &text)) custom = parseText(text);
+    if (readFile(customFile(cheatsDir, titleId), &text)) custom = parseText(text);
     custom.push_back(c);
-    if (!writeFile(customFile(dataDir, titleId), renderText(custom))) {
-        if (err) *err = "Could not write " + customFile(dataDir, titleId);
+    if (!writeFile(customFile(cheatsDir, titleId), renderText(custom))) {
+        if (err) *err = "Could not write " + customFile(cheatsDir, titleId);
         return false;
     }
-    prepare(dataDir, titleId);
+    prepare(cheatsDir, titleId);
     return true;
 }
 
-bool removeCustom(const std::string& dataDir, uint64_t titleId, int index) {
+bool removeCustom(const std::string& cheatsDir, uint64_t titleId, int index) {
     if (titleId == 0) return false;
     std::string text;
     std::vector<Cheat> custom;
-    if (readFile(customFile(dataDir, titleId), &text)) custom = parseText(text);
-    if (index < 0 || index >= (int)custom.size()) return false;
-    const Cheat gone = custom[index];
-    custom.erase(custom.begin() + index);
+    if (readFile(customFile(cheatsDir, titleId), &text)) custom = parseText(text);
+    // index counts the custom cheats as listed at the top (see prepare)
+    const std::vector<size_t> listed = listedCustom(custom, databaseCheats(titleId));
+    if (index < 0 || index >= (int)listed.size()) return false;
+    const Cheat gone = custom[listed[index]];
+    custom.erase(custom.begin() + listed[index]);
     if (custom.empty()) {
-        unlink(customFile(dataDir, titleId).c_str());
-    } else if (!writeFile(customFile(dataDir, titleId), renderText(custom))) {
+        unlink(customFile(cheatsDir, titleId).c_str());
+    } else if (!writeFile(customFile(cheatsDir, titleId), renderText(custom))) {
         return false;
     }
     // its enabled mark must not carry over to a database cheat of the same name
     std::vector<Cheat> previous;
-    if (readFile(cheatFile(dataDir, titleId), &text)) {
+    if (readFile(cheatFile(cheatsDir, titleId), &text)) {
         previous = parseText(text);
         bool changed = false;
         for (Cheat& p : previous) {
@@ -362,9 +393,9 @@ bool removeCustom(const std::string& dataDir, uint64_t titleId, int index) {
                 changed = true;
             }
         }
-        if (changed) writeFile(cheatFile(dataDir, titleId), renderText(previous));
+        if (changed) writeFile(cheatFile(cheatsDir, titleId), renderText(previous));
     }
-    prepare(dataDir, titleId);
+    prepare(cheatsDir, titleId);
     return true;
 }
 

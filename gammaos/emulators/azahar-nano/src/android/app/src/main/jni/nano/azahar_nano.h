@@ -123,6 +123,10 @@ void azn_set_present_mode(int vsync, int swapchain_extra_images);
 // after azn_init and before azn_run; the subfolders are created.
 void azn_set_user_folder(const char* dir);
 
+// RG52 Mini: the cheats folder on its own (the <title id>.txt files and their custom/),
+// after azn_set_user_folder; created when missing.
+void azn_set_cheats_folder(const char* dir);
+
 // Frame limiter mode: 1 = pace every emulated frame onto a fixed wall-clock
 // schedule (even swap cadence for a scanout presenter), 0 = stock limiter.
 void azn_set_deadline_pacing(int enabled);

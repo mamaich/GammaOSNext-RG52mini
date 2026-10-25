@@ -69,6 +69,9 @@ constexpr const char* kSessionDoneProp = "sys.gammaos.azahar_nano.session_done";
 constexpr const char* kCoreLibDefault = "/system/lib64/libazahar-nano-core.so";
 constexpr const char* kUserDirDefault = "/data/system/azahar-nano";   // private root
 constexpr const char* kDataDirDefault = "/sdcard/azahar-nano";        // relocatable user folder
+// RG52 Mini: the cheats folder shared with dArkOS on a dual-boot card (its RetroArch Azahar core
+// reads and writes the same <TID>.txt and custom/); persist.gammaos.azahar_nano.cheats_dir.
+constexpr const char* kCheatsDirDefault = "/sdcard/ROMs/cheats/3ds/azahar";
 
 struct CoreApi {
     void* handle = nullptr;
@@ -117,6 +120,7 @@ struct CoreApi {
     void (*set_screen_aa)(int) = nullptr;         // optional (newer cores)
     void (*set_color_matrix)(int, const float*, int) = nullptr;   // optional (newer cores)
     void (*set_user_folder)(const char*) = nullptr;
+    void (*set_cheats_folder)(const char*) = nullptr;      // optional (newer cores)
     void (*set_config_overrides)(const char*) = nullptr;   // optional (older cores)
     int (*set_config_value)(const char*, const char*, const char*) = nullptr;
 };
@@ -133,6 +137,7 @@ std::atomic<bool> sFastForward{false};   // R3 fast forward state
 std::atomic<float> sHudSpeed{100.0f};    // emulation speed in percent of real time
 std::string gUserDir;                     // config.ini folder, for readers outside main()
 uint64_t gCheatTitleId = 0;               // the running ROM's title id (cheat files)
+std::string gCheatsDir;                   // where <TID>.txt and custom/ live (CheatDb.h)
 int gCheatCustomCount = 0;                // the user's own cheats lead the merged cheat file
 
 // Dynamic resolution (persist.gammaos.azahar_nano.dynres=1): run at the configured
@@ -204,6 +209,7 @@ bool loadCore(const std::string& path) {
     sym(gCore.cheat_set_enabled, "azn_cheat_set_enabled");
     sym(gCore.cheats_save, "azn_cheats_save");
     sym(gCore.cheats_reload, "azn_cheats_reload");
+    sym(gCore.set_cheats_folder, "azn_set_cheats_folder");
     ok &= sym(gCore.is_running, "azn_is_running");
     ok &= sym(gCore.button, "azn_button");
     ok &= sym(gCore.joystick, "azn_joystick");
@@ -957,6 +963,17 @@ int main(int argc, char** argv) {
         gCore.set_user_folder(dataDir.c_str());
     }
     ALOGI("private root %s, user folder %s", userDir.c_str(), dataDir.c_str());
+    // RG52 Mini: cheats in the folder shared with dArkOS (kCheatsDirDefault). A core without
+    // azn_set_cheats_folder keeps <user folder>/cheats, and CheatDb follows it there.
+    gCheatsDir = dataDir + "/cheats";
+    if (gCore.set_cheats_folder) {
+        const std::string shared = prop("persist.gammaos.azahar_nano.cheats_dir", kCheatsDirDefault);
+        if (!shared.empty()) {
+            gCore.set_cheats_folder(shared.c_str());
+            gCheatsDir = shared;
+        }
+    }
+    ALOGI("cheats folder %s", gCheatsDir.c_str());
     // GammaOS tweaks (persist.gammaos.azahar_nano.tweaks, default on): renderer side.
     gCore.set_tweaks(prop("persist.gammaos.azahar_nano.tweaks", "1") == "1" ? 1 : 0,
                      prop("persist.gammaos.azahar_nano.vertex_depth", "1") == "1" ? 1 : 0);
@@ -1236,8 +1253,8 @@ int main(int argc, char** argv) {
         oa.setBottomOverlay = [](bool on) { gSetOverlayActive(1, on); };
         // Cheats: the core keeps the list; the files around it are CheatDb's (the user's own
         // cheats come first in the merged file, so the first customCount indices are theirs).
-        static std::string sDataDir;
-        sDataDir = dataDir;
+        static std::string sCheatsDir;
+        sCheatsDir = gCheatsDir;
         if (gCore.cheat_count && gCore.cheat_get && gCore.cheat_set_enabled && gCore.cheats_save &&
             gCore.cheats_reload) {
             oa.cheatCount = [] { return gCore.cheat_count(); };
@@ -1256,15 +1273,15 @@ int main(int argc, char** argv) {
             oa.cheatAddCustom = [](const std::string& name, const std::string& code, std::string* err) {
                 // the core's enabled marks go to the file first, so the re-merge keeps them
                 gCore.cheats_save();
-                if (!azahar_nano::cheatdb::addCustom(sDataDir, gCheatTitleId, name, code, err)) return false;
-                gCheatCustomCount = azahar_nano::cheatdb::prepare(sDataDir, gCheatTitleId);
+                if (!azahar_nano::cheatdb::addCustom(sCheatsDir, gCheatTitleId, name, code, err)) return false;
+                gCheatCustomCount = azahar_nano::cheatdb::prepare(sCheatsDir, gCheatTitleId);
                 gCore.cheats_reload();
                 return true;
             };
             oa.cheatRemoveCustom = [](int customIndex) {
                 gCore.cheats_save();
-                if (!azahar_nano::cheatdb::removeCustom(sDataDir, gCheatTitleId, customIndex)) return false;
-                gCheatCustomCount = azahar_nano::cheatdb::prepare(sDataDir, gCheatTitleId);
+                if (!azahar_nano::cheatdb::removeCustom(sCheatsDir, gCheatTitleId, customIndex)) return false;
+                gCheatCustomCount = azahar_nano::cheatdb::prepare(sCheatsDir, gCheatTitleId);
                 gCore.cheats_reload();
                 return true;
             };
@@ -1272,8 +1289,8 @@ int main(int argc, char** argv) {
                 char tid[24];
                 snprintf(tid, sizeof(tid), "%016llX", (unsigned long long)gCheatTitleId);
                 return "Title " + std::string(tid) + ": your cheats in " +
-                       azahar_nano::cheatdb::customFile(sDataDir, gCheatTitleId) + ", the merged list in " +
-                       azahar_nano::cheatdb::cheatFile(sDataDir, gCheatTitleId) + ", the database " +
+                       azahar_nano::cheatdb::customFile(sCheatsDir, gCheatTitleId) + ", the merged list in " +
+                       azahar_nano::cheatdb::cheatFile(sCheatsDir, gCheatTitleId) + ", the database " +
                        azahar_nano::cheatdb::databasePath();
             };
         }
@@ -1993,7 +2010,7 @@ int main(int argc, char** argv) {
     // The cheat file the core loads at boot: the user's own cheats + the database.
     if (gCore.rom_title_id) {
         gCheatTitleId = gCore.rom_title_id(rom.c_str());
-        if (gCheatTitleId) gCheatCustomCount = azahar_nano::cheatdb::prepare(dataDir, gCheatTitleId);
+        if (gCheatTitleId) gCheatCustomCount = azahar_nano::cheatdb::prepare(gCheatsDir, gCheatTitleId);
         else ALOGW("cheats: no title id for %s", rom.c_str());
     }
     const int result = gCore.run(rom.c_str());
