@@ -1706,10 +1706,13 @@ void RendererVulkan::SwapBuffers() {
     g_swap_trace.last = trace_t0;
     g_swap_trace.last_cpu_ms = trace_cpu;
 #endif
-    if (!GammaGpu::g.enabled) {
-        const auto props = instance.GetPhysicalDevice().getProperties();
-        GammaGpu::Init(instance.GetDevice(), props.limits.timestampPeriod,
-                       props.limits.timestampComputeAndGraphics);
+    if (!GammaGpu::g.enabled && !GammaGpu::g.checked) {
+        GammaGpu::g.checked = true;
+        if (GammaGpu::Wanted()) {
+            const auto props = instance.GetPhysicalDevice().getProperties();
+            GammaGpu::Init(instance.GetDevice(), props.limits.timestampPeriod,
+                           props.limits.timestampComputeAndGraphics);
+        }
     }
     GammaGpu::FrameBoundary();
     renderpass_cache.EndRendering();

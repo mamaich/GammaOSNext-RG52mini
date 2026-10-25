@@ -42,6 +42,7 @@ struct State {
     std::uint32_t frame = 0;   // index of the pool being recorded
     double period_ns = 1.0;
     bool enabled = false;
+    bool checked = false;   // RG52 Mini: Wanted() read once (see renderer_vulkan.cpp)
     bool presenting = false;
     // accumulated over the trace window, in ms
     std::array<double, NumCategories> sum_ms{};
@@ -52,6 +53,15 @@ struct State {
 };
 
 inline State g;
+
+// RG52 Mini: the timer only for profiling (persist.gammaos.azahar_nano.gputime=1). Always on,
+// its timestamp pair around every pass, clear, blit, copy, upload and present (about 34 a frame
+// in Castlevania: Mirror of Fate) split the GPU work and cost 1-3% of the frame on the Mali-G52
+// (found and measured in dArkOS, its patch 018: 50.1 -> 48.7 ms a frame with libmali g29p1).
+inline bool Wanted() {
+    char v[PROP_VALUE_MAX] = {};
+    return __system_property_get("persist.gammaos.azahar_nano.gputime", v) > 0 && v[0] == '1';
+}
 
 inline void Init(vk::Device device, float timestamp_period_ns, bool supported) {
     if (!supported || g.enabled) return;
