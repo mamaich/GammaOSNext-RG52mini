@@ -46,6 +46,7 @@ Flycast, DraStic, mupen64plus, Daijishō, с v1.13 — эмулятор 3DS azah
 
 | Выпуск | Дата | Коротко |
 |---|---|---|
+| [v1.14](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.14) — [подробности](doc/rg52mini/release-v1.14.md) | 25.10.2026 | Игры 3DS и из Daijishō; игры DS в nano — во встроенном drastic-nano; HDMI можно вставлять и вынимать посреди игры 3DS и DS; быстрее сохранение 3DS и Castlevania: Mirror of Fate; читы 3DS из апстрима GammaOS |
 | [v1.13](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.13) — [подробности](doc/rg52mini/release-v1.13.md) | 23.10.2026 | Эмулятор 3DS (из апстрима GammaOS, доработан под один экран); при перегреве частота отдаётся графике, режим 3D Games убран; курки и HOME/BACK исправлены в драйвере, назначение осей не уводит правый стик в курки |
 | [v1.12](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.12) — [подробности](doc/rg52mini/release-v1.12.md) | 18.10.2026 | Нет перезапуска на слабой батарее от громкого звука (потолок громкости динамика); Wi-Fi сам подключается после аварийного перезапуска; одна громкость для всех звуков |
 | [v1.11](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.11) — [подробности](doc/rg52mini/release-v1.11.md) | 17.10.2026 | Сила вибрации; Daijishō видит папки и платформы dArkOS, BIOS общие в `ROMs/bios`; HDMI в оболочке nano; наушники 3,5 мм; мастер настройки без лишних шагов |
