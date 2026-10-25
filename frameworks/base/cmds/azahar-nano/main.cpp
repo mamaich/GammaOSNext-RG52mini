@@ -904,6 +904,45 @@ static void exportMaliEnv() {
           getenv("MALI_DFC_ALLOW_PILOTS"));
 }
 
+// RG52 Mini: deadline pacing (persist.gammaos.azahar_nano.drm_deadline, DRM path) lands the
+// swaps of a game that keeps up one panel period apart, but a game that cannot keep up pays
+// for it: Castlevania: Mirror of Fate (GPU-bound, ~17 fps) ran 4% faster without it (three
+// alternating pairs, 25.10.2026), the idea from the dArkOS port. So it goes off after 5 s in a
+// row below 90% speed and back on after 5 s at 98% or more. Speed, not the game's frame rate:
+// a 30 fps game at full speed must keep it. persist.gammaos.azahar_nano.deadline_auto=0 leaves
+// it as configured.
+static bool gDeadlineAuto = false;
+
+static void deadlineAutoTick(double speed, bool menuOpen) {
+    static bool on = true;
+    static int slow = 0, fast = 0;
+    if (!gDeadlineAuto || !gCore.set_deadline_pacing) return;
+    const int pending = gCore.compiles_pending ? gCore.compiles_pending() : 0;
+    // Not a game speed reading (as in dynResTick), or the device sleeping.
+    if (menuOpen || sFastForward || gLoadScreenOn || gSleepPaused || pending > 0 ||
+        speed < 0.05 || speed > 1.5) {
+        slow = fast = 0;
+        return;
+    }
+    if (on) {
+        slow = speed < 0.90 ? slow + 1 : 0;
+        if (slow >= 5) {
+            on = false;
+            slow = 0;
+            gCore.set_deadline_pacing(0);
+            ALOGI("pacing: speed %.0f%%, below 90%% for 5 s: deadline pacing off", speed * 100.0);
+        }
+    } else {
+        fast = speed >= 0.98 ? fast + 1 : 0;
+        if (fast >= 5) {
+            on = true;
+            fast = 0;
+            gCore.set_deadline_pacing(1);
+            ALOGI("pacing: speed %.0f%% for 5 s: deadline pacing back on", speed * 100.0);
+        }
+    }
+}
+
 int main(int argc, char** argv) {
     exportEnvProp();
     exportMaliEnv();
@@ -1198,7 +1237,11 @@ int main(int argc, char** argv) {
         gCore.set_present_mode(fifo ? 1 : 0, extra);
         // Even swap cadence: the scanout presenter shows one frame per vblank, so
         // the emulator's swaps must land one frame period apart.
-        gCore.set_deadline_pacing(prop("persist.gammaos.azahar_nano.drm_deadline", "1") == "1" ? 1 : 0);
+        {
+            const bool deadline = prop("persist.gammaos.azahar_nano.drm_deadline", "1") == "1";
+            gCore.set_deadline_pacing(deadline ? 1 : 0);
+            gDeadlineAuto = deadline && prop("persist.gammaos.azahar_nano.deadline_auto", "1") == "1";
+        }
         // Pace to the panel's exact refresh (the DSI runs 59.8 Hz, not 60): one
         // emulated frame per real vblank, so no frame is dropped every few seconds.
         // The mode timings are nominal (the DSI reports 60.000 while it flips at
@@ -1955,6 +1998,7 @@ int main(int argc, char** argv) {
                 sHudStatsSeq++;
             }
             dynResTick(st.emulation_speed, overlay.isOpen(), sOa.setLcdShader);
+            deadlineAutoTick(st.emulation_speed, overlay.isOpen());
         }
     });
 
