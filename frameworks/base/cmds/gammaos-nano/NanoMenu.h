@@ -3303,8 +3303,6 @@ private:
     void drasticPerfRestoreCheck();            // put back the global performance mode a per-game one parked
     void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
     int64_t mMouseGuardMs = 0;                 // its once-a-second throttle (uptime)
-    void drasticCheatsFolderSelect(const std::string& path); // persist.gammaos.drastic.cheats_dir (folder-picker target 8)
-    void drasticPerfRestoreCheck();            // put back the global performance mode a per-game one parked
     void drasticFolderSelect(const char* prop, const char* what, const std::string& path);
     // A data folder relocation in flight (DraStic data / cheats, Azahar data): the whole tree moves
     // to mFolderMoveDst on a worker behind the scraper's progress modal; the drain then writes the
