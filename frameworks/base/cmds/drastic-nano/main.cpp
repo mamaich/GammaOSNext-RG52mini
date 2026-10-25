@@ -1833,9 +1833,16 @@ RunLoopResult runLoop(Display* dpy, DrasticRunner* dr,
     // the install matrix -- so a rotated (portrait) panel shows the landscape layout without
     // the stretch a direct rotated layout produces. Off by default: the existing
     // renderBothScreens (fixed stack) stays the default for every device that relies on it.
+    // RG52 Mini: on by default for a single panel mounted turned (install orientation 90 or
+    // 270, its portrait 720x1280 DSI panel sits sideways in the case): the fixed stack is drawn
+    // with the unrotated matrix there, so the DS picture came out turned by 90 degrees while
+    // the overlay menu (its own install matrix) stood right. The property still overrides.
+    const bool drmTurnedPanel =
+            android::sDrmRotationDeg == 90 || android::sDrmRotationDeg == 270;
     const bool drmSingleLayout =
             !hasDualDisplay &&
-            android::drastic_settings::getBool("persist.gammaos.drastic_nano.drm_single_layout", false);
+            android::drastic_settings::getBool("persist.gammaos.drastic_nano.drm_single_layout",
+                                              drmTurnedPanel);
     // The panel's native FBO size (what the AHB ring scans out).
     const int drmPanelW = (android::sAhbRingPrimary[0].glFbo != 0)
                           ? (int)android::sAhbRingPrimary[0].w : dpy->width;
