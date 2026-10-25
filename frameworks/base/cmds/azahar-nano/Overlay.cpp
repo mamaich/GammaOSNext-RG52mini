@@ -481,6 +481,21 @@ void Overlay::buildPages() {
             {{"All", "0"}, {"1 light", "1"}, {"2 lights", "2"}, {"4 lights", "4"}},
             "Emulate only the first lights of a scene: much faster in heavily lit games, rooms "
             "lit by the dropped lights go dark. Applies the next time a game starts"));
+        // RG52 Mini: the stereo switches the dArkOS port put in its core options (its patch
+        // 013). Auto (unset) leaves them to the core's defaults by title ID
+        // (vk_gammaos_game_prop.h: on for Castlevania: Lords of Shadow - Mirror of Fate).
+        pg.rows.push_back(propChoice("Stereo Draw Skip",
+            "persist.gammaos.azahar_nano.stereo_skip", "",
+            {{"Auto", ""}, {"Off", "0"}, {"On", "1"}},
+            "Leaves out the right eye in games that draw both eyes draw by draw (Castlevania: "
+            "Mirror of Fate, Metroid: Samus Returns): much faster with 3D off. Auto turns it on "
+            "for the games known to need it. Applies the next time a game starts"));
+        pg.rows.push_back(propChoice("GPU Flush Lag",
+            "persist.gammaos.azahar_nano.async_gpu_flush_lag", "",
+            {{"Auto", ""}, {"Off", "0"}, {"8 jobs", "8"}, {"24 jobs", "24"}},
+            "Lets the GPU stay jobs behind at the game's cache flushes instead of waiting for it: "
+            "faster in games that flush often (Castlevania: Mirror of Fate). Auto sets 24 for the "
+            "games known to need it. Applies the next time a game starts"));
         pg.rows.push_back(propChoice("Screen AA", "persist.gammaos.azahar_nano.screen_aa", "0",
             {{"Off", "0"}, {"On", "1"}},
             "Smooths jagged edges at native 1x (also when Dynamic Resolution drops to 1x), with any screen shader",

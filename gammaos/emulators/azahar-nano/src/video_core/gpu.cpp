@@ -1426,9 +1426,10 @@ void GPU::Execute(const Service::GSP::Command& command) {
     }
     // persist.gammaos.azahar_nano.async_gpu_flush_lag=N: CacheFlush lets N jobs stay in flight
     // instead of waiting for the whole queue (0 = wait for everything, the safe default).
+    // RG52 Mini: per game (GammaGameProp), and set by default for the games that need it.
     static const int flush_lag = [] {
         char v[PROP_VALUE_MAX] = {};
-        __system_property_get("persist.gammaos.azahar_nano.async_gpu_flush_lag", v);
+        GammaGameProp::GetOrTitleDefault("async_gpu_flush_lag", v);
         return v[0] ? atoi(v) : 0;
     }();
     if (AsyncQueued() && command.id == CommandId::CacheFlush && flush_lag > 0) {

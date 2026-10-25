@@ -192,6 +192,7 @@ private:
     PAddr stereo_right_rt = 0;      // GammaOS: right eye target of interleaved stereo games
     PAddr last_left_src = 0;
     u32 stereo_right_w = 0, stereo_right_h = 0; // size of the right eye target        // GammaOS: last surface transferred to a left framebuffer
+    u32 stereo_right_size = 0;      // RG52 Mini: its bytes, for the texture copies out of it
     bool eye_draws_after_left = false;
     bool RightEyeSkipAllowed() const;
     bool OnDisplayTransferEye(const Pica::DisplayTransferConfig& config);   // false = skip it

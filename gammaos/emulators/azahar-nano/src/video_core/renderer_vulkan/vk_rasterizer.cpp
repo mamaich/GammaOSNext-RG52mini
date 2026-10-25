@@ -1680,9 +1680,10 @@ bool RasterizerVulkan::OnDisplayTransferEye(const Pica::DisplayTransferConfig& c
                      lfb.address_left2, lfb.address_right1, lfb.address_right2, static_cast<u32>(lfb.active_fb));
         }
     }
+    // RG52 Mini: per game (GammaGameProp), and on by default for the games that need it.
     static const bool stereo_skip = [] {
         char v[PROP_VALUE_MAX] = {};
-        __system_property_get("persist.gammaos.azahar_nano.stereo_skip", v);
+        GammaGameProp::GetOrTitleDefault("stereo_skip", v);
         return v[0] == '1';
     }();
     if (stereo_skip) {
@@ -1712,6 +1713,8 @@ bool RasterizerVulkan::OnDisplayTransferEye(const Pica::DisplayTransferConfig& c
             stereo_right_rt = t_in;
             stereo_right_w = config.input_width.Value();
             stereo_right_h = config.input_height.Value();
+            stereo_right_size =
+                stereo_right_w * stereo_right_h * Pica::BytesPerPixel(config.input_format);
             GammaStats::Add(GammaStats::TransfersBlocked);
             return false; // the right eye image is never displayed
         }
@@ -1787,6 +1790,18 @@ bool RasterizerVulkan::AccelerateDisplayTransfer(const Pica::DisplayTransferConf
 }
 
 bool RasterizerVulkan::AccelerateTextureCopy(const Pica::DisplayTransferConfig& config) {
+    // RG52 Mini (from the dArkOS port's patch 013): stereo_skip leaves the right eye target's
+    // draws out, so a copy out of it copies an image nobody sees. Castlevania: Lords of Shadow -
+    // Mirror of Fate copies each eye's image into one texture for its post-processing; the right
+    // eye's copy (its source only the clear) went to the CPU, which first downloaded the left
+    // eye's copy from the GPU (a wait) and had it uploaded again, three times a frame.
+    if (stereo_right_rt != 0) {
+        const PAddr in = config.GetPhysicalInputAddress();
+        if (in >= stereo_right_rt && in < stereo_right_rt + stereo_right_size) {
+            GammaStats::Add(GammaStats::TransfersBlocked);
+            return true;
+        }
+    }
     if (GammaDump::d.active) {
         GammaDump::Note(fmt::format("texture copy {:08X} ({}x{}) -> {:08X} ({}x{})",
                                     config.GetPhysicalInputAddress(), config.input_width.Value(),

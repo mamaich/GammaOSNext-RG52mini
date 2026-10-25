@@ -813,8 +813,10 @@ int main(int argc, char** argv) {
         // Core switches the override may carry (the lighting approximations): the core reads
         // sys.gammaos.azahar_nano.<key> first and the persist prop second, so the override
         // value (or the global one when the override has no line) is published per launch
-        // without touching the global persist props.
-        for (const char* key : {"light_max", "no_shadow_map", "async_gpu"}) {
+        // without touching the global persist props. RG52 Mini: the stereo switches as well
+        // (the core also has defaults for them by title ID, used when neither is set).
+        for (const char* key : {"light_max", "no_shadow_map", "async_gpu", "stereo_skip",
+                                "async_gpu_flush_lag"}) {
             const std::string v = prop((std::string("persist.gammaos.azahar_nano.") + key).c_str(), "");
             property_set((std::string("sys.gammaos.azahar_nano.") + key).c_str(), v.c_str());
         }
