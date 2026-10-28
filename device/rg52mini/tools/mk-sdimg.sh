@@ -395,6 +395,24 @@ for m in aic8800_bsp.ko aic8800_fdrv.ko rk915.ko; do
     fi
 done
 
+# --- прошивки USB-донглов Bluetooth Realtek ---
+# На ревизии A своего Bluetooth нет, остаётся донгл по USB. btusb поднимает
+# Realtek только с прошивкой, а ищет её ядро лишь в firmware_class.path
+# (/vendor/lib/firmware, см. APPEND ниже): такой папки в vendor от Android 13
+# нет, а запасного пути через ueventd у ядра нет. Что и почему лежит в
+# device/rg52mini/firmware - в README.md там же.
+BTFW=$TREE/device/rg52mini/firmware/rtl_bt
+if [ -d "$BTFW" ]; then
+    sudo mkdir -p /mnt/imgven/lib/firmware/rtl_bt
+    sudo cp "$BTFW"/*.bin /mnt/imgven/lib/firmware/rtl_bt/
+    sudo chmod 755 /mnt/imgven/lib/firmware /mnt/imgven/lib/firmware/rtl_bt
+    sudo chmod 644 /mnt/imgven/lib/firmware/rtl_bt/*.bin
+    sudo chcon -R u:object_r:vendor_file:s0 /mnt/imgven/lib/firmware 2>/dev/null || true
+    echo "   прошивки Bluetooth Realtek: /vendor/lib/firmware/rtl_bt ($(ls "$BTFW"/*.bin | wc -l) файлов)"
+else
+    echo "   !! нет $BTFW — донглы Bluetooth Realtek останутся без прошивки"
+fi
+
 # --- HAL питания: тепловая защита остаётся включённой во время ввода ---
 # android.hardware.power-service.rockchip (v12.0) на каждое событие ввода
 # (Boost::INTERACTION, не чаще раза в 100 мс) заводит сессию на секунду и в её
