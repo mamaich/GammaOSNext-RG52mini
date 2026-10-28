@@ -14,7 +14,7 @@ GammaOS Next (LineageOS 21 / Android 14) для карманной консол�
 | sha256 образа | … |
 | Пакет обновления | … — для тех, кто уже на v1.3–v1.14 |
 | Основа | GammaOS Next Core (вариант на базе Android TV), Android 14 |
-| Ядро | Linux 5.10.226, [mamaich/kernel_rk3562_rg52mini](https://github.com/mamaich/kernel_rk3562_rg52mini) |
+| Ядро | Linux 5.10.226, [mamaich/kernel_rk3562_rg52mini](https://github.com/mamaich/kernel_rk3562_rg52mini); после v1.14 — донглы Bluetooth Realtek под чужими USB ID |
 | Загрузчик | [mamaich/u-boot-rk3562-rg52mini](https://github.com/mamaich/u-boot-rk3562-rg52mini), тег `rg52mini-1.4` |
 | Раздел vendor | от Android 13 (SyachOS), с вырезанным лишним и подменённым драйвером графики |
 
@@ -32,6 +32,11 @@ Realtek, которые знает ядро, лежат в разделе vendor
 RTL8761A/B, RTL8822B/C. В том числе RTL8761B — на нём многие донглы «Bluetooth
 5.0».
 
+Ядро узнаёт и донглы Realtek, которые продаются под чужими идентификаторами USB:
+TP-Link UB500, ASUS USB-BT500, Edimax, Mercusys и другие. Если донгла нет в
+списке, ядро спрашивает у самого чипа, кто его сделал, и для Realtek загружает
+прошивку так же.
+
 Донглы на CSR8510 A10 и Broadcom BCM20702 прошивки не требуют. Не заработают
 RTL8761C и другие новые донглы «Bluetooth 5.3/5.4», донглы на Actions ATS2851 и на
 MediaTek. Донгл лучше вставить до включения Bluetooth.
@@ -39,5 +44,5 @@ MediaTek. Донгл лучше вставить до включения Bluetoo
 ## Что стоит проверить
 
 - **Bluetooth через USB-донгл на ревизии A** — с донглом пока не проверялось.
-  Какой в донгле чип, видно по идентификатору USB: CSR — `0a12:0001`, остальные
-  Realtek — `0bda:xxxx`.
+  Какой в донгле чип, видно по идентификатору USB: CSR — `0a12:0001`, Realtek —
+  `0bda:xxxx`, TP-Link UB500 — `2357:0604`.
