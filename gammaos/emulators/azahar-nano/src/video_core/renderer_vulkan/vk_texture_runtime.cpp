@@ -7,6 +7,7 @@
 #include "video_core/renderer_vulkan/vk_gammaos_stats.h"
 #include "video_core/renderer_vulkan/vk_gammaos_gpu_timer.h"
 
+#include <cstdlib>
 #include <limits>
 #include <span>
 #include <string>
@@ -161,8 +162,32 @@ vk::ImageSubresourceRange MakeSubresourceRange(vk::ImageAspectFlags aspect, u32 
     };
 }
 
-constexpr u64 UPLOAD_BUFFER_SIZE = 512_MiB;
+// RG52 Mini: upstream's 512 MiB upload ring pins ~0.45 GB on a 2 GB console - kbase
+// backs the whole buffer with physical pages at once and they never reach swap. Only
+// guest textures at native size (at most 4 MiB, scaling happens later on the GPU) and
+// custom textures (up to 64 MiB) go through it. A smaller ring only waits when one
+// frame uploads more than its size; a single upload larger than the whole ring trips
+// ASSERT in StreamBuffer::Map. 128 MiB keeps room for a 64 MiB custom texture.
+// persist.gammaos.azahar_nano.upload_mb overrides it (16..512), read when the
+// renderer starts.
+constexpr u64 UPLOAD_BUFFER_DEFAULT_MB = 128;
 constexpr u64 DOWNLOAD_BUFFER_SIZE = 16_MiB;
+
+u64 UploadBufferSize() {
+    u64 mb = UPLOAD_BUFFER_DEFAULT_MB;
+    char v[PROP_VALUE_MAX] = {};
+    if (__system_property_get("persist.gammaos.azahar_nano.upload_mb", v) > 0) {
+        const long n = std::strtol(v, nullptr, 10);
+        if (n >= 16 && n <= 512) {
+            mb = static_cast<u64>(n);
+        } else {
+            LOG_WARNING(Render_Vulkan, "upload_mb={} is out of range 16..512, using {} MiB", v,
+                        mb);
+        }
+    }
+    LOG_INFO(Render_Vulkan, "Texture upload buffer: {} MiB", mb);
+    return mb * 1_MiB;
+}
 
 } // Anonymous namespace
 
@@ -297,7 +322,7 @@ TextureRuntime::TextureRuntime(const Instance& instance, Scheduler& scheduler,
                                u32 num_swapchain_images_)
     : instance{instance}, scheduler{scheduler}, renderpass_cache{renderpass_cache},
       blit_helper{instance, scheduler, renderpass_cache, update_queue},
-      upload_buffer{instance, scheduler, vk::BufferUsageFlagBits::eTransferSrc, UPLOAD_BUFFER_SIZE,
+      upload_buffer{instance, scheduler, vk::BufferUsageFlagBits::eTransferSrc, UploadBufferSize(),
                     BufferType::Upload},
       download_buffer{instance, scheduler,
                       vk::BufferUsageFlagBits::eTransferDst |
