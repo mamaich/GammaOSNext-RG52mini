@@ -896,6 +896,12 @@ Surface::Surface(TextureRuntime& runtime_, const VideoCore::SurfaceParams& param
         // shadow-source texture that will get used in the utility descriptor-set
         usage |= vk::ImageUsageFlagBits::eStorage;
     }
+    if (!storage_capable) {
+        // GammaOS: traits.usage already carries eStorage for RGBA8 (Instance::DetermineTraits),
+        // so the deferred path has to take it out, or libmali gives the target no AFBC. Every
+        // storage view comes after EnsureStorage, which recreates the image with eStorage.
+        usage &= ~vk::ImageUsageFlagBits::eStorage;
+    }
 
     const bool need_format_list = is_mutable && instance.IsImageFormatListSupported();
     handles[Type::Base].Create(width, height, levels, texture_type, format, usage, flags,
