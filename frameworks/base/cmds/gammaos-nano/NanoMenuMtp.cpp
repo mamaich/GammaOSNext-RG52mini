@@ -74,21 +74,46 @@ bool mtpUsbOnline() {
     return on;
 }
 
-// The ffs.mtp function is linked into the active gadget configuration.
+// The MTP function (ffs.mtp, or the kernel's mtp.gs*) is linked into the active gadget
+// configuration. Every link in the config is looked at, whatever its name: the USB gadget HAL names
+// them function0, function1..., while a gadget that init builds from init.usb.configfs.rc (RG52
+// Mini) names them f1, f2. Looking only at function* never saw MTP there, and the watchdog below
+// then re-rejigged the gadget every ~14 s, dropping the transfer each time.
 bool mtpFunctionLinked() {
     DIR* d = opendir("/config/usb_gadget/g1/configs/b.1"); if (!d) return false;
     bool linked = false;
     while (dirent* e = readdir(d)) {
-        if (strncmp(e->d_name, "function", 8) != 0) continue;
+        if (e->d_name[0] == '.') continue;
         std::string p = std::string("/config/usb_gadget/g1/configs/b.1/") + e->d_name;
-        char tgt[256]; ssize_t n = readlink(p.c_str(), tgt, sizeof(tgt) - 1);
-        if (n > 0) { tgt[n] = 0; if (strstr(tgt, "ffs.mtp")) { linked = true; break; } }
+        char tgt[256]; ssize_t n = readlink(p.c_str(), tgt, sizeof(tgt) - 1);   // fails for non-links
+        if (n > 0) { tgt[n] = 0; if (strstr(tgt, "ffs.mtp") || strstr(tgt, "mtp.gs")) { linked = true; break; } }
     }
     closedir(d);
     return linked;
 }
 
-// pid of the MediaProvider module process that hosts MtpService, 0 when it is not running.
+// The process holds the MTP endpoint open: FunctionFS ep0 of the mtp instance, or the kernel
+// f_mtp node. Matched by suffix, as nano's bootstrap mount namespace may show the path differently.
+bool mtpHoldsEndpoint(int pid) {
+    char dir[64]; snprintf(dir, sizeof dir, "/proc/%d/fd", pid);
+    DIR* d = opendir(dir); if (!d) return false;
+    bool held = false;
+    while (dirent* e = readdir(d)) {
+        if (e->d_name[0] == '.') continue;
+        std::string p = std::string(dir) + "/" + e->d_name;
+        char tgt[256]; ssize_t n = readlink(p.c_str(), tgt, sizeof(tgt) - 1);
+        if (n <= 0) continue;
+        tgt[n] = 0;
+        if (strstr(tgt, "usb-ffs/mtp/ep0") || strstr(tgt, "/mtp_usb")) { held = true; break; }
+    }
+    closedir(d);
+    return held;
+}
+
+// pid of the process that serves MTP, 0 when no MTP server is running. MtpService belongs to
+// MediaProvider, but which of its processes runs it differs between builds (RG52 Mini:
+// android.process.media, while com.android.providers.media.module runs alongside without it), so
+// of the MediaProvider processes the one holding the MTP endpoint is taken.
 int mtpMediaModulePid() {
     DIR* d = opendir("/proc"); if (!d) return 0;
     int found = 0;
@@ -97,14 +122,25 @@ int mtpMediaModulePid() {
         std::string p = std::string("/proc/") + e->d_name + "/cmdline";
         int fd = open(p.c_str(), O_RDONLY | O_CLOEXEC); if (fd < 0) continue;
         char buf[128] = {}; ssize_t n = read(fd, buf, sizeof(buf) - 1); close(fd);
-        if (n > 0 && strcmp(buf, "com.android.providers.media.module") == 0) { found = atoi(e->d_name); break; }
+        if (n <= 0) continue;
+        if (strcmp(buf, "android.process.media") != 0 &&
+            strcmp(buf, "com.android.providers.media.module") != 0) continue;
+        const int pid = atoi(e->d_name);
+        if (mtpHoldsEndpoint(pid)) { found = pid; break; }
     }
     closedir(d);
     return found;
 }
 
-// Pin (or restore) the media module's OOM priority. -1000 is OOM_SCORE_ADJ_MIN: neither the kernel
-// OOM killer nor lmkd will reap it. -700 is what the framework gives it (a persistent process).
+int mtpGetAdj(int pid) {
+    char p[64]; snprintf(p, sizeof p, "/proc/%d/oom_score_adj", pid);
+    std::string s; if (!readSmallFile(p, s) || s.empty()) return 0;
+    return atoi(s.c_str());
+}
+
+// Pin (or restore) the MTP host's OOM priority. -1000 is OOM_SCORE_ADJ_MIN: neither the kernel
+// OOM killer nor lmkd will reap it. The framework's own value (persistent process, -700 or -800)
+// is read before pinning and put back when the screen closes.
 void mtpSetMediaModuleAdj(int pid, int adj) {
     if (pid <= 0) return;
     char p[64], v[16];
@@ -130,6 +166,8 @@ void NanoMenu::mtpRejigAsync(const char* reason) {
             // (a switch that only adds mtp on top of the same state does not start MtpService).
             (void)system("gammaos-net usb none 2>/dev/null");
             usleep(1500 * 1000);
+            // Closed meanwhile: closeMtpScreen has switched to charge-only, do not undo it.
+            if (!mMtpActive || gen != mMtpGen) break;
             (void)system("gammaos-net usb mtp 2>/dev/null");
             // The gadget re-enumerates and MediaProvider's receiver launches MtpService; give it
             // up to ~10 s, polling for both the linked function and a live host process.
@@ -137,6 +175,7 @@ void NanoMenu::mtpRejigAsync(const char* reason) {
                 usleep(250 * 1000);
                 const int pid = mtpMediaModulePid();
                 if (pid > 0 && mtpFunctionLinked()) {
+                    if (pid != mMtpMediaPid) mMtpMediaAdj = mtpGetAdj(pid);
                     mtpSetMediaModuleAdj(pid, -1000);
                     mMtpMediaPid = pid; ok = true; break;
                 }
@@ -172,14 +211,15 @@ void NanoMenu::closeMtpScreen() {
     mMtpActive = false;
     mMtpGen++;                       // a worker still polling stops caring
     const int pid = mMtpMediaPid; mMtpMediaPid = 0; mMtpMissCount = 0;
-    std::thread([pid] {
+    const int adj = mMtpMediaAdj > -1000 ? mMtpMediaAdj : -700;
+    std::thread([pid, adj] {
         (void)system("gammaos-net usb none 2>/dev/null");
         // Hand the host back to the framework's own priority, but only the process this screen
         // pinned and only if it is still the one alive at -1000 (a restarted host is already the
         // framework's to manage).
         if (pid > 0) {
             char p[64]; snprintf(p, sizeof p, "/proc/%d/oom_score_adj", pid);
-            std::string cur; if (readSmallFile(p, cur) && cur == "-1000") mtpSetMediaModuleAdj(pid, -700);
+            std::string cur; if (readSmallFile(p, cur) && cur == "-1000") mtpSetMediaModuleAdj(pid, adj);
         }
     }).detach();
     showXmbMessage(trDyn("USB: Charge Only"), trDyn("File transfer is switched off"), 240);
@@ -221,6 +261,7 @@ void NanoMenu::mtpTick() {
         else if (pid != mMtpMediaPid) {
             mMtpMissCount = 0;
             // The system restarted the host on its own (persistent process): pin the new one.
+            mMtpMediaAdj = mtpGetAdj(pid);
             mtpSetMediaModuleAdj(pid, -1000); mMtpMediaPid = pid;
             ALOGI("mtp: host restarted as pid %d, pinned", pid);
         } else mMtpMissCount = 0;

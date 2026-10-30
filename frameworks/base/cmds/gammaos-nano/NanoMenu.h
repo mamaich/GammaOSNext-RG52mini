@@ -3652,7 +3652,8 @@ private:
     bool mMtpFailed = false;               // last rejig gave up (under mMtpMutex)
     int  mMtpPollFrames = 0;
     int  mMtpGen = 0;                      // bumps on close so a stale worker stops
-    int  mMtpMediaPid = 0;                 // pinned MediaProvider module pid (0 = none)
+    int  mMtpMediaPid = 0;                 // pinned MTP host pid (0 = none)
+    int  mMtpMediaAdj = -700;              // its oom_score_adj before pinning, restored on close
     int64_t mMtpLastRejigMs = 0;
     int64_t mMtpLastPollMs = 0, mMtpLastWatchMs = 0;   // wall-clock pacing of mtpTick
     int  mMtpMissCount = 0;                // consecutive watchdog checks with no host process
