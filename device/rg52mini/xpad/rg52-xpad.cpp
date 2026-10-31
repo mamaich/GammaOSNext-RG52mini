@@ -523,8 +523,10 @@ bool writeFfsDescriptors(bool vendorDesc) {
 }
 
 bool isMounted(const char* dir) {
+    // /proc/mounts - символьная ссылка на self/mounts, а ReadFileToString по умолчанию
+    // открывает с O_NOFOLLOW: читалась пустая строка, и второй запуск падал на EBUSY.
     std::string m;
-    android::base::ReadFileToString("/proc/mounts", &m);
+    android::base::ReadFileToString("/proc/self/mounts", &m);
     return m.find(std::string(" ") + dir + " ") != std::string::npos;
 }
 
@@ -574,7 +576,9 @@ bool setupGadget() {
     }
     mkdirOk("/dev/usb-ffs", 0775);
     mkdirOk(kFfsDir);
-    if (!isMounted(kFfsDir) && mount("xpad", kFfsDir, "functionfs", 0, "") != 0) {
+    // FunctionFS остаётся смонтированной после прошлого запуска (как у adb и mtp).
+    // EBUSY - экземпляр xpad уже смонтирован: тоже годится.
+    if (!isMounted(kFfsDir) && mount("xpad", kFfsDir, "functionfs", 0, "") != 0 && errno != EBUSY) {
         ALOGE("mount functionfs: %s", strerror(errno));
         return false;
     }
