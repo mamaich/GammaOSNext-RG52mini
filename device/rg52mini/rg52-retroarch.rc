@@ -1,0 +1,12 @@
+# RetroArch из образа - на системы, установленные раньше (setup.sh ставит его только на
+# первой загрузке), см. rg52-retroarch.sh. На новой установке скрипт видит тот же APK и
+# только ставит отметку.
+service rg52_retroarch /system/bin/rg52-retroarch.sh
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+on property:sys.boot_completed=1 && property:persist.gammaos.setupwizard_done=1
+    start rg52_retroarch

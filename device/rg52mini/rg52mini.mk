@@ -261,6 +261,12 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-bios.sh:system/bin/rg52-bios.sh \
     device/rg52mini/rg52-bios.rc:system/etc/init/rg52-bios.rc
 
+# RetroArch ставит setup.sh один раз, на первой загрузке; новый APK из образа (с v1.16 -
+# 1.22.2) доходит до установленных раньше систем этим скриптом, см. rg52-retroarch.sh.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-retroarch.sh:system/bin/rg52-retroarch.sh \
+    device/rg52mini/rg52-retroarch.rc:system/etc/init/rg52-retroarch.rc
+
 # Папки и платформы dArkOS в базе Daijishō системы, обновлённой по воздуху (исходная
 # база из daijisho.tar.zst распаковывается только при установке). SQL и список обоев
 # собирает device/rg52mini/tools/daijisho/build.sh. См. rg52-daijisho.sh.
