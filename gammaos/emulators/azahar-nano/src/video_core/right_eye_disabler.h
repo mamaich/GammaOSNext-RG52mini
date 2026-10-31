@@ -56,6 +56,9 @@ private:
     }
     bool RightFramebuffer(PAddr dst) const;
     bool TitleHasRightEye() const;
+    // RG52 Mini: eye_rule=timing keeps the timing rule alone, without the target learning
+    // above (see right_eye_disabler.cpp).
+    static bool TimingRule();
 
     bool cmd_queue_trigger_happened = false;
     bool display_tranfer_happened = false;

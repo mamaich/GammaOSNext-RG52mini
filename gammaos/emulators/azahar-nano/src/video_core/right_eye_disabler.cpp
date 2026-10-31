@@ -7,9 +7,25 @@
 #include "right_eye_disabler.h"
 #include "video_core/gpu.h"
 #include "video_core/gpu_impl.h"
+#include "video_core/renderer_vulkan/vk_gammaos_game_prop.h"
 #include "video_core/renderer_vulkan/vk_gammaos_stats.h"
 
 namespace VideoCore {
+// RG52 Mini: on the Mali-G52 the right eye of Castlevania: Mirror of Fate costs more than the
+// left: rendering it, as the target rule below does, takes the intro from 18 fps to 7.5, and
+// eye_lists=1 only cuts its last lists (7.5 as well). The timing rule cuts the bulk of it and
+// now and then a left eye lighting pass, a lone unlit frame among a dozen. eye_rule=timing
+// (the game's default in kTitleDefaults) keeps that rule; any other value, frame for one, runs
+// the target rule. Read once per session, at the first command list of the title.
+bool RightEyeDisabler::TimingRule() {
+    static const bool timing = [] {
+        char v[PROP_VALUE_MAX] = {};
+        GammaGameProp::GetOrTitleDefault("eye_rule", v);
+        return std::strcmp(v, "timing") == 0;
+    }();
+    return timing;
+}
+
 bool RightEyeDisabler::ShouldAllowCmdQueueTrigger(PAddr addr, u32 size, const u32* words) {
     namespace GS = Vulkan::GammaStats;
     GS::Add(GS::CmdLists);
@@ -37,7 +53,7 @@ bool RightEyeDisabler::ShouldAllowCmdQueueTrigger(PAddr addr, u32 size, const u3
     // full speed to 37 fps at 63 percent (the game then runs 2.6 times the lists per shown
     // frame and doubles its texture copies). persist.gammaos.azahar_nano.eye_lists=1 cuts them
     // anyway, for experiments.
-    if (DistinctRightTarget()) {
+    if (!TimingRule() && DistinctRightTarget()) {
         static const bool cut_lists = [] {
             char v[PROP_VALUE_MAX] = {};
             __system_property_get("persist.gammaos.azahar_nano.eye_lists", v);
@@ -55,7 +71,7 @@ bool RightEyeDisabler::ShouldAllowCmdQueueTrigger(PAddr addr, u32 size, const u3
     }
     // GammaOS: targets that swap eyes between frames: no list can be told apart, and the timing
     // rule would cut a left eye now and then. Render everything; the right transfers are cut.
-    if (TargetsAlternate()) {
+    if (!TimingRule() && TargetsAlternate()) {
         cmd_trigger_blocked = false;
         return true;
     }
@@ -108,13 +124,14 @@ bool RightEyeDisabler::ShouldAllowDisplayTransfer(PAddr src_address, PAddr dst_a
     }
     // A transfer into the right framebuffer is never shown: cut it whatever the target pattern.
     // The lists behind it are only cut when the target is unambiguous (see the trigger rule).
-    if (size >= 400 && RightFramebuffer(dst_address)) {
+    // RG52 Mini: not under eye_rule=timing, which decides the transfers as before.
+    if (!TimingRule() && size >= 400 && RightFramebuffer(dst_address)) {
         if (cmd_queue_trigger_happened)
             display_tranfer_happened = true;
         GS::Add(GS::TransfersBlocked);
         return false;
     }
-    if (DistinctRightTarget() || TargetsAlternate()) {
+    if (!TimingRule() && (DistinctRightTarget() || TargetsAlternate())) {
         if (cmd_queue_trigger_happened)
             display_tranfer_happened = true;
         return true;
