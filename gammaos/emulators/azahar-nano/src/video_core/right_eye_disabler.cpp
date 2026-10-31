@@ -13,10 +13,11 @@
 namespace VideoCore {
 // RG52 Mini: on the Mali-G52 the right eye of Castlevania: Mirror of Fate costs more than the
 // left: rendering it, as the target rule below does, takes the intro from 18 fps to 7.5, and
-// eye_lists=1 only cuts its last lists (7.5 as well). The timing rule cuts the bulk of it and
-// now and then a left eye lighting pass, a lone unlit frame among a dozen. eye_rule=timing
-// (the game's default in kTitleDefaults) keeps that rule; any other value, frame for one, runs
-// the target rule. Read once per session, at the first command list of the title.
+// eye_lists=1 only cuts its last lists (7.5 as well). The timing rule cuts the bulk of it; the
+// bright frames in its intro are the game's own flash (a 7-frame fade, there with both eyes
+// rendered too). eye_rule=timing (the game's default in kTitleDefaults) keeps that rule; any
+// other value, frame for one, runs the target rule. Read once per session, at the first
+// command list of the title.
 bool RightEyeDisabler::TimingRule() {
     static const bool timing = [] {
         char v[PROP_VALUE_MAX] = {};

@@ -43,7 +43,7 @@ inline constexpr TitleDefault kTitleDefaults[] = {
     {0x000400000009E500, "stereo_skip", "1"},
     {0x000400000009E500, "async_gpu_flush_lag", "24"},
     // The upstream target rule renders its right eye (7.5 fps against 18 on the RG52 Mini,
-    // 31.10.2026): keep the timing rule here, at the price of a rare unlit frame.
+    // 31.10.2026) with no difference on screen in its intro: keep the timing rule here.
     {0x000400000009E500, "eye_rule", "timing"},
 };
 
