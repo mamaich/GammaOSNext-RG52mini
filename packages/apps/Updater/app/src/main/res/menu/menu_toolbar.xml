@@ -22,4 +22,8 @@
         android:id="@+id/menu_show_changelog"
         android:title="@string/menu_show_changelog"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/menu_show_changelog_rg52"
+        android:title="@string/menu_show_changelog_rg52"
+        app:showAsAction="never" />
 </menu>

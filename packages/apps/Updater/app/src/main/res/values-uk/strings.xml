@@ -48,6 +48,7 @@
     <string name="menu_copy_url">Копіювати URL</string>
     <string name="menu_export_update">Експорт оновлення</string>
     <string name="menu_show_changelog">Журнал змін</string>
+    <string name="menu_show_changelog_rg52">Журнал змін RG52 Mini</string>
     <string name="menu_update_recovery">Оновити режим відновлення</string>
     <string name="toast_forced_update_recovery">Неможливо вимкнути оновлення режиму відновлення Lineage на цьому пристрої.</string>
     <string name="snack_updates_found">Знайдено оновлення</string>

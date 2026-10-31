@@ -285,6 +285,11 @@ public class UpdatesActivity extends UpdatesListActivity implements UpdateImport
                     Uri.parse(Utils.getChangelogURL(this)));
             startActivity(openUrl);
             return true;
+        } else if (itemId == R.id.menu_show_changelog_rg52) {
+            // RG52 Mini: the release notes of this port (GitHub releases, newest first)
+            startActivity(new Intent(Intent.ACTION_VIEW,
+                    Uri.parse(getString(R.string.menu_changelog_rg52_url))));
+            return true;
         } else if (itemId == R.id.menu_local_update) {
             // "Local update" — use Android file picker to select a zip from storage
             mUpdateImporter.openImportPicker();
