@@ -83,7 +83,7 @@ void NanoMenu::openInputDevices() {
             // Exclusive grab: prevent Android InputReader from stealing events.
             // Gated by property — disable when preload is off to avoid input
             // ownership issues during app transitions.
-            if (android::base::GetBoolProperty("persist.gammaos.nano.grab_input", false)) {
+            if (android::base::GetBoolProperty("persist.gammaos.nano.grab_input", false) && !mMtpXpad) {
                 if (ioctl(fd, EVIOCGRAB, 1) < 0) {
                     ALOGW("EVIOCGRAB failed for %s: %s", path, strerror(errno));
                 }
@@ -175,7 +175,7 @@ void NanoMenu::checkInputHotplug() {
                         // Home-mode grab only (persist.gammaos.nano.grab_input).
                         // The overlay does NOT grab: it isolates the app's input
                         // via the framework drop_input prop, not EVIOCGRAB.
-                        if (android::base::GetBoolProperty("persist.gammaos.nano.grab_input", false)) {
+                        if (android::base::GetBoolProperty("persist.gammaos.nano.grab_input", false) && !mMtpXpad) {
                             if (ioctl(fd, EVIOCGRAB, 1) < 0) {
                                 ALOGW("EVIOCGRAB failed for hotplugged %s: %s", path, strerror(errno));
                             }
@@ -251,7 +251,7 @@ void NanoMenu::checkInputHotplug() {
         int fd = open(path, O_RDONLY | O_NONBLOCK);
         if (fd >= 0) {
             // Home-mode grab only; the overlay isolates via drop_input, not grab.
-            if (android::base::GetBoolProperty("persist.gammaos.nano.grab_input", false)) {
+            if (android::base::GetBoolProperty("persist.gammaos.nano.grab_input", false) && !mMtpXpad) {
                 if (ioctl(fd, EVIOCGRAB, 1) < 0) {
                     ALOGW("EVIOCGRAB failed for swept %s: %s", path, strerror(errno));
                 }
@@ -2762,7 +2762,10 @@ void NanoMenu::pollInput() {
                     }
                     if (powerHold) {
                         mPowerPressTime = 0;
-                        openQuickPowerMenu();
+                        // RG52 Mini: in the USB game controller mode the hold turns the mode off
+                        // (on homes where PWM owns power, PhoneWindowManager does the same).
+                        if (mMtpXpad) closeMtpScreen();
+                        else openQuickPowerMenu();
                         continue;
                     }
                     // Key was released before 1.5s — short press = sleep.

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="rg52_usb_use_game_controller">Геймпад для компьютера (Xbox 360)</string>
+    <string name="rg52_usb_game_controller_title">Включить режим геймпада?</string>
+    <string name="rg52_usb_game_controller_message">Компьютер увидит консоль как проводной геймпад Xbox 360. Все кнопки будут уходить на компьютер, сама консоль на них отвечать не будет.\n\nЧтобы выключить режим, удерживайте кнопку питания.</string>
+    <string name="rg52_usb_game_controller_start">Включить</string>
+</resources>

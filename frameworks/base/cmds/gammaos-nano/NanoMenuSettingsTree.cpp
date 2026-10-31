@@ -710,6 +710,9 @@ void NanoMenu::buildSettingsTree() {
         // starts MtpService. Non-persistent: resets to charge-only on unplug/reboot, as stock.
         b.action("usb_mtp",    "File Transfer (MTP)");
         b.action("usb_charge", "Charge Only");
+        // RG52 Mini: the console as a wired Xbox 360 controller for the PC (rg52-xpad).
+        if (access("/system/bin/rg52-xpad", X_OK) == 0)
+            b.action("usb_xpad", "Game Controller for PC (Xbox 360)");
         b.toggle("dc_dimming", "DC Dimming Emulation",
                  SettingSource::kProp, "persist.gammaos.dcdimmingemulation", "0");
       b.endCategory();
@@ -1152,6 +1155,8 @@ void NanoMenu::handleSettingsTreeSelect() {
             // The MTP screen does the switch itself (a none -> mtp rejig, which is what actually
             // starts MtpService), keeps it alive, and holds the display until Back stops it.
             openMtpScreen();
+        } else if (node.id == "usb_xpad") {
+            openXpadScreen();
         } else if (node.id == "usb_charge") {
             (void)system("gammaos-net usb none 2>/dev/null");   // back to charge-only
             showXmbMessage(trDyn("USB: Charge Only"),

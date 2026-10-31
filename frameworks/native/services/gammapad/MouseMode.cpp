@@ -14,8 +14,27 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <sys/system_properties.h>
 
 namespace gammapad {
+
+// RG52 Mini: режим «геймпад для компьютера» (rg52-xpad, sys.rg52.xpad.active=1). Кнопки и
+// стики тогда уходят на компьютер как есть: аккорд L3+R3 не должен включать мышь, а щелчок
+// стиком - ждать окно аккорда. Свойство читается на каждое событие, поэтому без поиска по
+// имени: prop_info запоминается, как только свойство появилось.
+static bool rg52XpadActive() {
+    static const prop_info* pi = nullptr;
+    if (!pi) pi = __system_property_find("sys.rg52.xpad.active");
+    if (!pi) return false;
+    bool on = false;
+    __system_property_read_callback(
+            pi,
+            [](void* cookie, const char*, const char* value, uint32_t) {
+                *static_cast<bool*>(cookie) = value[0] == '1';
+            },
+            &on);
+    return on;
+}
 
 // 60Hz tick rate for smooth cursor movement
 static constexpr int TICK_INTERVAL_MS = 16;
@@ -638,6 +657,8 @@ bool MouseMode::checkExternalToggle() {
 }
 
 bool MouseMode::processEvent(const struct input_event& ev) {
+    if (rg52XpadActive()) return false;
+
     // Кнопки аккорда разбираются отдельно и в обоих режимах.
     if (ev.type == EV_KEY && ev.value != 2 /* не автоповтор */) {
         if (ev.code == mComboBtn1Code) return handleChordButton(0, ev.value != 0);

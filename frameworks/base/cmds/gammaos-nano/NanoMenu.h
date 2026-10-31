@@ -3659,6 +3659,17 @@ private:
     int  mMtpMissCount = 0;                // consecutive watchdog checks with no host process
     std::mutex mMtpMutex;
     std::string mMtpStatus;                // status line (under mMtpMutex)
+    // RG52 Mini: the USB game controller mode (rg52-xpad, the console as a wired Xbox 360
+    // controller for a PC) uses the MTP modal: with mMtpXpad set it shows the mode instead,
+    // and every theme already treats it as the one modal (swallows navigation, renders it).
+    void openXpadScreen();
+    void xpadTick();                       // from mtpTick: service state, then the regrab
+    void xpadSetInputGrab(bool release);   // let the gamepad go for the service / take it back
+    std::string xpadStatusLine() const;    // the state line of the screen (and the 3DS dialog)
+    bool mMtpXpad = false;                 // the modal shows the game controller mode
+    bool mXpadRegrab = false;              // closed; take the input back once the service let go
+    int64_t mXpadOpenMs = 0, mXpadCloseMs = 0;
+    std::string mXpadState;                // last sys.rg52.xpad.state
     // scrape worker state
     std::mutex mScrapeMutex;
     bool mScrapeRunning = false;           // worker alive

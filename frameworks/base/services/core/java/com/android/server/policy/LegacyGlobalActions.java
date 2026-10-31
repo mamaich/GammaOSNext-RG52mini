@@ -1438,11 +1438,43 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         };
     }
 
+    // RG52 Mini: the console as a wired Xbox 360 controller for the PC. rg52-xpad (init service,
+    // sys.rg52.xpad.enable=1) takes the USB controller from Android's gadget itself and grabs the
+    // gamepad, so every button then goes to the PC; the way out is a power hold
+    // (PhoneWindowManager.powerLongPress). Hence the warning first.
+    private static final String RG52_XPAD_BINARY = "/system/bin/rg52-xpad";
+
+    private void confirmRg52GameController() {
+        AlertDialog dialog = new AlertDialog.Builder(mContext, android.R.style.Theme_Material_Dialog)
+                .setTitle("Game controller for PC")
+                .setMessage("The computer will see the console as a wired Xbox 360 controller. "
+                        + "All the buttons go to the computer, so the console itself will not "
+                        + "respond to them.\n\nTo turn this mode off, hold the power button.")
+                .setPositiveButton("Start", (dlg, which) -> {
+                    Log.i(TAG, "RG52: USB game controller mode on");
+                    SystemProperties.set("sys.rg52.xpad.enable", "1");
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+        dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_KEYGUARD_DIALOG);
+        dialog.show();
+        applyDarkDialogTheme(dialog);
+    }
+
     // USB device-mode switch for the ATV power menu. Single-choice because the USB functions are
     // mutually exclusive; applied immediately through UsbManager (system_server holds MANAGE_USB).
     // ADB, when enabled, is layered back on by the USB stack, so switching modes never drops adb.
     private void showUsbDialog() {
-        final String[] labels = {
+        // RG52 Mini: the last row, when rg52-xpad is in the image, is the game controller mode
+        // (not a UsbManager function, see confirmRg52GameController).
+        final boolean xpad = new java.io.File(RG52_XPAD_BINARY).exists();
+        final String[] labels = xpad ? new String[] {
+                "Charging",
+                "MTP (Media Transfer Protocol)",
+                "PTP (Picture Transfer Protocol)",
+                "RNDIS (USB Ethernet)",
+                "Game controller for PC (Xbox 360)",
+        } : new String[] {
                 "Charging",
                 "MTP (Media Transfer Protocol)",
                 "PTP (Picture Transfer Protocol)",
@@ -1477,6 +1509,11 @@ class LegacyGlobalActions implements DialogInterface.OnDismissListener, DialogIn
         AlertDialog dialog = new AlertDialog.Builder(mContext, android.R.style.Theme_Material_Dialog)
                 .setTitle(R.string.gammaos_usb_options)
                 .setSingleChoiceItems(labels, current, (dlg, which) -> {
+                    if (which >= modes.length) {
+                        dlg.dismiss();
+                        mHandler.post(() -> confirmRg52GameController());
+                        return;
+                    }
                     if (usb != null) {
                         final long token = Binder.clearCallingIdentity();
                         try {

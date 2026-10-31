@@ -1762,6 +1762,19 @@ public class PhoneWindowManager implements WindowManagerPolicy {
         Slog.d(TAG, "powerLongPress: eventTime=" + eventTime
                 + " mResolvedLongPressOnPowerBehavior=" + mResolvedLongPressOnPowerBehavior);
 
+        // RG52 Mini: в режиме «геймпад для компьютера» (rg52-xpad) все кнопки, кроме
+        // выключателя, уходят на компьютер, поэтому долгое нажатие выключателя выключает
+        // этот режим, а не открывает меню. Служба следит за sys.rg52.xpad.enable сама и
+        // возвращает USB Android. В Android и в nano одинаково: сюда приходит раньше ветвей nano.
+        if (android.os.SystemProperties.getBoolean("sys.rg52.xpad.active", false)) {
+            mPowerKeyHandled = true;
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS_POWER_BUTTON, false,
+                    "Power - Long Press - RG52 USB game controller off");
+            android.os.SystemProperties.set("sys.rg52.xpad.enable", "0");
+            Slog.i(TAG, "RG52: power long press -> USB game controller mode off");
+            return;
+        }
+
         // GammaOS Nano: in-game XMB overlay. When the opt-in feature is enabled, a
         // power-hold raises / dismisses the resident overlay XMB (gammaos-nano-overlay)
         // instead of the global actions dialog. Over a running app it toggles (raise to

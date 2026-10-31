@@ -1,0 +1,15 @@
+// RG52 Mini как проводной геймпад Xbox 360 для компьютера, см. rg52-xpad.cpp.
+cc_binary {
+    name: "rg52-xpad",
+    srcs: ["rg52-xpad.cpp"],
+    shared_libs: [
+        "libbase",
+        "liblog",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+    ],
+    init_rc: ["rg52-xpad.rc"],
+}

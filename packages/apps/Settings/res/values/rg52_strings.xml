@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RG52 Mini: the console as a wired Xbox 360 controller for a PC (rg52-xpad), chosen on the
+     USB screen next to the USB functions. -->
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <string name="rg52_usb_use_game_controller">Game controller for the PC (Xbox 360)</string>
+    <string name="rg52_usb_game_controller_title">Use as a game controller?</string>
+    <string name="rg52_usb_game_controller_message">The computer will see the console as a wired Xbox 360 controller. All the buttons go to the computer, so the console itself will not respond to them.\n\nTo turn this mode off, hold the power button.</string>
+    <string name="rg52_usb_game_controller_start">Start</string>
+</resources>

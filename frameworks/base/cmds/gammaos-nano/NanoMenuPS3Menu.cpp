@@ -2251,6 +2251,15 @@ void NanoMenu::buildUsbSubmenu(Ps3Level& out, int forceActive) {
         if ((int)i == active) { out.sel = (int)i; it.value = "Active"; }
         out.items.push_back(it);
     }
+    // RG52 Mini: the console as a wired Xbox 360 controller for the PC (rg52-xpad). Opens its
+    // own screen (NanoMenuMtp.cpp), so it is never the "Active" row here.
+    if (access("/system/bin/rg52-xpad", X_OK) == 0) {
+        Ps3Item it; it.label = "Game Controller for PC (Xbox 360)"; it.kind = PS3_QUICK;
+        it.a = QA_USB_SET; it.payloadStr = "xpad";
+        it.iconTex = iconTexForIcon(5); it.nmapTex = nmapForIcon(5);   // gamepad glyph
+        it.iconR = it.iconG = it.iconB = 1.0f;
+        out.items.push_back(it);
+    }
 }
 
 // Quick Menu -> Quick Settings submenu: the custom GammaOS Quick Settings tiles
@@ -6696,6 +6705,11 @@ void NanoMenu::ps3XmbSelect() {
                     // exactly like the wifi/bt controls. Run detached so the round-trip never stalls
                     // the render thread. ADB, when enabled, is re-added by the USB stack.
                     std::string fn = it.payloadStr;
+                    if (fn == "xpad") {
+                        // RG52 Mini: game controller mode - its own screen; it starts rg52-xpad.
+                        openXpadScreen();
+                        mDisplayDirty = true; return;
+                    }
                     if (fn == "mtp") {
                         // MTP gets its own screen: it performs the switch as a none -> mtp rejig
                         // (the plain switch links the function but does not start MtpService),

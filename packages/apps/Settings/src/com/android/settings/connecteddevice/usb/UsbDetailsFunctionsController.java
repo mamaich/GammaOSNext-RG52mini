@@ -56,6 +56,13 @@ public class UsbDetailsFunctionsController extends UsbDetailsController
         FUNCTIONS_MAP.put(UsbManager.FUNCTION_NONE, R.string.usb_use_charging_only);
     }
 
+    // RG52 Mini: консоль как проводной геймпад Xbox 360 для компьютера (служба rg52-xpad).
+    // Это не функция UsbManager: служба сама забирает контроллер USB у гаджета Android, поэтому
+    // пункт только запускает её - после предупреждения, что все кнопки уйдут на компьютер, а
+    // выключается режим долгим нажатием выключателя (PhoneWindowManager).
+    private static final String KEY_RG52_XPAD = "rg52_xpad";
+    private static final String RG52_XPAD_BINARY = "/system/bin/rg52-xpad";
+
     private PreferenceCategory mProfilesContainer;
     private TetheringManager mTetheringManager;
     private Handler mHandler;
@@ -126,10 +133,38 @@ public class UsbDetailsFunctionsController extends UsbDetailsController
                 mProfilesContainer.removePreference(pref);
             }
         }
+        if (new java.io.File(RG52_XPAD_BINARY).exists()) {
+            // Последним, под «Только зарядка». Отмеченным не бывает: пока режим включён, экран
+            // USB закрыт, а Android считает кабель отключённым.
+            pref = getProfilePreference(KEY_RG52_XPAD, R.string.rg52_usb_use_game_controller);
+            pref.setChecked(false);
+        }
+    }
+
+    private void confirmRg52GameController() {
+        final android.app.Activity activity = mFragment.getActivity();
+        if (activity == null) {
+            return;
+        }
+        new android.app.AlertDialog.Builder(activity)
+                .setTitle(R.string.rg52_usb_game_controller_title)
+                .setMessage(R.string.rg52_usb_game_controller_message)
+                .setPositiveButton(R.string.rg52_usb_game_controller_start, (dialog, which) -> {
+                    Log.i(TAG, "RG52: USB game controller mode on");
+                    android.os.SystemProperties.set("sys.rg52.xpad.enable", "1");
+                    activity.finish();
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
     }
 
     @Override
     public void onRadioButtonClicked(SelectorWithWidgetPreference preference) {
+        if (KEY_RG52_XPAD.equals(preference.getKey())) {
+            preference.setChecked(false);
+            requireAuthAndExecute(this::confirmRg52GameController);
+            return;
+        }
         requireAuthAndExecute(() -> {
             final long function = UsbBackend.usbFunctionsFromString(preference.getKey());
             final long previousFunction = mUsbBackend.getCurrentFunctions();

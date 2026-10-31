@@ -2419,6 +2419,13 @@ int NanoMenu::ctrWizSync(ctr::CtrPanel* panel, ctr::CtrDialog* dialog, bool* pan
 // notice with the wait icon turning while it (re)starts, and Stop ends it.
 bool NanoMenu::ctrStatusView(CtrStatusView* v) {
     *v = CtrStatusView();
+    if (mMtpActive && mMtpXpad) {
+        // RG52 Mini: the USB game controller mode. No button: the gamepad belongs to the PC,
+        // the way out is a power hold.
+        v->text = std::string(trDyn("Game Controller")) + "\n\n" + xpadStatusLine() + "\n" +
+                  trDyn("Hold the power button to stop");
+        return true;
+    }
     if (mMtpActive) {
         std::string status; bool failed;
         { std::lock_guard<std::mutex> lk(mMtpMutex); status = mMtpStatus; failed = mMtpFailed; }

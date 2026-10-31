@@ -18,8 +18,13 @@
 
 #include <dirent.h>
 #include <fcntl.h>
+#include <linux/input.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
+
+#include <android-base/properties.h>
+#include <cutils/properties.h>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -208,6 +213,21 @@ void NanoMenu::openMtpScreen() {
 // Back / B: the only way out. Stops the transfer (charge-only), lets the host be reaped again.
 void NanoMenu::closeMtpScreen() {
     if (!mMtpActive) return;
+    if (mMtpXpad) {
+        // Game controller mode: stop the service (it gives USB back to Android itself) and take
+        // the input back once it has let go of the gamepad (xpadTick).
+        const bool failed = mXpadState.rfind("error", 0) == 0;
+        mMtpActive = false;
+        mMtpXpad = false;
+        property_set("sys.rg52.xpad.enable", "0");
+        mXpadRegrab = true;
+        mXpadCloseMs = mtpNowMs();
+        showXmbMessage(trDyn("USB: Game Controller"),
+                       failed ? trDyn("The game controller mode could not start")
+                              : trDyn("The game controller mode is off"), 240);
+        mDisplayDirty = true;
+        return;
+    }
     mMtpActive = false;
     mMtpGen++;                       // a worker still polling stops caring
     const int pid = mMtpMediaPid; mMtpMediaPid = 0; mMtpMissCount = 0;
@@ -230,6 +250,7 @@ void NanoMenu::closeMtpScreen() {
 // the home idles at 10 fps and the DSi theme can skip render() entirely when idle, so this is
 // paced on the wall clock): cable edge detection at 4 Hz and the service watchdog every 3 s.
 void NanoMenu::mtpTick() {
+    if (mMtpXpad || mXpadRegrab) { xpadTick(); return; }
     if (!mMtpActive) return;
     const int64_t now = mtpNowMs();
     if (now - mMtpLastPollMs < 250) return;
@@ -268,6 +289,76 @@ void NanoMenu::mtpTick() {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// RG52 Mini: the USB game controller mode. rg52-xpad (init service, sys.rg52.xpad.enable=1)
+// takes the USB controller from Android's gadget for a wired Xbox 360 one and grabs the GammaOS
+// virtual gamepad, so every button goes to the PC and none reaches nano. The screen therefore
+// only shows the state; the way out is a power hold - PhoneWindowManager (or nano's own power
+// handler on a grabbing home) sets sys.rg52.xpad.enable=0, the service stops and xpadTick closes
+// the screen when it sees that.
+// ---------------------------------------------------------------------------------------------
+
+// A home that grabs input exclusively (persist.gammaos.nano.grab_input) lets go of every device
+// but the power key, or the service could not grab the gamepad; and takes them back after.
+void NanoMenu::xpadSetInputGrab(bool release) {
+    if (!android::base::GetBoolProperty("persist.gammaos.nano.grab_input", false)) return;
+    for (int fd : mInputFds) {
+        unsigned long keys[KEY_CNT / (8 * sizeof(long)) + 1] = {};
+        ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys);
+        const int bit = KEY_POWER;
+        if ((keys[bit / (8 * sizeof(long))] >> (bit % (8 * sizeof(long)))) & 1) continue;
+        ioctl(fd, EVIOCGRAB, release ? 0 : 1);
+    }
+}
+
+void NanoMenu::openXpadScreen() {
+    if (mMtpActive) return;
+    if (access("/system/bin/rg52-xpad", X_OK) != 0) return;
+    mMtpActive = true;
+    mMtpXpad = true;
+    mXpadRegrab = false;
+    mXpadOpenMs = mtpNowMs();
+    mXpadState.clear();
+    mMtpPollFrames = 0;
+    cancelPendingLaunch();
+    xpadSetInputGrab(true);
+    property_set("sys.rg52.xpad.enable", "1");
+    ALOGI("xpad: game controller mode requested");
+    mDisplayDirty = true;
+}
+
+std::string NanoMenu::xpadStatusLine() const {
+    if (mXpadState == "connected") return trDyn("Connected to the computer");
+    if (mXpadState == "waiting") return trDyn("Waiting for the computer...");
+    if (mXpadState.rfind("error", 0) == 0) return trDyn("Could not start");
+    return trDyn("Starting...");
+}
+
+void NanoMenu::xpadTick() {
+    const int64_t now = mtpNowMs();
+    if (now - mMtpLastPollMs < 250) return;
+    mMtpLastPollMs = now;
+    mMtpPollFrames++;
+    char st[PROPERTY_VALUE_MAX] = {}, act[PROPERTY_VALUE_MAX] = {}, en[PROPERTY_VALUE_MAX] = {};
+    property_get("sys.rg52.xpad.state", st, "");
+    property_get("sys.rg52.xpad.active", act, "0");
+    property_get("sys.rg52.xpad.enable", en, "0");
+    if (mXpadRegrab) {
+        // Closed: take the input back once the service has released the gamepad (or gave up).
+        if (strcmp(act, "1") != 0 || now - mXpadCloseMs > 5000) {
+            xpadSetInputGrab(false);
+            mXpadRegrab = false;
+        }
+        return;
+    }
+    if (mXpadState != st) { mXpadState = st; mDisplayDirty = true; }
+    // The service has ended - a power hold, an error, or it never started: close the screen.
+    if (strcmp(en, "1") != 0 && strcmp(act, "1") != 0 && now - mXpadOpenMs > 1000) {
+        ALOGI("xpad: game controller mode ended (%s)", st);
+        closeMtpScreen();
+    }
+}
+
 void NanoMenu::renderMtpScreen() {
     if (!mMtpActive) return;
     mDisplayDirty = true;   // keep redrawing: the status and the spinner change without input
@@ -295,7 +386,9 @@ void NanoMenu::renderMtpScreen() {
         dimA = 0.55f; rad = 0.0f;
     }
     // Disconnected: warn in amber instead of the theme accent.
-    if (!mMtpUsbConnected) { accR = 0.98f; accG = 0.72f; accB = 0.20f; }
+    if (mMtpXpad ? mXpadState != "connected" : !mMtpUsbConnected) {
+        accR = 0.98f; accG = 0.72f; accB = 0.20f;
+    }
 
     drawQuad(0, 0, W, H, 0.0f, 0.0f, 0.0f, dimA);
     const float pw = W * 0.62f, ph = H * 0.34f;
@@ -313,6 +406,21 @@ void NanoMenu::renderMtpScreen() {
         float w = measureText(s, scale);
         drawText(s, cx - w * 0.5f, y, scale, r, g, b, a);
     };
+
+    if (mMtpXpad) {
+        std::string line = xpadStatusLine();
+        if (!line.empty() && line.back() == '.') {   // waiting: the trailing dots count up
+            while (!line.empty() && line.back() == '.') line.pop_back();
+            line += std::string(1 + (mMtpPollFrames / 2) % 3, '.');
+        }
+        centered(trDyn("Game Controller"), py + ph * 0.18f, 1.7f * sf, accR, accG, accB, 1.0f);
+        centered(line.c_str(), py + ph * 0.46f, 1.2f * sf, t1R, t1G, t1B, 1.0f);
+        centered(trDyn("The computer sees an Xbox 360 controller"), py + ph * 0.62f, 0.95f * sf,
+                 t2R, t2G, t2B, 1.0f);
+        centered(trDyn("Hold the power button to stop"), py + ph * 0.86f, 0.9f * sf,
+                 t2R, t2G, t2B, 0.9f);
+        return;
+    }
 
     std::string status; bool failed;
     { std::lock_guard<std::mutex> lk(mMtpMutex); status = mMtpStatus; failed = mMtpFailed; }

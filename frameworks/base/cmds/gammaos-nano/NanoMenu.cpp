@@ -5472,7 +5472,9 @@ if (sRingPrimedCount >= 2) {
             }
         }
 
-        if (mMtpActive) mtpTick();   // MTP screen: cable edges + service watchdog, every loop, wall-clock paced
+        // MTP screen: cable edges + service watchdog; game controller mode: its state, then the
+        // regrab after it closes. Every loop, wall-clock paced.
+        if (mMtpActive || mXpadRegrab) mtpTick();
         if (!ndsIdleSkip) {
         mMinimaWantsFrame = false;   // the Minima renderer re-arms it while anything animates
         render();

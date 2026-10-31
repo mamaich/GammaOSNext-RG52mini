@@ -1,0 +1,29 @@
+# Режим «геймпад для компьютера»: rg52-xpad (device/rg52mini/xpad). Включают пункты выбора
+# режима USB в Настройках и в nano (sys.rg52.xpad.enable=1); выключает долгое нажатие
+# выключателя (sys.rg52.xpad.enable=0) - служба следит за свойством сама и перед выходом
+# возвращает USB гаджету Android. stop у init здесь не годится: отвязка контроллера может
+# занять дольше 200 мс, которые gentle_kill даёт до SIGKILL.
+#
+# root - ради configfs и монтирования FunctionFS; домен shell, как у rg52-ledd, - своего
+# домена у служб этой сборки нет (SELinux permissive).
+service rg52_xpad /system/bin/rg52-xpad
+    user root
+    group root system input
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+# Уборка, если служба завершилась аварийно и не вернула USB Android. После обычного
+# выхода ей делать нечего.
+service rg52_xpad_cleanup /system/bin/rg52-xpad --cleanup
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+on property:sys.rg52.xpad.enable=1
+    start rg52_xpad
+
+on property:init.svc.rg52_xpad=stopped
+    start rg52_xpad_cleanup
