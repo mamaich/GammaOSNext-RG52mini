@@ -1,0 +1,28 @@
+# ShanWan PS3/PC Wired GamePad (2563:0523), DirectInput mode, hid-generic.
+# Buttons come as BTN_TRIGGER..BTN_BASE6 (288..299); without this file Android
+# turns them into BUTTON_1..BUTTON_12 and emulators see no A/B/X/Y.
+# Layout as in SDL gamecontrollerdb (03000000632500002305000010010000); checked
+# by the owner on 01.11.2026 (Zombies Ate My Neighbors in RetroArch). The pad
+# starts as 2563:0973 and switches to this mode on Android; on Windows and
+# dArkOS it goes to Xbox 360 mode (045e:028e, kernel xpad) instead.
+
+key 288   BUTTON_Y
+key 289   BUTTON_B
+key 290   BUTTON_A
+key 291   BUTTON_X
+key 292   BUTTON_L1
+key 293   BUTTON_R1
+key 294   BUTTON_L2
+key 295   BUTTON_R2
+key 296   BUTTON_SELECT
+key 297   BUTTON_START
+key 298   BUTTON_THUMBL
+key 299   BUTTON_THUMBR
+
+# Left stick, right stick (Z/RZ), D-pad as a hat
+axis 0x00 X
+axis 0x01 Y
+axis 0x02 Z
+axis 0x05 RZ
+axis 0x10 HAT_X
+axis 0x11 HAT_Y

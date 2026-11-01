@@ -12,6 +12,7 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/keylayout/adc-keys.kl:system/usr/keylayout/adc-keys.kl \
     device/rg52mini/keylayout/rk3562-joystick.kl:system/usr/keylayout/rk3562-joystick.kl \
     device/rg52mini/keylayout/idroid_con.kl:system/usr/keylayout/idroid_con.kl \
+    device/rg52mini/keylayout/Vendor_2563_Product_0523.kl:system/usr/keylayout/Vendor_2563_Product_0523.kl \
     device/rg52mini/idc/rk3562-joystick.idc:system/usr/idc/rk3562-joystick.idc
 
 # Расширение userdata на всю карту при первой загрузке. sgdisk есть в
