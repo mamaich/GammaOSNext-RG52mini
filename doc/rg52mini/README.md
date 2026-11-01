@@ -60,6 +60,7 @@ Flycast, DraStic, mupen64plus, Daijishō, с v1.13 — эмулятор 3DS azah
 
 | Выпуск | Дата | Коротко |
 |---|---|---|
+| [v1.16](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.16) — [подробности](release-v1.16.md) | 01.11.2026 | консоль работает как проводной геймпад Xbox 360 для компьютера; RetroArch 1.22.2; связь с компьютером по USB не рвётся от кратковременного провала питания |
 | [v1.15](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.15) — [подробности](release-v1.15.md) | 31.10.2026 | USB-донглы Bluetooth на Realtek для плат ревизии A; эмулятор 3DS занимает на 384 МБ меньше памяти; передача файлов (MTP) в оболочке nano больше не обрывается |
 | [v1.14](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.14) — [подробности](release-v1.14.md) | 25.10.2026 | Игры 3DS и из Daijishō; игры DS в nano — во встроенном drastic-nano; HDMI можно вставлять и вынимать посреди игры 3DS и DS; быстрее сохранение 3DS и Castlevania: Mirror of Fate; читы 3DS из апстрима GammaOS |
 | [v1.13](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.13) — [подробности](release-v1.13.md) | 23.10.2026 | Эмулятор 3DS (из апстрима GammaOS, доработан под один экран); при перегреве частота отдаётся графике, режим 3D Games убран; курки и HOME/BACK исправлены в драйвере, назначение осей не уводит правый стик в курки |
