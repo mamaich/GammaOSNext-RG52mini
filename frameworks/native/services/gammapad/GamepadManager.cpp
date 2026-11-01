@@ -461,6 +461,26 @@ bool GamepadManager::grabDevice(const std::string& path) {
     std::string nameStr(name);
     bool userSelected = shouldGrabDevice(nameStr);
 
+    // RG52 Mini: only the console's own controls go into the virtual gamepad. An external
+    // USB or Bluetooth pad stays a device of its own, so in a game it is player 2, 3...
+    // instead of being merged into player 1 with the console (owner's decision 01.11.2026).
+    // Bus type cannot tell them apart: retrogame_joypad reports BUS_BLUETOOTH. phys can:
+    // USB pads are "usb-...", Bluetooth (uhid) ones carry the adapter address
+    // "xx:xx:xx:xx:xx:xx". A pad picked in the gammapad device list is still taken.
+    // persist.rg52.gamepad.builtin_only=0 restores the upstream behaviour.
+    if (!userSelected && phys[0] &&
+        android::base::GetIntProperty("persist.rg52.gamepad.builtin_only", 1) != 0) {
+        const bool usb = strncmp(phys, "usb-", 4) == 0;
+        const bool bt = strlen(phys) >= 17 && phys[2] == ':' && phys[5] == ':' &&
+                        phys[8] == ':' && phys[11] == ':' && phys[14] == ':';
+        if (usb || bt) {
+            LOG(INFO) << "Skipping " << name << ": external pad (phys=" << phys
+                      << "), stays a separate player";
+            close(fd);
+            return false;
+        }
+    }
+
     // Devices explicitly selected by the user bypass gamepad capability checks.
     // This allows key-only secondary inputs (e.g., mtk-pmic-keys) to be grabbed
     // and routed through the virtual gamepad for remapping.
