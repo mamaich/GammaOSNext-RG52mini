@@ -266,7 +266,9 @@ PRODUCT_COPY_FILES += \
 # 1.22.2) доходит до установленных раньше систем этим скриптом, см. rg52-retroarch.sh.
 PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-retroarch.sh:system/bin/rg52-retroarch.sh \
-    device/rg52mini/rg52-retroarch.rc:system/etc/init/rg52-retroarch.rc
+    device/rg52mini/rg52-retroarch.rc:system/etc/init/rg52-retroarch.rc \
+    device/rg52mini/retroarch-autoconfig/ShanWan_PS3_PC_Wired_GamePad.cfg:system/etc/rg52-retroarch-autoconfig/ShanWan_PS3_PC_Wired_GamePad.cfg \
+    device/rg52mini/retroarch-autoconfig/SHANWAN_Android_gamepad.cfg:system/etc/rg52-retroarch-autoconfig/SHANWAN_Android_gamepad.cfg
 
 # Папки и платформы dArkOS в базе Daijishō системы, обновлённой по воздуху (исходная
 # база из daijisho.tar.zst распаковывается только при установке). SQL и список обоев
