@@ -1,0 +1,16 @@
+// adb remount: overlay из /cache на каждой загрузке, см. rg52-overlay-mount.cpp.
+cc_binary {
+    name: "rg52-overlay-mount",
+    srcs: ["rg52-overlay-mount.cpp"],
+    shared_libs: [
+        "libbase",
+        "libfs_mgr_binder",
+        "liblog",
+    ],
+    cflags: [
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+    ],
+    init_rc: ["rg52-overlay-mount.rc"],
+}

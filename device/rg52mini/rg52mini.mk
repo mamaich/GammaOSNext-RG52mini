@@ -654,6 +654,12 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     rg52-xpad
 
+# adb remount: overlay из /cache/overlay поднимается на каждой загрузке
+# (device/rg52mini/remount). Init первого этапа из initrd вендора (user-сборка) этого
+# не делает. Без /cache/overlay служба сразу выходит.
+PRODUCT_PACKAGES += \
+    rg52-overlay-mount
+
 # Свойства GammaOS для такой подсветки. Контроллер знает 7 цветов и несколько
 # уровней яркости, отдельно левым и правым стиком не управляет:
 #   split=0, color_split=0  - раздельных цветов нет;
