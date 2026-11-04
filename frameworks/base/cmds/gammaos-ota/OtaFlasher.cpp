@@ -25,6 +25,7 @@
 #include <limits.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <ftw.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/wait.h>
@@ -1257,6 +1258,7 @@ bool OtaFlasher::flash(const OtaManifest& manifest) {
             physicalFailures.push_back(part->name);
         } else {
             logToFile("INFO", "Physical partition %s: DONE", part->name.c_str());
+            dropRemountOverlay(part->name);
         }
         notifyStatus(FlashPhase::FLASHING_PHYSICAL, part->name, idx, totalParts, 100);
         idx++;
@@ -1297,6 +1299,34 @@ bool OtaFlasher::flash(const OtaManifest& manifest) {
     dumpSuperMetadata("AFTER");
 
     return true;
+}
+
+// RG52 Mini: `adb remount` keeps its changes in an overlayfs upper dir on /cache
+// (/cache/overlay/<partition>/upper), and first-stage init mounts it over the
+// partition on every boot. After a new image of that partition is written, the
+// old upper files would hide the new ones from the update, so drop them: the
+// partition comes up exactly as flashed, and `adb remount` starts afresh.
+void OtaFlasher::dropRemountOverlay(const std::string& name) {
+    static const char* const kOverlaid[] = {"system", "vendor", "odm", "product", "system_ext"};
+    bool overlaid = false;
+    for (const char* p : kOverlaid) {
+        if (name == p) overlaid = true;
+    }
+    if (!overlaid) return;
+    const std::string dir = "/cache/overlay/" + name;
+    struct stat st;
+    if (lstat(dir.c_str(), &st) != 0) return;
+    // In-process rm -rf: while flashing, /system/bin is a tmpfs copy without rm.
+    // The tree belongs to adb remount alone; /cache/overlay itself stays.
+    auto rmOne = [](const char* path, const struct stat*, int, struct FTW*) -> int {
+        return remove(path) == 0 ? 0 : -1;
+    };
+    const bool ok = nftw(dir.c_str(), rmOne, 16, FTW_DEPTH | FTW_PHYS) == 0;
+    if (ok && lstat(dir.c_str(), &st) != 0) {
+        logToFile("INFO", "adb remount overlay %s removed", dir.c_str());
+    } else {
+        logToFile("WARN", "could not remove adb remount overlay %s: %s", dir.c_str(), strerror(errno));
+    }
 }
 
 bool OtaFlasher::flashPhysical(const OtaPartition& part, int partIdx, int partCount) {

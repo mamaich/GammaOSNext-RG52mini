@@ -125,6 +125,19 @@ if [ "$(stat -c %s "$BOOTDIR/$INITRD")" -lt 1048576 ] ||
     exit 1
 fi
 
+# /cache - на первом этапе загрузки, как /metadata: тогда init сам поднимает поверх
+# /system и /vendor overlay `adb remount` из /cache/overlay. Правится копия initrd
+# (строка /cache в обоих fstab.rk30board), сам boot/initrd.zst не трогается; остальные
+# файлы initrd побайтно те же (tools/initrd-fstab.py).
+INITRD_SRC="$BOOTDIR/$INITRD"
+if [ "$INITRD" = initrd.zst ]; then
+    INITRD_TMP=$(mktemp -d)
+    trap 'rm -rf "${INITRD_TMP:-}"' EXIT
+    python3 -I "$TREE/device/rg52mini/tools/initrd-fstab.py" "$BOOTDIR/$INITRD" "$INITRD_TMP/$INITRD" ||
+        { echo "initrd не поправлен" >&2; exit 1; }
+    INITRD_SRC="$INITRD_TMP/$INITRD"
+fi
+
 mkdir -p "$OUTDIR"
 OUT=${2:-$OUTDIR/GammaOSCore-RG52Mini-$(date +%Y%m%d-%H%M).img}
 
@@ -205,7 +218,7 @@ sgdisk --print "$OUT" | tail -12
 
 # --- заливка разделов ---
 LOOP=$(sudo losetup -P -f --show "$OUT")
-trap 'sudo losetup -d "$LOOP" 2>/dev/null || true' EXIT
+trap 'sudo losetup -d "$LOOP" 2>/dev/null || true; rm -rf "${INITRD_TMP:-}"' EXIT
 echo "== loop $LOOP"
 
 # --- до первого раздела: idbloader и хранилище vendor ---
@@ -239,8 +252,9 @@ echo "== загрузочный FAT"
 sudo mkfs.vfat -F 32 -s 1 -S 512 -R 32 -f 2 -i A96B415C -h 32768 "${LOOP}p3" > /dev/null
 sudo mkdir -p /mnt/imgboot && sudo mount "${LOOP}p3" /mnt/imgboot
 sudo mkdir -p /mnt/imgboot/extlinux
-echo "   initrd: $INITRD ($(stat -c %s "$BOOTDIR/$INITRD") байт)"
-for f in rk3562-rg52mini.dtb $INITRD battery_0.bmp battery_1.bmp battery_2.bmp \
+echo "   initrd: $INITRD ($(stat -c %s "$INITRD_SRC") байт)"
+sudo cp "$INITRD_SRC" /mnt/imgboot/$INITRD
+for f in rk3562-rg52mini.dtb battery_0.bmp battery_1.bmp battery_2.bmp \
          battery_3.bmp battery_4.bmp battery_5.bmp battery_fail.bmp; do
     sudo cp "$BOOTDIR/$f" /mnt/imgboot/$f
 done
@@ -257,6 +271,14 @@ sudo umount /mnt/imgboot
 # получить цикл перезагрузок.
 echo "== правлю vendor"
 sudo mkdir -p /mnt/imgven && sudo mount "${LOOP}p5" /mnt/imgven
+
+# fstab в vendor: полные пути к разделам, как в fstab из initrd. В vendor от Android 13
+# system, vendor и odm записаны короткими именами; загрузке это не мешает (первый этап
+# init берёт fstab из initrd), но `adb remount` открывает устройство по имени из этого
+# fstab, получал каталог /system вместо раздела, не видел у system признака
+# shared_blocks и не ставил overlay - remount падал на «Read-only file system».
+sudo sed -i -E 's#^(system|vendor|odm)([[:space:]])#/dev/block/by-name/\1\2#' /mnt/imgven/etc/fstab.rk30board
+echo "   fstab: полные пути у $(grep -c '^/dev/block/by-name/\(system\|vendor\|odm\) ' /mnt/imgven/etc/fstab.rk30board) строк system/vendor/odm"
 
 # flydigi-mouse и flydigi-triggers — поддержка внешних геймпадов Flydigi. Обе
 # службы безусловно создают постоянные виртуальные устройства, и мышиное из них
@@ -715,6 +737,7 @@ for p in 4 5 6 7; do
 done
 
 sudo losetup -d "$LOOP"; trap - EXIT
+rm -rf "${INITRD_TMP:-}"
 echo
 echo "готово: $OUT"
 ls -la "$OUT"

@@ -138,6 +138,10 @@ public:
     // and makes SurfaceFlinger present again (see OtaFlasher.cpp). `when` goes to the log.
     static void releaseStaleNanoGate(const char* when);
 
+    // RG52 Mini: after a partition is written, drops its `adb remount` overlay
+    // (/cache/overlay/<name>), so old upper files do not hide the update.
+    static void dropRemountOverlay(const std::string& name);
+
 private:
     void notifyStatus(FlashPhase phase, const std::string& partition = "",
                       int idx = 0, int count = 0, int progress = 0,
