@@ -31,6 +31,10 @@ public final class Constants {
     public static final String PREF_LAST_UPDATE_CHECK = "last_update_check";
     public static final String PREF_AUTO_UPDATES_CHECK_INTERVAL = "auto_updates_check_interval";
     public static final String PREF_AUTO_DELETE_UPDATES = "auto_delete_updates";
+    // RG52 Mini: по умолчанию включено. Пакет ~1,9 ГБ, а OTA ещё распаковывает его и
+    // разворачивает образ system на /data: оставленный архив прошлого обновления
+    // съедает место, которого следующему обновлению и так впритык.
+    public static final boolean AUTO_DELETE_UPDATES_DEFAULT = true;
     public static final String PREF_AB_PERF_MODE = "ab_perf_mode";
     public static final String PREF_METERED_NETWORK_WARNING = "pref_metered_network_warning";
     public static final String PREF_MOBILE_DATA_WARNING = "pref_mobile_data_warning";

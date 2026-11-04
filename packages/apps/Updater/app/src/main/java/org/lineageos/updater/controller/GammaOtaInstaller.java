@@ -16,8 +16,11 @@
 package org.lineageos.updater.controller;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.SystemProperties;
 import android.util.Log;
+
+import androidx.preference.PreferenceManager;
 
 import org.lineageos.updater.misc.Constants;
 import org.lineageos.updater.model.UpdateInfo;
@@ -64,6 +67,22 @@ public class GammaOtaInstaller {
             setFailed(downloadId);
             return;
         }
+
+        // Запомнить установку так же, как UpdateInstaller (путь через recovery): без
+        // этого Utils.cleanupDownloadsDir после загрузки не знает, какой архив поставлен,
+        // и «Delete updates when installed» не удаляет его, а UpdaterReceiver не
+        // сообщает о неудачной установке.
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(mContext);
+        long buildTimestamp = SystemProperties.getLong(Constants.PROP_BUILD_DATE, 0);
+        long lastBuildTimestamp = preferences.getLong(Constants.PREF_INSTALL_OLD_TIMESTAMP,
+                buildTimestamp);
+        preferences.edit()
+                .putLong(Constants.PREF_INSTALL_OLD_TIMESTAMP, buildTimestamp)
+                .putLong(Constants.PREF_INSTALL_NEW_TIMESTAMP, update.getTimestamp())
+                .putString(Constants.PREF_INSTALL_PACKAGE_PATH, updateFile.getAbsolutePath())
+                .putBoolean(Constants.PREF_INSTALL_AGAIN, buildTimestamp == lastBuildTimestamp)
+                .putBoolean(Constants.PREF_INSTALL_NOTIFIED, false)
+                .commit();
 
         // Set status to installing
         mUpdaterController.getActualUpdate(downloadId)

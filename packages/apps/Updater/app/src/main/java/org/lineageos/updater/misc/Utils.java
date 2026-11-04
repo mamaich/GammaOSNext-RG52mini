@@ -319,6 +319,41 @@ public class Utils {
     }
 
     /**
+     * «Delete updates when installed» на пути GammaOtaInstaller до v1.17 не работал:
+     * установка не записывала PREF_INSTALL_PACKAGE_PATH, и cleanupDownloadsDir не знал,
+     * какой архив удалить. При загрузке удаляем скачанные архивы выпусков старее
+     * установленной системы, если удаление включено (архив своей же версии оставляем:
+     * его могли скачать для переустановки).
+     */
+    public static void cleanupInstalledDownloads(Context context) {
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+        if (!preferences.getBoolean(Constants.PREF_AUTO_DELETE_UPDATES,
+                Constants.AUTO_DELETE_UPDATES_DEFAULT)) {
+            return;
+        }
+        long buildTimestamp = SystemProperties.getLong(Constants.PROP_BUILD_DATE, 0);
+        if (buildTimestamp <= 0) {
+            return;
+        }
+        UpdatesDbHelper dbHelper = new UpdatesDbHelper(context);
+        for (Update update : dbHelper.getUpdates()) {
+            if (update.getTimestamp() >= buildTimestamp) {
+                continue;
+            }
+            File file = update.getFile();
+            if (file != null && file.exists()) {
+                if (file.delete()) {
+                    Log.i(TAG, "Removed installed update " + file.getAbsolutePath());
+                } else {
+                    Log.w(TAG, "Could not remove installed update " + file.getAbsolutePath());
+                    continue;
+                }
+            }
+            dbHelper.removeUpdate(update.getDownloadId());
+        }
+    }
+
+    /**
      * Cleanup the download directory, which is assumed to be a privileged location
      * the user can't access and that might have stale files. This can happen if
      * the data of the application are wiped.
@@ -334,7 +369,8 @@ public class Utils {
         long prevTimestamp = preferences.getLong(Constants.PREF_INSTALL_OLD_TIMESTAMP, 0);
         String lastUpdatePath = preferences.getString(Constants.PREF_INSTALL_PACKAGE_PATH, null);
         boolean reinstalling = preferences.getBoolean(Constants.PREF_INSTALL_AGAIN, false);
-        boolean deleteUpdates = preferences.getBoolean(Constants.PREF_AUTO_DELETE_UPDATES, false);
+        boolean deleteUpdates = preferences.getBoolean(Constants.PREF_AUTO_DELETE_UPDATES,
+                Constants.AUTO_DELETE_UPDATES_DEFAULT);
         if ((buildTimestamp != prevTimestamp || reinstalling) && deleteUpdates &&
                 lastUpdatePath != null) {
             File lastUpdate = new File(lastUpdatePath);
