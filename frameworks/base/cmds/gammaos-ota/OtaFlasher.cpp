@@ -2061,6 +2061,28 @@ void OtaFlasher::reboot() {
         }
         closedir(dir);
     }
+    // Updater (GammaOtaInstaller) и «Install from storage» распаковывают пакет не в
+    // package/, а прямо в /data/gammaos_ota: без этой чистки там после каждого
+    // обновления оставались образы (~1,9 ГБ), и следующему OTA не хватало места
+    // на staging. Удаляем только обычные файлы верхнего уровня, кроме журнала;
+    // каталоги (backup/, staging/, package/) не трогаем.
+    if (mPackageDir == OTA_DIR) {
+        dir = opendir(OTA_DIR);
+        if (dir) {
+            struct dirent* entry;
+            while ((entry = readdir(dir)) != nullptr) {
+                if (entry->d_name[0] == '.' || strcmp(entry->d_name, "ota.log") == 0) continue;
+                std::string path = std::string(OTA_DIR) + "/" + entry->d_name;
+                struct stat st;
+                if (lstat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) continue;
+                if (unlink(path.c_str()) == 0)
+                    logToFile("INFO", "  Deleted: %s", path.c_str());
+                else
+                    logToFile("WARN", "  Could not delete %s: %s", path.c_str(), strerror(errno));
+            }
+            closedir(dir);
+        }
+    }
     // Also clean staging dir
     dir = opendir(STAGING_DIR);
     if (dir) {
