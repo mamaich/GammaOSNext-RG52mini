@@ -295,6 +295,30 @@ public class Utils {
     }
 
     /**
+     * GammaOtaInstaller распаковывает пакет прямо в /data/gammaos_ota, а gammaos-ota до
+     * v1.17 после прошивки чистил только package/. Образы прошлого обновления (~1,9 ГБ)
+     * так и оставались на /data, и следующему OTA не хватало места на staging. При
+     * загрузке установка не идёт: удаляем обычные файлы верхнего уровня, кроме журнала;
+     * каталоги (backup/, staging/, package/) не трогаем.
+     */
+    public static void cleanupGammaOtaDir() {
+        File[] files = new File(Constants.GAMMAOS_OTA_DIR).listFiles();
+        if (files == null) {
+            return;
+        }
+        for (File f : files) {
+            if (!f.isFile() || "ota.log".equals(f.getName())) {
+                continue;
+            }
+            if (f.delete()) {
+                Log.i(TAG, "Removed leftover OTA file " + f.getAbsolutePath());
+            } else {
+                Log.w(TAG, "Could not remove leftover OTA file " + f.getAbsolutePath());
+            }
+        }
+    }
+
+    /**
      * Cleanup the download directory, which is assumed to be a privileged location
      * the user can't access and that might have stale files. This can happen if
      * the data of the application are wiped.

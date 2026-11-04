@@ -53,6 +53,7 @@ public class UpdatesCheckReceiver extends BroadcastReceiver {
     public void onReceive(final Context context, Intent intent) {
         if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
             Utils.cleanupDownloadsDir(context);
+            Utils.cleanupGammaOtaDir();
         }
 
         final SharedPreferences preferences =
