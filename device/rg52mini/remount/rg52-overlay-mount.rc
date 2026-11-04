@@ -1,10 +1,22 @@
 # adb remount: поднять overlay из /cache/overlay на каждой загрузке (см. rg52-overlay-mount.cpp).
 #
-# Триггер fs: mount_all вендора (init.rk30board.rc, импортирован из init.rc, поэтому его
-# "on fs" идёт раньше нашего из /system/etc/init) уже смонтировал /cache, а bind-mount
+# Два запуска, по одному на пространство монтирования init:
+#
+# on fs - начальное (bootstrap) пространство: в нём остаются ранние службы (vold, logd,
+# surfaceflinger). mount_all вендора (init.rk30board.rc, импортирован из init.rc, поэтому
+# его "on fs" идёт раньше нашего из /system/etc/init) уже смонтировал /cache, а bind-mount
 # поверх /vendor/etc/usb_audio_policy_configuration.xml из gammaos.rc (post-fs) ещё не
-# сделан: overlay ложится на чистые /system и /vendor, переносить подмонтирования не нужно.
-# exec, а не служба: post-fs должен увидеть уже поднятый overlay.
+# сделан: overlay ложится на чистые /system и /vendor.
+#
+# on post-fs-data - default-пространство: init.rc переходит в него (enter_default_mount_ns)
+# в своём post-fs-data, а оно выполняется раньше нашего. Здесь живут adbd, zygote и все
+# приложения. Монтирование из bootstrap сюда не распространяется (у корня разные peer-группы,
+# проверено на t34), поэтому поднимаем ещё раз - до zygote-start.
+#
+# exec, а не служба: следующие действия должны увидеть уже поднятый overlay.
 # Домена su в сборке нет, поэтому shell (SELinux permissive).
 on fs
+    exec u:r:shell:s0 root root -- /system/bin/rg52-overlay-mount
+
+on post-fs-data
     exec u:r:shell:s0 root root -- /system/bin/rg52-overlay-mount

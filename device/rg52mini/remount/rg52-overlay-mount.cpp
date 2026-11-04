@@ -8,13 +8,17 @@
  * overlay выключен при сборке (kAllowOverlayfs), и после перезагрузки изменения пропадали
  * из вида до повторного `adb remount`.
  *
- * Здесь делается тот же вызов из нашей userdebug-сборки, на триггере fs: vendor уже
- * прошёл mount_all, /cache смонтирован, а bind-mount'ов поверх /system и /vendor (post-fs)
- * и почти всех служб ещё нет. Нет /cache/overlay (adb remount не делали или OTA его стёр) -
+ * Здесь делается тот же вызов из нашей userdebug-сборки, дважды: на триггере fs (начальное
+ * пространство монтирования init, ранние службы) и на post-fs-data, когда init уже перешёл
+ * в default-пространство (adbd, zygote, приложения) - см. rg52-overlay-mount.rc. Уже
+ * поднятые точки fs_mgr_overlayfs_mount_all пропускает сам.
+ * Нет в /cache/overlay ни одного каталога раздела (adb remount не делали или OTA их стёр) -
  * выходим сразу, загрузка не меняется.
  */
+#include <dirent.h>
 #include <unistd.h>
 
+#include <memory>
 #include <string>
 
 #include <android-base/file.h>
@@ -23,12 +27,25 @@
 #include <fs_mgr_overlayfs.h>
 #include <fstab/fstab.h>
 
+// Есть ли в /cache/overlay хоть один каталог раздела (system, vendor...).
+static bool HasOverlayDirs() {
+    std::unique_ptr<DIR, decltype(&closedir)> dir(opendir("/cache/overlay"), closedir);
+    if (!dir) return false;
+    while (auto* entry = readdir(dir.get())) {
+        if (entry->d_name[0] != '.' && entry->d_type == DT_DIR) return true;
+    }
+    return false;
+}
+
 int main(int /*argc*/, char** argv) {
     android::base::InitLogging(argv, android::base::KernelLogger);
 
-    if (access("/cache/overlay", F_OK) != 0) {
+    if (!HasOverlayDirs()) {
         return 0;
     }
+
+    std::string ns;
+    android::base::Readlink("/proc/self/ns/mnt", &ns);
 
     android::fs_mgr::Fstab fstab;
     if (!android::fs_mgr::ReadDefaultFstab(&fstab)) {
@@ -46,12 +63,13 @@ int main(int /*argc*/, char** argv) {
     for (const auto& line : android::base::Split(mounts, "\n")) {
         if (android::base::StartsWith(line, "overlay ")) {
             auto fields = android::base::Split(line, " ");
-            LOG(INFO) << "adb remount overlay mounted on " << fields[1];
+            LOG(INFO) << "adb remount overlay mounted on " << fields[1] << " (" << ns << ")";
             ++count;
         }
     }
     if (count == 0) {
-        LOG(WARNING) << "/cache/overlay exists but no overlay was mounted";
+        LOG(WARNING) << "/cache/overlay has partition directories but no overlay was mounted ("
+                     << ns << ")";
     } else if (!all) {
         LOG(INFO) << "some overlay candidates have no /cache/overlay directory, left as is";
     }
