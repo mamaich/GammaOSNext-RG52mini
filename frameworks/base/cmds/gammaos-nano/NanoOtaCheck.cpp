@@ -72,8 +72,13 @@ static const char* kPropAllowDowngrade  = "lineage.updater.allow_downgrading";
 static const char* kPropUpdaterUri      = "lineage.updater.uri";        // optional override template
 
 // R.string.updater_server_url (values/strings.xml). Template placeholders {device}/{variant}.
+// RG52 Mini: the same feed as our Updater (packages/apps/Updater/app/src/main/res/values/
+// strings.xml) - keep the two equal. With the GammaOS server here, nano's "Update via
+// Internet" asked ota.gammaos.sh, which has no rg52mini builds, and never saw our releases,
+// while Updater in Android did. lineage.updater.uri is no way out: the URL is longer than
+// the 91 characters a non-ro property can hold.
 static const char* kDefaultServerUrl =
-        "https://ota.gammaos.sh/api/v1/{device}/{variant}";
+        "https://raw.githubusercontent.com/mamaich/GammaOSNext-RG52mini/develop/ota/{device}-{variant}.json";
 
 static const char* kOtaDir      = "/data/gammaos_ota";
 static const char* kPackageDir  = "/data/gammaos_ota/package";
