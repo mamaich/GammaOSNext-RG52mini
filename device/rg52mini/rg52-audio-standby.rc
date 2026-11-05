@@ -28,9 +28,10 @@ service audio_standby /system/bin/true
 # Задержка в две секунды - как у vendor: короткое засыпание и пробуждение
 # (так, например, rg52-hdmi-unplug возвращает встроенный экран) audioserver не
 # перезапускает - пробуждение убивает ожидающую службу раньше.
-# sys.rg52.panel_kick.busy=1 - экран гасит rg52-panel-kick (на две секунды, ревизия A),
-# звук не трогаем.
-service rg52_audio_sleep /system/bin/sh -c "sleep 2; getprop sys.screen.state | grep -qx off && ! getprop sys.rg52.panel_kick.busy | grep -qx 1 && stop audioserver"
+# sys.rg52.panel_kick.busy=1 - экран гасит rg52-panel-kick (ревизия A), звук не
+# трогаем. Флаг проверяется первым: пока читается состояние экрана, пинок мог бы
+# успеть включить экран и снять флаг.
+service rg52_audio_sleep /system/bin/sh -c "sleep 2; ! getprop sys.rg52.panel_kick.busy | grep -qx 1 && getprop sys.screen.state | grep -qx off && stop audioserver"
     user root
     group root shell
     disabled

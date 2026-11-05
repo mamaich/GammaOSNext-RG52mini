@@ -1,11 +1,17 @@
 # Повторная инициализация встроенного экрана в конце загрузки на платах
-# ревизии A, см. rg52-panel-kick.sh. Один раз за загрузку; сам цикл - после того,
-# как отработают одноразовые службы конца загрузки.
+# ревизии A, см. rg52-panel-kick.sh: один раз за загрузку ядра, не раньше 3 с
+# после sys.boot_completed и не раньше persist.rg52.panel_kick.at (по умолчанию
+# 36) секунд по /proc/uptime.
 
 on property:sys.boot_completed=1
     start rg52_panel_kick
 
-# root: запись в /sys/power/wake_lock.
+# Скрипт погиб посреди цикла (stop, kill) - снять флаг, иначе rg52_audio_sleep
+# до перезагрузки не останавливал бы audioserver во сне.
+on property:init.svc.rg52_panel_kick=stopped && property:sys.rg52.panel_kick.busy=1
+    setprop sys.rg52.panel_kick.busy 0
+
+# root: запись в /sys/power/wake_lock и /dev/kmsg.
 service rg52_panel_kick /system/bin/rg52-panel-kick.sh
     user root
     group root shell wakelock
