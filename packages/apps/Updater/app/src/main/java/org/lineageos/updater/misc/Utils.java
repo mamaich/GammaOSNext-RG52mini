@@ -322,22 +322,32 @@ public class Utils {
      * «Delete updates when installed» на пути GammaOtaInstaller до v1.17 не работал:
      * установка не записывала PREF_INSTALL_PACKAGE_PATH, и cleanupDownloadsDir не знал,
      * какой архив удалить. При загрузке удаляем скачанные архивы выпусков старее
-     * установленной системы, если удаление включено (архив своей же версии оставляем:
-     * его могли скачать для переустановки).
+     * установленной системы, если удаление включено. Архив своей же версии удаляем только
+     * в первую загрузку этой сборки: он скачан до её установки, значит им и обновились
+     * (так при переходе с v1.16, чей Updater путь архива не записывал). В следующие
+     * загрузки такой архив оставляем: его могли скачать для переустановки.
      */
     public static void cleanupInstalledDownloads(Context context) {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
-        if (!preferences.getBoolean(Constants.PREF_AUTO_DELETE_UPDATES,
-                Constants.AUTO_DELETE_UPDATES_DEFAULT)) {
-            return;
-        }
         long buildTimestamp = SystemProperties.getLong(Constants.PROP_BUILD_DATE, 0);
         if (buildTimestamp <= 0) {
             return;
         }
+        // Remembered even with deletion off, so turning it on later does not take an archive
+        // downloaded for reinstalling as the installed one.
+        final String PREF_CLEANUP_BUILD = "cleanup_installed_build";
+        boolean firstBootOfBuild = preferences.getLong(PREF_CLEANUP_BUILD, 0) != buildTimestamp;
+        if (firstBootOfBuild) {
+            preferences.edit().putLong(PREF_CLEANUP_BUILD, buildTimestamp).apply();
+        }
+        if (!preferences.getBoolean(Constants.PREF_AUTO_DELETE_UPDATES,
+                Constants.AUTO_DELETE_UPDATES_DEFAULT)) {
+            return;
+        }
         UpdatesDbHelper dbHelper = new UpdatesDbHelper(context);
         for (Update update : dbHelper.getUpdates()) {
-            if (update.getTimestamp() >= buildTimestamp) {
+            long timestamp = update.getTimestamp();
+            if (timestamp > buildTimestamp || (timestamp == buildTimestamp && !firstBootOfBuild)) {
                 continue;
             }
             File file = update.getFile();
