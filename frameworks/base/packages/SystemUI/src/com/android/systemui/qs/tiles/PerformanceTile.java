@@ -56,6 +56,9 @@ public class PerformanceTile extends QSTileImpl<BooleanState> {
     private static final String MODE_STOCK        = "stock";
     private static final String MODE_POWERSAVE    = "powersave";
     private static final String MODE_MAX          = "max";
+    // Modes the tile does not cycle through, see resyncFromProp().
+    private static final String MODE_OVERCLOCK    = "overclock";
+    private static final String MODE_3D_GAME      = "3d_game";
 
     private static final int STATE_STOCK         = 0;
     private static final int STATE_POWERSAVE     = 1;
@@ -81,12 +84,8 @@ public class PerformanceTile extends QSTileImpl<BooleanState> {
               statusBarStateController, activityStarter, qsLogger);
 
         // 1) Read the persisted prop (default to max if missing), map to our state enum
-        currentState = mapPropToState(
-                SystemProperties.get(PROP_PERF_MODE, MODE_MAX)
-        );
-
         // 2) Re-apply it (in case it's been changed externally between boots)
-        applyState(currentState);
+        resyncFromProp();
 
         // 3) Listen for screen-off and boot so we can re-sync
         mReceiver.init();
@@ -194,6 +193,20 @@ public class PerformanceTile extends QSTileImpl<BooleanState> {
     }
 
     /**
+     * Re-read the prop and re-apply it. Overclock (chosen in the power menu, nano
+     * or the PS3 theme) and the retired 3d_game are applied elsewhere and are only
+     * shown as max here: mapping them to max and writing that back reset overclock
+     * to max on every screen-off. Any other unknown value is still normalised.
+     */
+    private void resyncFromProp() {
+        String mode = SystemProperties.get(PROP_PERF_MODE, MODE_MAX);
+        currentState = mapPropToState(mode);
+        if (!MODE_OVERCLOCK.equals(mode) && !MODE_3D_GAME.equals(mode)) {
+            applyState(currentState);
+        }
+    }
+
+    /**
      * Write the current state into the system property.
      */
     private void applyState(int state) {
@@ -222,12 +235,9 @@ public class PerformanceTile extends QSTileImpl<BooleanState> {
             String action = intent.getAction();
             if (Intent.ACTION_SCREEN_OFF.equals(action)
              || Intent.ACTION_BOOT_COMPLETED.equals(action)) {
-                // Re-read the prop in case it was changed elsewhere
-                currentState = mapPropToState(
-                        SystemProperties.get(PROP_PERF_MODE, MODE_MAX)
-                );
-                // Re-apply it just to be safe, and update UI
-                applyState(currentState);
+                // Re-read the prop in case it was changed elsewhere,
+                // re-apply it just to be safe, and update UI
+                resyncFromProp();
                 refreshState();
             }
         }

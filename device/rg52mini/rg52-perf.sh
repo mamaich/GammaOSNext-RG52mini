@@ -158,6 +158,14 @@ if [ "$BOOTING" = 1 ] && [ "$MODE" = overclock ]; then
     setprop persist.gammaos.performance_mode max
     log -t rg52-perf "boot: overclock is not kept across reboots, mode max"
 fi
+# Сохранённый overclock init применяет раньше rg52_perf_boot: триггер по
+# свойству срабатывает и при загрузке persist-свойств (около 6 с от старта
+# ядра), и тогда сбой разгона повторялся бы на каждой загрузке. До конца
+# загрузки вместо него max; свойство не трогаем, его перепишет rg52_perf_boot.
+if [ "$MODE" = overclock ] && [ "$(getprop sys.boot_completed)" != 1 ]; then
+    MODE=max
+    log -t rg52-perf "overclock is not applied before boot completes, mode max"
+fi
 # То же для режима, запаркованного drastic-nano на время игры с собственным режимом
 # (persist.gammaos.drastic.perf_restore): после перезагрузки посреди такой игры оболочка
 # вернула бы запаркованный overclock.
