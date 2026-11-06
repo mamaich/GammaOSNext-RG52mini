@@ -36,7 +36,7 @@ rk915_loaded() {
 }
 
 if have_wlan; then
-    log -t wifi_pick "интерфейс уже есть, AIC8800 не нужен"
+    log -t wifi_pick "wlan interface already present, AIC8800 not needed"
     exit 0
 fi
 
@@ -46,15 +46,15 @@ if rk915_loaded; then
     i=0
     while [ $i -lt 20 ]; do
         if have_wlan; then
-            log -t wifi_pick "RK915 поднял интерфейс, AIC8800 не нужен"
+            log -t wifi_pick "RK915 brought up the interface, AIC8800 not needed"
             exit 0
         fi
         i=$((i + 1))
         sleep 0.2
     done
-    log -t wifi_pick "RK915 в памяти, но интерфейса нет, гружу AIC8800"
+    log -t wifi_pick "RK915 loaded but no interface, loading AIC8800"
 else
-    log -t wifi_pick "RK915 не загрузился, ждать нечего, гружу AIC8800 сразу"
+    log -t wifi_pick "RK915 not loaded, loading AIC8800 now"
 fi
 
 insmod /vendor/lib/modules/aic8800_bsp.ko

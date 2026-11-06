@@ -39,8 +39,18 @@
 # sys.boot_completed выставляется снова, а панель у u-boot тогда не
 # перехватывается.
 #
-# Ревизию A узнаём по дереву устройства: наш u-boot, не найдя HUSB311 на
-# i2c@ffa10000 по адресу 0x4e, ставит его узлу status = "disabled".
+# Ревизию A узнаём по любому из двух признаков:
+# - дерево устройства: наш u-boot, не найдя HUSB311 на i2c@ffa10000 по адресу
+#   0x4e, ставит его узлу status = "disabled";
+# - Wi-Fi: модуль rk915 есть в /proc/modules. На ревизии B его инициализация
+#   проваливается и модуля в списке нет (см. wifi_pick.sh), а к моменту цикла
+#   модули давно загружены. Этот признак от u-boot не зависит: с чужим
+#   загрузчиком (без проверки HUSB311) дерево у ядра как на ревизии B, и по
+#   одному первому признаку пинка на плате A не было вовсе (ноябрь 2026).
+#
+# Итог - в sys.rg52.panel_kick.result (getprop): logcat и dmesg кольцевые, и
+# через несколько минут работы строк этого скрипта в них уже нет, а свойство
+# живёт до перезагрузки.
 #
 # persist.rg52.panel_kick: 1 - делать на любой ревизии (проверка), 0 - не
 # делать никогда, пусто - только на ревизии A.
@@ -52,6 +62,7 @@
 #   setprop sys.rg52.panel_kick.done 0; setprop persist.rg52.panel_kick.at 0
 #   start rg52_panel_kick
 # Цикл - через 3 с; потом setprop persist.rg52.panel_kick.at ''.
+# Итог: getprop sys.rg52.panel_kick.result.
 
 TAG=rg52-panel-kick
 NODE=/sys/firmware/devicetree/base/i2c@ffa10000/husb311@4e/status
@@ -67,6 +78,18 @@ say() {
     echo "$TAG: $*" 2>/dev/null > /dev/kmsg
 }
 
+# Итог в свойство (значение не длиннее 91 символа).
+result() {
+    setprop sys.rg52.panel_kick.result "$*"
+}
+
+# Пропуск цикла: в журналы и в итог.
+skip() {
+    say "$1, skipping"
+    result "skipped at uptime $(sec $now) s: $1"
+    exit 0
+}
+
 # Сотые доли секунды из /proc/uptime (там всегда два знака после точки) и
 # обратно - встроенными средствами, без запуска процессов.
 uptime_cs() {
@@ -78,12 +101,20 @@ sec() {
 }
 
 mode=$(getprop persist.rg52.panel_kick)
-[ "$mode" = 0 ] && exit 0
+if [ "$mode" = 0 ]; then
+    result "off by persist.rg52.panel_kick=0"
+    exit 0
+fi
+husb=$(tr -d '\0' 2>/dev/null < $NODE)
 if [ "$mode" = 1 ]; then
     board="forced by persist.rg52.panel_kick=1"
-else
-    [ "$(tr -d '\0' 2>/dev/null < $NODE)" = disabled ] || exit 0
+elif [ "$husb" = disabled ]; then
     board="board revision A (no HUSB311)"
+elif grep -q '^rk915 ' /proc/modules 2>/dev/null; then
+    board="board revision A (RK915 Wi-Fi)"
+else
+    result "not revision A: husb311 ${husb:-missing}, no rk915 module"
+    exit 0
 fi
 
 [ "$(getprop sys.rg52.panel_kick.done)" = 1 ] && exit 0
@@ -96,6 +127,7 @@ case "$at" in ''|*[!0-9]*) at=$AT_S ;; esac
 target=$((at * 100))
 [ $target -lt $((boot + AFTER_BOOT_S * 100)) ] && target=$((boot + AFTER_BOOT_S * 100))
 say "boot completed at uptime $(sec $boot) s, kick planned at uptime $(sec $target) s"
+result "waiting until uptime $(sec $target) s, $board"
 
 sleep "$(sec $((target - boot)))"
 
@@ -103,15 +135,13 @@ sleep "$(sec $((target - boot)))"
 # консоль за время ожидания спала.
 uptime_cs
 if [ $now -gt $((target + 1000)) ]; then
-    say "at uptime $(sec $now) s: the device slept while waiting, skipping"
-    exit 0
+    skip "the device slept while waiting"
 fi
 
 # С подключённым HDMI встроенный экран не показывается, переинициализировать
 # нечего.
 if grep -qx "HDMI=1" /sys/class/extcon/extcon*/state 2>/dev/null; then
-    say "HDMI connected, skipping"
-    exit 0
+    skip "HDMI connected"
 fi
 
 # Устройство спит - значит, его усыпили; будить без спроса нельзя. Экран гас
@@ -122,7 +152,7 @@ fi
 power=$(dumpsys power 2>/dev/null)
 case "$power" in
     *mWakefulness=Awake*) ;;
-    *) say "device is not awake, skipping"; exit 0 ;;
+    *) skip "device is not awake" ;;
 esac
 slept=0
 case "$power" in
@@ -132,8 +162,7 @@ case "$power" in
         ;;
 esac
 if [ $((slept / 10)) -ge $boot ]; then
-    say "screen was turned off at uptime $(sec $((slept / 10))) s, after boot completed, skipping"
-    exit 0
+    skip "screen was off at uptime $(sec $((slept / 10))) s, after boot completed"
 fi
 
 wlan=absent
@@ -154,3 +183,4 @@ setprop sys.rg52.panel_kick.busy 0
 echo $LOCK > /sys/power/wake_unlock
 uptime_cs
 say "done at uptime $(sec $now) s"
+result "done at uptime $(sec $now) s, $board"
