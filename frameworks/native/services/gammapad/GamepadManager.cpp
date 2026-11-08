@@ -1177,6 +1177,14 @@ void GamepadManager::handleInputEvent(int fd) {
     }
 }
 
+// Write the events the transformer queued outside the event loop (a config reload releasing combo targets).
+void GamepadManager::flushTransformerExtras() {
+    for (const auto& extra : mTransformer->getExtraEvents()) {
+        mVirtualGamepad->writeEvent(extra);
+    }
+    mTransformer->clearExtraEvents();
+}
+
 void GamepadManager::drainMouseFlushEvents() {
     if (!mMouseMode) return;
     const auto& flushEvents = mMouseMode->getFlushEvents();
@@ -1328,9 +1336,12 @@ void GamepadManager::checkConfigChange() {
                 }
             }
             mForceFeedback->connectBridge();
+            // loadConfig() may have queued combo-target releases; write them now instead of at the next input event.
+            flushTransformerExtras();
         } else {
             LOG(INFO) << "Lightweight config reload (calibration/transform only)";
             mTransformer->loadConfig();
+            flushTransformerExtras();
             if (mMouseMode) mMouseMode->loadConfig();
             if (mScreenMapMode) mScreenMapMode->loadConfig();
             // сила и путь вибрации (Vibration intensity) - тоже без
@@ -1362,6 +1373,7 @@ void GamepadManager::checkForegroundApp() {
     // profile for the new foreground package on top of the global config.
     loadPerAppProfiles();
     applyPerAppProfile(fgPkg);
+    flushTransformerExtras();
 
     // A per-app key-emit action target may need advertising on the keyboard.
     refreshVirtualKeyboard();
