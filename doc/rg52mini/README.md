@@ -60,6 +60,7 @@ Flycast, DraStic, mupen64plus, Daijishō, с v1.13 — эмулятор 3DS azah
 
 | Выпуск | Дата | Коротко |
 |---|---|---|
+| [v1.18](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.18) — [подробности](release-v1.18.md) | 08.11.2026 | экран сам загорается на платах первой ревизии с общей картой dArkOS; толчки консоли не сбрасывают гашение экрана; игры видят Vulkan 1.3; после `adb remount` adb shell видит карту |
 | [v1.17](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.17) — [подробности](release-v1.17.md) | 06.11.2026 | игра вдвоём с внешними геймпадами; работающий `adb remount`; обновление через Updater не оставляет на /data почти 4 ГБ; картинка после загрузки на платах первой ревизии с быстрыми картами |
 | [v1.16](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.16) — [подробности](release-v1.16.md) | 01.11.2026 | консоль работает как проводной геймпад Xbox 360 для компьютера; RetroArch 1.22.2; связь с компьютером по USB не рвётся от кратковременного провала питания |
 | [v1.15](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.15) — [подробности](release-v1.15.md) | 31.10.2026 | USB-донглы Bluetooth на Realtek для плат ревизии A; эмулятор 3DS занимает на 384 МБ меньше памяти; передача файлов (MTP) в оболочке nano больше не обрывается |
