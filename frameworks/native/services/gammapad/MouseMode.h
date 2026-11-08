@@ -63,6 +63,9 @@ public:
     // sys.gammaos.gamepad.mouse_active). Returns true if mode was toggled.
     bool checkExternalToggle();
 
+    // A DS or 3DS nano session blocks the combo (and switches an active mode off) while it runs.
+    void setSessionBlock(bool block);
+
     // Set the toast callback (called when mouse mode toggles)
     void setToastCallback(ToastCallback cb) { mToastCallback = std::move(cb); }
 
@@ -91,6 +94,7 @@ private:
     bool readCursorPosition();
 
     bool mActive;
+    bool mSessionBlock = false;
 
     // Combo detection
     // Аккорд двух стиков, механика заимствована из rgp2pad: срабатывает по

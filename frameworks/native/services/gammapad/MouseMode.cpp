@@ -480,6 +480,21 @@ void MouseMode::showToast(const std::string& message) {
     }
 }
 
+// A DS or 3DS nano session (drastic-nano, azahar-nano) reads the pad from evdev and shows no pointer: the chord would
+// silently eat the stick clicks there. Off while it runs, and an active mode is switched off.
+void MouseMode::setSessionBlock(bool block) {
+    if (block == mSessionBlock) return;
+    mSessionBlock = block;
+    // Аккорд в полёте забываем: в сеансе кнопки уходят в игру как есть.
+    for (int i = 0; i < 2; ++i) {
+        mChordDown[i] = mChordPending[i] = mChordFwd[i] = mChordActed[i] = false;
+    }
+    mChordUsed = false;
+    if (block && mActive) setActive(false);
+    if (!mActive) stopTimer();
+    LOG(INFO) << (block ? "Mouse mode combo off during a nano game session" : "Mouse mode combo available again");
+}
+
 bool MouseMode::checkChordTimers() {
     const auto now = std::chrono::steady_clock::now();
     bool any = false;
@@ -647,6 +662,12 @@ bool MouseMode::handleChordButton(int idx, bool pressed) {
 }
 
 bool MouseMode::checkExternalToggle() {
+    if (mSessionBlock) {
+        if (android::base::GetIntProperty("sys.gammaos.gamepad.mouse_active", 0) != 0) {
+            android::base::SetProperty("sys.gammaos.gamepad.mouse_active", "0");
+        }
+        return false;
+    }
     bool externalActive = android::base::GetIntProperty(
         "sys.gammaos.gamepad.mouse_active", 0) != 0;
     if (externalActive != mActive) {
@@ -658,6 +679,9 @@ bool MouseMode::checkExternalToggle() {
 
 bool MouseMode::processEvent(const struct input_event& ev) {
     if (rg52XpadActive()) return false;
+
+    // В сеансе DS/3DS режим выключен, аккорд не разбираем.
+    if (mSessionBlock) return false;
 
     // Кнопки аккорда разбираются отдельно и в обоих режимах.
     if (ev.type == EV_KEY && ev.value != 2 /* не автоповтор */) {
