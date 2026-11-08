@@ -847,9 +847,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
     private boolean mRetroarchSelectDown = false;
     private String mRetroarchSelectDevicePath = null;
 
-    // Track last known foreground app to detect transitions into/out of RetroArch.
-    private String mLastFgApp = null;
-
     // The device id from which the BACK key event came.
     private int mBackDeviceId = -1;
     // The device id from which the non-BACK (combo) key was received (if different from BACK).
@@ -2844,15 +2841,13 @@ public class PhoneWindowManager implements WindowManagerPolicy {
             }
             mRetroarchSelectDown = false;
             mRetroarchSelectDevicePath = null;
-            mLastFgApp = getForegroundAppPackageName();
-           return;
         }
-        // (nano-foreground stale-combo reset handled at the top of this method.) The block below
-        // keeps the synthesized-SELECT bookkeeping accurate for the in-app override path. We cannot
-        // rely on a foreground-app *change* to clear a stuck modifier: getRunningTasks() returns the
-        // most-recent task, so after the app exits it still reports that package (it lingers in
-        // recents) - which is why the reset above keys off nano being foreground instead.
-        mLastFgApp = getForegroundAppPackageName();
+        // No foreground-app lookup here: it ran on every key edge (WM and ATM global locks, getRunningTasks) to fill a
+        // field nothing read. We cannot rely on a foreground-app *change* to clear a stuck modifier anyway:
+        // getRunningTasks() returns the most-recent task, so after the app exits it still reports that package (it
+        // lingers in recents) - which is why the stale-combo reset keys off nano being foreground instead.
+        // Follow-up, not changed here: the focused-window lookup in getForegroundAppPackageName() never matches, so
+        // all its callers fall back to getRunningTasks().
     }
 
     /**
