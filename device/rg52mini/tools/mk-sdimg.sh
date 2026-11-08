@@ -377,6 +377,22 @@ else
     [ -f "$PROPS" ] || echo "   !! нет $PROPS — новый драйвер останется без конфигураций EGL"
 fi
 
+# --- версия Vulkan, которую объявляет система ---
+# В vendor от Android 13 старший признак android.hardware.vulkan.version - 1.1
+# (4198400), под прежний драйвер. g25p0 отдаёт Vulkan 1.3.283 (conformance
+# 1.3.2.8), но приложения, которые сверяют версию по PackageManager, а не по
+# самому драйверу, видят 1.1 и от драйвера отказываются. Так делает Takedawn:
+# «The game needs Vulkan 1.3» при драйвере 1.3. Признак 1.3 (4206592) кладём
+# рядом: из нескольких объявлений одного признака система берёт старшую версию.
+# Только вместе с новым драйвером - со старым это была бы неправда.
+VK13=$TREE/frameworks/native/data/etc/android.hardware.vulkan.version-1_3.xml
+if [ -f "$MALIDIR/lib64/libGLES_mali.so" ] && [ -f "$VK13" ]; then
+    sudo cp -f "$VK13" /mnt/imgven/etc/permissions/android.hardware.vulkan.version-1_3.xml
+    sudo chmod 644 /mnt/imgven/etc/permissions/android.hardware.vulkan.version-1_3.xml
+    sudo chcon u:object_r:vendor_configs_file:s0         /mnt/imgven/etc/permissions/android.hardware.vulkan.version-1_3.xml 2>/dev/null || true
+    echo "   Vulkan: признак android.hardware.vulkan.version 1.3 в /vendor/etc/permissions"
+fi
+
 # --- выбор драйвера Wi-Fi из своей сборки ---
 # Скрипт приехал в vendor от Android 13 и ждал появления интерфейса вслепую -
 # до четырёх секунд. На ревизии B, то есть у большинства, эти секунды чистая

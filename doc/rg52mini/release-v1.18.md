@@ -43,3 +43,10 @@ GammaOS Next (LineageOS 21 / Android 14) для карманной консол�
   и возврат в покой идут без задержки. Если фильтр мешает, его выключает
   `echo 0 > /sys/module/rk3562_joystick/parameters/rest_glitch_polls` (до
   перезагрузки, от root).
+- **Система объявляет ту версию Vulkan, что есть у драйвера: 1.3.** С v1.6 в
+  консоли стоит новый драйвер Mali с Vulkan 1.3, а признак
+  `android.hardware.vulkan.version` остался от прежнего и говорил 1.1. Игры,
+  которые узнают версию у системы, а не у самого драйвера, считали, что Vulkan 1.3
+  нет, и отказывались запускаться. Так было, например, с Takedawn («The game needs
+  Vulkan 1.3»). Проверить: `adb shell pm list features | grep vulkan.version`
+  покажет `4206592`.
