@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RG52 Mini: пункт «Блокировка экрана» не показывается. Экрана ввода пароля
+     у нас нет, а поставленный пароль после перезагрузки давал чёрный экран;
+     подробности и основная защита - device/rg52mini/rg52-features.xml
+     (снят признак android.software.secure_lock_screen). -->
+<resources>
+    <bool name="config_show_unlock_set_or_change">false</bool>
+</resources>

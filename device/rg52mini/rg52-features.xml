@@ -21,8 +21,23 @@
      пустое или false (умолчание) открывает обычный. Переключатель в
      настройках («Show phone apps») пишет то же свойство наоборот: имя
      свойства описывает поведение системы, имя пункта - то, что видит
-     человек. Читается при старте system_server, поэтому нужна перезагрузка. -->
+     человек. Читается при старте system_server, поэтому нужна перезагрузка.
+
+     android.software.secure_lock_screen снимается всегда. Его объявляют и
+     system (android.software.secure_lock_screen.xml), и планшетный
+     tablet_core_hardware.xml из vendor, но экрана ввода пароля у нас нет:
+     TvSystemUI не показывает keyguard (persist.sys.disable_lockscreen=1 из
+     gsi_tv_base.mk). Пароль, PIN или графический ключ, поставленные в Settings,
+     после перезагрузки оставляли хранилище с шифрованием по учётным данным
+     запертым, а ввести их было негде: чёрный экран, помогала только
+     перепрошивка карты. Без признака LockSettingsService отказывает в
+     установке любых учётных данных, кроме «нет», откуда бы ни пришла просьба
+     (Settings, TvSettings, администратор устройства, adb locksettings), а
+     выбор блокировки в Settings предлагает только «нет» и «провести». Сам
+     пункт блокировки в Settings прячет оверлей config_show_unlock_set_or_change
+     (overlay/packages/apps/Settings). -->
 <permissions>
     <unavailable-feature-conditional name="android.software.leanback_only"
                                      prop="persist.rg52.tv_only" />
+    <unavailable-feature name="android.software.secure_lock_screen" />
 </permissions>
