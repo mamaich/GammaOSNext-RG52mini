@@ -64,7 +64,17 @@ public class InattentiveSleepWarningController {
 
     private void showInternal() {
         try {
-            getStatusBar().showInattentiveSleepWarning();
+            // RG52 Mini: в урезанной загрузке оболочки nano (sys.gammaos.minimal_boot) нет ни
+            // SystemUI, ни службы строки состояния - показать окно некому. Без этой проверки
+            // здесь падал system_server (NullPointerException): вместо сна Android
+            // перезапускался и закрывал игру. Признак показа (mIsShown) оставляем: по нему
+            // экран приглушается (PowerGroup), а сон наступает как обычно.
+            final IStatusBarService statusBar = getStatusBar();
+            if (statusBar == null) {
+                Log.w(TAG, "No status bar service: the warning window is not shown");
+                return;
+            }
+            statusBar.showInattentiveSleepWarning();
         } catch (RemoteException e) {
             Log.e(TAG, "Failed to show inattentive sleep warning", e);
             mIsShown = false;
@@ -86,7 +96,12 @@ public class InattentiveSleepWarningController {
 
     private void dismissInternal(boolean animated) {
         try {
-            getStatusBar().dismissInattentiveSleepWarning(animated);
+            // RG52 Mini: см. showInternal - службы может не быть.
+            final IStatusBarService statusBar = getStatusBar();
+            if (statusBar == null) {
+                return;
+            }
+            statusBar.dismissInattentiveSleepWarning(animated);
         } catch (RemoteException e) {
             Log.e(TAG, "Failed to dismiss inattentive sleep warning", e);
         }
