@@ -98,4 +98,17 @@
          PowerManagerService (isNanoInputHiddenFromFramework).
          Проверка: dumpsys power | grep -i attentive -->
     <integer name="config_attentiveTimeout">7200000</integer>
+
+    <!-- Приглушение экрана не уводит подсветку в ноль.
+
+         Перед гашением (и на время предупреждения перед сном без нажатий, см. выше)
+         Android приглушает экран до min(яркость - этот вычет, 0,05), но не ниже нуля
+         (DisplayDimModifier). Со штатным вычетом 0,04 при яркости на нижних делениях
+         ползунка выходил ноль - подсветка 1 из 255, экран чёрный. С нулевым вычетом
+         приглушённый уровень - min(яркость, 0,05): 14 из 255 при обычной яркости (картинка
+         видна, проверено камерой на 13 и на 9), а если пользователь сам поставил ещё
+         ниже - остаётся как поставил.
+         Проверка: dumpsys display | grep MinimumDimAmount; уровень во время приглушения -
+         cat /sys/class/backlight/backlight/brightness -->
+    <item name="config_screenBrightnessMinimumDimAmountFloat" format="float" type="dimen">0.0</item>
 </resources>

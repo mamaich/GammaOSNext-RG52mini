@@ -421,6 +421,17 @@ public class PowerGroup {
     }
 
     @VisibleForTesting
+    // RG52 Mini: идёт предупреждение перед сном без нажатий (attentive timeout). Окно
+    // предупреждения SystemUI видно не везде: эмуляторы 3DS и DS рисуют своим слоем
+    // поверх всех окон Android, а в оболочке nano окон Android не видно вовсе. Поэтому на
+    // эти 30 секунд экран ещё и приглушается (политика DIM, как перед обычным гашением) -
+    // подсветка от окон не зависит. Ставит PowerManagerService перед пересчётом политики.
+    private boolean mInattentiveWarningShown;
+
+    void setInattentiveWarningShownLocked(boolean shown) {
+        mInattentiveWarningShown = shown;
+    }
+
     int getDesiredScreenPolicyLocked(boolean quiescent, boolean dozeAfterScreenOff,
             boolean bootCompleted, boolean screenBrightnessBoostInProgress,
             boolean brightWhenDozing) {
@@ -441,6 +452,12 @@ public class PowerGroup {
             // Fall through and preserve the current screen policy if not configured to
             // bright when dozing or doze after screen off.  This causes the screen off transition
             // to be skipped.
+        }
+
+        // RG52 Mini: предупреждение перед сном без нажатий - экран приглушён, даже если
+        // приложение держит его включённым.
+        if (mInattentiveWarningShown && bootCompleted) {
+            return DisplayPowerRequest.POLICY_DIM;
         }
 
         if ((wakeLockSummary & WAKE_LOCK_SCREEN_BRIGHT) != 0

@@ -4191,9 +4191,12 @@ public final class PowerManagerService extends SystemService
     @GuardedBy("mLock")
     private boolean updatePowerGroupsLocked(int dirty) {
         final boolean oldPowerGroupsReady = areAllPowerGroupsReadyLocked();
+        // RG52: DIRTY_ATTENTIVE - появление предупреждения перед сном без нажатий меняет
+        // политику экрана (PowerGroup.setInattentiveWarningShownLocked), а таймер внимания
+        // других признаков не ставит.
         if ((dirty & (DIRTY_WAKE_LOCKS | DIRTY_USER_ACTIVITY | DIRTY_WAKEFULNESS
                 | DIRTY_ACTUAL_DISPLAY_POWER_STATE_UPDATED | DIRTY_BOOT_COMPLETED
-                | DIRTY_SETTINGS | DIRTY_SCREEN_BRIGHTNESS_BOOST
+                | DIRTY_SETTINGS | DIRTY_SCREEN_BRIGHTNESS_BOOST | DIRTY_ATTENTIVE
                 | DIRTY_QUIESCENT | DIRTY_DISPLAY_GROUP_WAKEFULNESS)) != 0) {
             if ((dirty & DIRTY_QUIESCENT) != 0) {
                 if (areAllPowerGroupsReadyLocked()) {
@@ -4223,6 +4226,10 @@ public final class PowerManagerService extends SystemService
                 } else {
                     screenBrightnessOverride = PowerManager.BRIGHTNESS_INVALID_FLOAT;
                 }
+                // RG52: на время предупреждения перед сном без нажатий экран приглушается.
+                powerGroup.setInattentiveWarningShownLocked(
+                        groupId == Display.DEFAULT_DISPLAY_GROUP
+                                && mInattentiveSleepWarningOverlayController.isShown());
                 boolean ready = powerGroup.updateLocked(screenBrightnessOverride,
                         shouldUseProximitySensorLocked(), shouldBoostScreenBrightness(),
                         mDozeScreenStateOverrideFromDreamManager,
