@@ -272,6 +272,14 @@
   `hwc_get_gemhandle_from_fd fail`, `could not create drm fb`. Отладка:
   `vendor.hwc.log` (маска, 32 — подробно, вернуть 0),
   `vendor.hwc.compose_policy` (1 — обычный режим, 0 — всё через GPU).
+- libmali (vendor Android 13) на запрос конфигурации EGL «RGB888, только
+  pbuffer» первой отдаёт RGBA 10-10-10-2, а она не умеет окно. Программы,
+  которые выбирают так конфигурацию и потом создают на ней поверхность окна
+  (EKA2L1), получали `EGL_BAD_MATCH` (12297) и чёрный экран. Поэтому наш libEGL
+  (`eglChooseConfigImpl` в `frameworks/native/opengl/libs/EGL`) на запрос без
+  `EGL_WINDOW_BIT` отдаёт конфигурации с окном первыми. Это не откатывать.
+  Проверять приложение с новым libEGL: подложить `libEGL.so` (lib64 и lib) через
+  `mount --bind` и перезапустить zygote, иначе приложения возьмут старую копию.
 
 ## 9. Где читать дальше
 
