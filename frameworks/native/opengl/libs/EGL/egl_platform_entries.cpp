@@ -31,12 +31,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <algorithm>
 #include <condition_variable>
 #include <deque>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <vector>
 
 #include "../egl_impl.h"
 #include "EGL/egl.h"
@@ -324,6 +326,47 @@ EGLBoolean eglGetConfigsImpl(EGLDisplay dpy, EGLConfig* configs, EGLint config_s
     return res;
 }
 
+// RG52: приложение, запросившее EGL_SURFACE_TYPE без EGL_WINDOW_BIT (например, только pbuffer), получает
+// конфигурации с поддержкой окна первыми; порядок драйвера внутри каждой группы сохраняется.
+// Зачем: libmali (vendor A13, RK3562) на запрос «RGB888, только pbuffer» первой отдаёт RGBA 10-10-10-2 без
+// поддержки окна (правило сортировки EGL: больше бит цвета — раньше). Программы, которые потом создают на той же
+// конфигурации поверхность окна (EKA2L1: egl_fake_attribs_es в context_egl.cpp), получали EGL_BAD_MATCH и
+// чёрный экран. Конфигурация с окном годится и для pbuffer, поэтому запрос по-прежнему выполнен.
+static bool requestsSurfaceWithoutWindow(const EGLint* attrib_list) {
+    if (!attrib_list) return false;
+    for (const EGLint* a = attrib_list; a[0] != EGL_NONE; a += 2) {
+        if (a[0] == EGL_SURFACE_TYPE) {
+            return a[1] != EGL_DONT_CARE && !(a[1] & EGL_WINDOW_BIT);
+        }
+    }
+    return false; // по умолчанию EGL_SURFACE_TYPE = EGL_WINDOW_BIT
+}
+
+static EGLBoolean chooseConfigWindowFirst(egl_connection_t* cnx, EGLDisplay dpy,
+                                          const EGLint* attrib_list, EGLConfig* configs,
+                                          EGLint config_size, EGLint* num_config) {
+    EGLint total = 0;
+    if (cnx->egl.eglChooseConfig(dpy, attrib_list, nullptr, 0, &total) != EGL_TRUE) {
+        return EGL_FALSE;
+    }
+    std::vector<EGLConfig> all(std::max<EGLint>(total, 0));
+    EGLint got = 0;
+    if (total > 0 &&
+        cnx->egl.eglChooseConfig(dpy, attrib_list, all.data(), total, &got) != EGL_TRUE) {
+        return EGL_FALSE;
+    }
+    all.resize(std::max<EGLint>(got, 0));
+    std::stable_partition(all.begin(), all.end(), [cnx, dpy](EGLConfig config) {
+        EGLint type = 0;
+        return cnx->egl.eglGetConfigAttrib(dpy, config, EGL_SURFACE_TYPE, &type) == EGL_TRUE &&
+                (type & EGL_WINDOW_BIT);
+    });
+    const EGLint n = std::min<EGLint>(std::max<EGLint>(config_size, 0), all.size());
+    std::copy_n(all.begin(), n, configs);
+    *num_config = n;
+    return EGL_TRUE;
+}
+
 EGLBoolean eglChooseConfigImpl(EGLDisplay dpy, const EGLint* attrib_list, EGLConfig* configs,
                                EGLint config_size, EGLint* num_config) {
     const egl_display_t* dp = validate_display(dpy);
@@ -338,9 +381,14 @@ EGLBoolean eglChooseConfigImpl(EGLDisplay dpy, const EGLint* attrib_list, EGLCon
     egl_connection_t* const cnx = &gEGLImpl;
     if (!cnx->dso) return EGL_FALSE;
 
-    if (!attrib_list || !base::GetBoolProperty("debug.egl.force_msaa", false))
+    if (!attrib_list || !base::GetBoolProperty("debug.egl.force_msaa", false)) {
+        if (configs && requestsSurfaceWithoutWindow(attrib_list)) {
+            return chooseConfigWindowFirst(cnx, dp->disp.dpy, attrib_list, configs, config_size,
+                                           num_config);
+        }
         return cnx->egl.eglChooseConfig(dp->disp.dpy, attrib_list, configs, config_size,
                                         num_config);
+    }
 
     // Force 4x MSAA
     size_t attribCount = 0;
