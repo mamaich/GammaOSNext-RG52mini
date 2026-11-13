@@ -579,6 +579,13 @@ PRODUCT_COPY_FILES += \
     device/rg52mini/rg52-zram-wb.sh:system/bin/rg52-zram-wb.sh \
     device/rg52mini/rg52-zram.rc:system/etc/init/rg52-zram.rc
 
+# Сброс кэша оверлеев ресурсов (/data/resource-cache) при первой загрузке после
+# обновления системы: в оболочке nano устаревший файл соответствия пересоздать
+# некому, и оверлей framework-res молча отбрасывался. Разбор - в rg52-idmap.sh.
+PRODUCT_COPY_FILES += \
+    device/rg52mini/rg52-idmap.sh:system/bin/rg52-idmap.sh \
+    device/rg52mini/rg52-idmap.rc:system/etc/init/rg52-idmap.rc
+
 # Подкачка: zram на всю память, файла подкачки нет.
 #
 # Это заводское поведение Android, и выбрано оно осознанно, с известной ценой.

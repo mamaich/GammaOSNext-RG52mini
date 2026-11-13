@@ -1,0 +1,15 @@
+# RG52 Mini: сброс кэша оверлеев ресурсов после обновления системы.
+# Зачем - в device/rg52mini/rg52-idmap.sh.
+service rg52_idmap /system/bin/rg52-idmap.sh
+    user root
+    group root system
+    disabled
+    oneshot
+    seclabel u:r:shell:s0
+
+# exec_start, а не start: init ждёт конца скрипта. Файлы должны быть удалены до
+# zygote-start - иначе zygote или system_server успеют загрузить ресурсы со
+# старым файлом соответствия. К post-fs-data /data смонтирована, а init.rc уже
+# создал /data/resource-cache и /data/system.
+on post-fs-data
+    exec_start rg52_idmap
