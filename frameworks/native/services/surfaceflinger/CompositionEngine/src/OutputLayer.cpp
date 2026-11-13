@@ -654,23 +654,28 @@ void OutputLayer::uncacheBuffers(const std::vector<uint64_t>& bufferIdsToUncache
         return;
     }
 
-    // Uncache the active buffer last so that it's the first buffer to be purged from the cache
-    // next time a buffer is sent to this layer.
-    bool uncacheActiveBuffer = false;
-
+    // RG52: буфер, который сейчас на экране, из кэша не выбрасываем, а запоминаем и убираем
+    // позже, когда слою придёт другой буфер (writeBufferStateToHWC). В AOSP он выбрасывается
+    // сразу, и на следующем кадре тот же буфер уходит в HWC заново, с новым хэндлом. Композитор
+    // Rockchip (drmhwc2 1.5.64 из vendor Android 13) запоминает номер fd буфера при первом
+    // знакомстве с ним и при повторной отправке не обновляет: старый хэндл к этому времени
+    // закрыт, номер fd либо недействителен, либо уже принадлежит другому буферу. Если слой до
+    // этого рисовался только через GPU (диалог с затемнением) и на последних кадрах анимации
+    // закрытия попадает на плоскость, композитор импортирует чужой буфер: сначала это ошибки
+    // "hwc_get_gemhandle_from_fd fail" / "could not create drm fb", потом два буфера делят один
+    // GEM-хэндл, и после его закрытия экран мерцает до перезагрузки (каждый второй кадр чужой).
+    // Слот отложенного буфера освобождается последним, поэтому следующий буфер займёт именно
+    // его, и память уйдёт сразу - как и задумано в AOSP.
     std::vector<uint32_t> slotsToClear;
     for (uint64_t bufferId : bufferIdsToUncache) {
         if (bufferId == state.hwc->activeBufferId) {
-            uncacheActiveBuffer = true;
+            state.hwc->deferredUncacheBufferId = bufferId;
         } else {
             uint32_t slot = state.hwc->hwcBufferCache.uncache(bufferId);
             if (slot != UINT32_MAX) {
                 slotsToClear.push_back(slot);
             }
         }
-    }
-    if (uncacheActiveBuffer) {
-        slotsToClear.push_back(state.hwc->hwcBufferCache.uncache(state.hwc->activeBufferId));
     }
 
     hal::Error error =
@@ -698,11 +703,24 @@ void OutputLayer::writeBufferStateToHWC(HWC2::Layer* hwcLayer,
 
     HwcSlotAndBuffer hwcSlotAndBuffer;
     sp<Fence> hwcFence;
+    // RG52: слот буфера, выброшенного из кэша с задержкой (см. uncacheBuffers).
+    uint32_t deferredSlot = UINT32_MAX;
     {
         // Editing the state only because we update the HWC buffer cache and active buffer.
         auto& state = editState();
+        // RG52: слою приходит другой буфер - теперь отложенный можно убрать из кэша. Делаем
+        // это до выбора слота, чтобы новый буфер занял освободившийся слот.
+        const auto flushDeferredUncache = [&state, &deferredSlot](uint64_t nextBufferId) {
+            if (state.hwc->deferredUncacheBufferId &&
+                *state.hwc->deferredUncacheBufferId != nextBufferId) {
+                deferredSlot =
+                        state.hwc->hwcBufferCache.uncache(*state.hwc->deferredUncacheBufferId);
+                state.hwc->deferredUncacheBufferId.reset();
+            }
+        };
         // Override buffers use a special cache slot so that they don't evict client buffers.
         if (state.overrideInfo.buffer != nullptr && !skipLayer) {
+            flushDeferredUncache(state.overrideInfo.buffer->getBuffer()->getId());
             hwcSlotAndBuffer = state.hwc->hwcBufferCache.getOverrideHwcSlotAndBuffer(
                     state.overrideInfo.buffer->getBuffer());
             hwcFence = state.overrideInfo.acquireFence;
@@ -710,6 +728,7 @@ void OutputLayer::writeBufferStateToHWC(HWC2::Layer* hwcLayer,
             // slot will be used first, allowing the memory to be freed as soon as possible.
             state.hwc->activeBufferId = state.overrideInfo.buffer->getBuffer()->getId();
         } else {
+            flushDeferredUncache(outputIndependentState.buffer->getId());
             hwcSlotAndBuffer =
                     state.hwc->hwcBufferCache.getHwcSlotAndBuffer(outputIndependentState.buffer);
             hwcFence = outputIndependentState.acquireFence;
@@ -727,6 +746,16 @@ void OutputLayer::writeBufferStateToHWC(HWC2::Layer* hwcLayer,
         ALOGE("[%s] Failed to set buffer %p: %s (%d)", getLayerFE().getDebugName(),
               hwcSlotAndBuffer.buffer->handle, to_string(error).c_str(),
               static_cast<int32_t>(error));
+    }
+
+    // RG52: если новый буфер лёг в другой слот, слот отложенного буфера очищаем явно (для HAL,
+    // которые это умеют; у нашего HIDL-композитора вызов ничего не делает).
+    if (deferredSlot != UINT32_MAX && deferredSlot != hwcSlotAndBuffer.slot) {
+        if (auto error = hwcLayer->setBufferSlotsToClear({deferredSlot}, hwcSlotAndBuffer.slot);
+            error != hal::Error::NONE) {
+            ALOGE("[%s] Failed to clear buffer slot: %s (%d)", getLayerFE().getDebugName(),
+                  to_string(error).c_str(), static_cast<int32_t>(error));
+        }
     }
 }
 

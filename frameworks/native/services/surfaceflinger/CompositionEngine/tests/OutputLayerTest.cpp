@@ -1400,7 +1400,9 @@ TEST_F(OutputLayerUncacheBufferTest, canUncacheAndReuseSlot) {
     Mock::VerifyAndClearExpectations(&mHwcLayer);
 
     // Buffer slots are cleared
-    std::vector<uint32_t> slotsToClear = {0, 2, 1}; // order doesn't matter
+    // RG52: слот активного буфера (1) здесь не очищается - буфер выбрасывается из кэша позже,
+    // когда слою приходит другой буфер (см. OutputLayer::uncacheBuffers).
+    std::vector<uint32_t> slotsToClear = {0, 2}; // order doesn't matter
     EXPECT_CALL(mHwcLayer, setBufferSlotsToClear(slotsToClear, /*activeBufferSlot*/ 1));
     // Uncache the active buffer in between other buffers to exercise correct algorithmic behavior.
     mOutputLayer.uncacheBuffers({kBuffer1->getId(), kBuffer2->getId(), kBuffer3->getId()});

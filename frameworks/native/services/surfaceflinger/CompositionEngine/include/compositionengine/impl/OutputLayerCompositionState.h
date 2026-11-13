@@ -146,6 +146,10 @@ struct OutputLayerCompositionState {
         uint64_t activeBufferId;
         uint32_t activeBufferSlot;
 
+        // RG52: буфер, который клиент уже освободил, но слой всё ещё показывает. Из кэша
+        // он убирается, когда слою приходит другой буфер (см. OutputLayer::uncacheBuffers).
+        std::optional<uint64_t> deferredUncacheBufferId;
+
         // Set to true when overridden info has been sent to HW composer
         bool stateOverridden = false;
 
