@@ -264,6 +264,16 @@
 - Версию u-boot видно из Android: `/proc/cmdline`, `androidboot.fwver=…`.
 - Свойства `sys.gammaos.*_nano.session` держат таймауты экрана: ввод nano
   Android не видит.
+- Сон без нажатий (attentive timeout, 2 часа, `config_attentiveTimeout` в
+  оверлее framework-res) усыпляет консоль, даже если игра держит экран. Отсчёт
+  идёт от последнего нажатия, которое видел PowerManager. Пока
+  `sys.gammaos.nano.drop_input=1` (панель nano поверх приложения, игра 3DS из
+  nano), диспетчер ввода отбрасывает всё, и нажатий PowerManager не видит. Такие
+  состояния перечислены в `isNanoInputHiddenFromFramework`
+  (`PowerManagerService`): в них сон не срабатывает. Добавляешь режим, который
+  читает ввод мимо фреймворка, — добавь его туда же, иначе консоль уснёт
+  посреди игры. Проверка, видит ли Android нажатия: возраст в строке
+  `lastUserActivityTime` из `dumpsys power` должен сбрасываться.
 - Аппаратный композитор — блоб vendor Android 13 (Rockchip drmhwc2 1.5.64).
   Номер fd буфера он запоминает при первой встрече и не обновляет, поэтому
   один и тот же буфер нельзя слать слою повторно с новым хэндлом: получится
