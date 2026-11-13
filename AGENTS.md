@@ -264,6 +264,14 @@
 - Версию u-boot видно из Android: `/proc/cmdline`, `androidboot.fwver=…`.
 - Свойства `sys.gammaos.*_nano.session` держат таймауты экрана: ввод nano
   Android не видит.
+- Аппаратный композитор — блоб vendor Android 13 (Rockchip drmhwc2 1.5.64).
+  Номер fd буфера он запоминает при первой встрече и не обновляет, поэтому
+  один и тот же буфер нельзя слать слою повторно с новым хэндлом: получится
+  мерцание до перезагрузки. Правка — в `OutputLayer::uncacheBuffers`
+  (SurfaceFlinger), её не откатывать. Признаки в журнале:
+  `hwc_get_gemhandle_from_fd fail`, `could not create drm fb`. Отладка:
+  `vendor.hwc.log` (маска, 32 — подробно, вернуть 0),
+  `vendor.hwc.compose_policy` (1 — обычный режим, 0 — всё через GPU).
 
 ## 9. Где читать дальше
 
