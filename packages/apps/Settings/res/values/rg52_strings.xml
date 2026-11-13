@@ -6,4 +6,26 @@
     <string name="rg52_usb_game_controller_title">Use as a game controller?</string>
     <string name="rg52_usb_game_controller_message">The computer will see the console as a wired Xbox 360 controller. All the buttons go to the computer, so the console itself will not respond to them.\n\nTo turn this mode off, hold the power button.</string>
     <string name="rg52_usb_game_controller_start">Start</string>
+
+    <!-- RG52 Mini: sleep after a long time without input even if a game keeps the screen on
+         (Settings.Secure attentive_timeout), Display settings. English only. -->
+    <string name="rg52_idle_sleep_title" translatable="false">Sleep without input</string>
+    <string name="rg52_idle_sleep_summary" translatable="false">After <xliff:g id="time">%1$s</xliff:g>, even if a game keeps the screen on</string>
+    <string name="rg52_idle_sleep_never" translatable="false">Never</string>
+    <string-array name="rg52_idle_sleep_entries" translatable="false">
+        <item>30 minutes</item>
+        <item>1 hour</item>
+        <item>2 hours</item>
+        <item>4 hours</item>
+        <item>8 hours</item>
+        <item>Never</item>
+    </string-array>
+    <string-array name="rg52_idle_sleep_values" translatable="false">
+        <item>1800000</item>
+        <item>3600000</item>
+        <item>7200000</item>
+        <item>14400000</item>
+        <item>28800000</item>
+        <item>-1</item>
+    </string-array>
 </resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RG52 Mini: предупреждение перед сном без нажатий (attentive timeout, см. оверлей
+     framework-res, config_attentiveTimeout). Штатный текст говорит про "Android TV device",
+     которое "выключится"; у нас это консоль, и она засыпает. -->
+<resources>
+    <string name="inattentive_sleep_warning_message" product="tv">Давно не было нажатий. Нажмите любую кнопку, чтобы консоль не уснула.</string>
+    <string name="inattentive_sleep_warning_message" product="default">Давно не было нажатий. Нажмите любую кнопку, чтобы консоль не уснула.</string>
+</resources>

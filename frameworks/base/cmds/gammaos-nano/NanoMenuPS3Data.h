@@ -275,6 +275,7 @@ static const Ps3DataItem kDisplayCh[] = {
   {"Screen Calibration",16,"Calibrates the colour of each screen on its own: brightness, contrast, saturation, hue and white balance, on top of LiveDisplay. Applies everywhere, games included, and is kept across reboots.",nullptr,0,PS3CH(kScreenCalCh)},
   {"Screen Saver",22,"Shows a screen saver while the system is idle and charging.","On",1,nullptr,0},
   {"Screen Timeout",22,"Sets how long the screen stays on while idle.","1 minute",1,nullptr,0},
+  {"Sleep Without Input",22,"Puts the console to sleep after this long without any input, even if a game keeps the screen on.","2 hours",1,nullptr,0},
   {"Font Size",22,"Sets the size of text shown on the screen.","Default",1,nullptr,0},
   {"Dark Theme",22,"Use a dark colour scheme across the system.","On",1,nullptr,0},
   {"Screen Orientation",70,"Sets the orientation of the home menu and apps. Choose Auto to follow the accelerometer, or lock to a fixed orientation.","Landscape",1,nullptr,0},

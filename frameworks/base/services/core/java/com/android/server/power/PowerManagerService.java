@@ -3574,8 +3574,10 @@ public final class PowerManagerService extends SystemService
     private void updateAttentiveStateLocked(long now, int dirty) {
         long attentiveTimeout = getAttentiveTimeoutLocked();
         // Attentive state only applies to the default display group.
-        long goToSleepTime = mPowerGroups.get(
-                Display.DEFAULT_DISPLAY_GROUP).getLastUserActivityTimeLocked() + attentiveTimeout;
+        // RG52: отсчёт не просто от последнего нажатия, а с поправкой на оболочку nano
+        // (см. getAttentiveActivityTimeLocked).
+        long goToSleepTime = getAttentiveActivityTimeLocked(
+                mPowerGroups.get(Display.DEFAULT_DISPLAY_GROUP), now) + attentiveTimeout;
         long showWarningTime = goToSleepTime - mAttentiveWarningDurationConfig;
 
         boolean warningDismissed = maybeHideInattentiveSleepWarningLocked(now, showWarningTime);
@@ -3609,6 +3611,12 @@ public final class PowerManagerService extends SystemService
                 nextTimeout = goToSleepTime;
             }
 
+            // RG52: пока ввод идёт мимо фреймворка, о конце такого состояния нам никто не
+            // сообщит - перепроверяем раз в минуту, чтобы отсчёт пошёл с его конца.
+            if (nextTimeout >= 0 && isNanoInputHiddenFromFramework()) {
+                nextTimeout = Math.min(nextTimeout, now + NANO_HIDDEN_INPUT_POLL_MS);
+            }
+
             if (nextTimeout >= 0) {
                 scheduleAttentiveTimeout(nextTimeout);
             }
@@ -3640,7 +3648,7 @@ public final class PowerManagerService extends SystemService
         long attentiveTimeout = getAttentiveTimeoutLocked();
         // Attentive state only applies to the default display group.
         return powerGroup.getGroupId() == Display.DEFAULT_DISPLAY_GROUP && attentiveTimeout >= 0
-                && now >= powerGroup.getLastUserActivityTimeLocked() + attentiveTimeout;
+                && now >= getAttentiveActivityTimeLocked(powerGroup, now) + attentiveTimeout;
     }
 
     /**
@@ -3671,6 +3679,46 @@ public final class PowerManagerService extends SystemService
             mDirty |= DIRTY_ATTENTIVE;
             updatePowerStateLocked();
         }
+    }
+
+    // RG52 Mini: сон без нажатий (attentive timeout, по умолчанию 2 часа - оверлей
+    // config_attentiveTimeout) усыпляет консоль, даже если игра держит экран включённым.
+    // Отсчёт идёт от последнего нажатия, которое видел фреймворк. Но в оболочке nano
+    // нажатия до него доходят не всегда: nano читает геймпад сама, а диспетчеру ввода
+    // временами велит все события отбрасывать (sys.gammaos.nano.drop_input) - тогда до
+    // PowerManager не доходит ничего. Без поправки консоль засыпала бы посреди игры
+    // каждые два часа. Поэтому, пока ввод идёт мимо фреймворка, считаем, что нажатие
+    // было только что: в таких состояниях сон без нажатий не срабатывает, а после выхода
+    // из них отсчёт начинается заново.
+    //
+    // Замер 13.11.2026 (каждые 3 с возраст последнего нажатия из dumpsys power, владелец
+    // нажимает кнопки). Обычный Android: RetroArch, DraStic, 3DS (AzaharSf) - нажатия
+    // видны. Оболочка nano: меню и DS (drastic-nano) - видны; 3DS (azahar-nano) - нет,
+    // на всё время игры drop_input=1.
+    private static final long NANO_HIDDEN_INPUT_POLL_MS = 60 * 1000;
+
+    // uptimeMillis последней проверки, заставшей ввод мимо фреймворка; 0 - такого не было.
+    @GuardedBy("mLock")
+    private long mNanoHiddenInputTime;
+
+    private static boolean isNanoInputHiddenFromFramework() {
+        // Диспетчер ввода отбрасывает все события: панель nano поверх приложения, игра
+        // 3DS, запущенная из nano.
+        if (SystemProperties.getBoolean("sys.gammaos.nano.drop_input", false)) return true;
+        // Проигрыватель nano: окна Android у него нет, и во время ролика кнопок не жмут.
+        if ("1".equals(SystemProperties.get("sys.gammaos.nano.media_playing", "0"))) return true;
+        // Оболочка, захватившая устройства ввода целиком (на RG52 Mini не включено), пока
+        // не запущено обычное приложение: ему nano захват отдаёт.
+        return SystemProperties.getBoolean("persist.gammaos.nano.grab_input", false)
+                && !"1".equals(SystemProperties.get("sys.gammaos.nano.app_launched", "0"));
+    }
+
+    @GuardedBy("mLock")
+    private long getAttentiveActivityTimeLocked(PowerGroup powerGroup, long now) {
+        if (isNanoInputHiddenFromFramework()) {
+            mNanoHiddenInputTime = now;
+        }
+        return Math.max(powerGroup.getLastUserActivityTimeLocked(), mNanoHiddenInputTime);
     }
 
     @GuardedBy("mLock")
@@ -5323,6 +5371,8 @@ public final class PowerManagerService extends SystemService
             pw.println("  mAttentiveTimeoutConfig=" + mAttentiveTimeoutConfig);
             pw.println("  mAttentiveTimeoutSetting=" + mAttentiveTimeoutSetting);
             pw.println("  mAttentiveWarningDurationConfig=" + mAttentiveWarningDurationConfig);
+            pw.println("  mNanoHiddenInputTime=" + mNanoHiddenInputTime
+                    + " (hidden now=" + isNanoInputHiddenFromFramework() + ")");
             pw.println("  mScreenOffTimeoutSetting=" + mScreenOffTimeoutSetting);
             pw.println("  mSleepTimeoutSetting=" + mSleepTimeoutSetting);
             pw.println("  mMaximumScreenOffTimeoutFromDeviceAdmin="

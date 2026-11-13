@@ -81,4 +81,21 @@
          (без звука, вибрация) при этом не действуют - на консоли они не нужны.
          Проверка: dumpsys audio | grep mIsSingleVolume -->
     <bool name="config_single_volume">true</bool>
+
+    <!-- Сон без нажатий: 2 часа.
+
+         Игры и эмуляторы держат экран включённым, поэтому Screen timeout на них не
+         действует, и забытая игра работала с подсветкой, пока не сядет батарея. В
+         Android на этот случай есть свой механизм (attentive timeout, по умолчанию
+         выключен, -1): через заданное время без единого нажатия он усыпляет
+         устройство, не глядя на то, держит ли приложение экран. За 30 секунд до сна
+         (config_attentiveWarningDuration) SystemUI показывает предупреждение, любая
+         кнопка его снимает и начинает отсчёт заново.
+
+         Это значение - умолчание; выбор пользователя лежит в Settings.Secure
+         attentive_timeout (Settings - Display - Sleep without input, там же Never).
+         Поправка для оболочки nano, где фреймворк нажатий не видит, - в
+         PowerManagerService (isNanoInputHiddenFromFramework).
+         Проверка: dumpsys power | grep -i attentive -->
+    <integer name="config_attentiveTimeout">7200000</integer>
 </resources>

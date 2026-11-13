@@ -66,6 +66,15 @@
             android:summary="@string/summary_placeholder"
             android:fragment="com.android.settings.display.ScreenTimeoutSettings"
             settings:controller="com.android.settings.display.ScreenTimeoutPreferenceController"/>
+
+        <!-- RG52 Mini: сон без нажатий, даже если игра держит экран (attentive timeout) -->
+        <ListPreference
+            android:key="rg52_idle_sleep"
+            android:title="@string/rg52_idle_sleep_title"
+            android:summary="@string/summary_placeholder"
+            android:entries="@array/rg52_idle_sleep_entries"
+            android:entryValues="@array/rg52_idle_sleep_values"
+            settings:controller="com.android.settings.display.Rg52IdleSleepPreferenceController"/>
     </PreferenceCategory>
 
     <PreferenceCategory
