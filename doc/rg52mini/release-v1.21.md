@@ -1,17 +1,24 @@
 # Выпуск v1.21
 
-> Заготовка. Пополняется по ходу работы; цифры образа и итоговый текст — при выпуске.
-
 GammaOS Next (LineageOS 21 / Android 14) для карманной консоли **AISLPC RG52 Mini**
 на Rockchip RK3562. Здесь перечислено то, что изменилось после
-[v1.20](release-v1.20.md).
+[v1.20](release-v1.20.md). Кнопки режима мыши снова можно сменить в
+настройках геймпада, а выключенная комбинация больше не включает мышь на
+SELECT+R1.
 
 | | |
 |---|---|
-| Образ | `@ARCH@`, @GIB@ ГиБ (@BYTES@ байт) |
-| sha256 архива | `@ASHA@` |
-| sha256 образа | `@ISHA@` |
-| Пакет обновления | `@NAME@-ota.zip` — для тех, кто уже на v1.3–v1.20 |
+| Образ | `GammaOSCore-RG52Mini-20261116-2218.img.xz`, 1,67 ГиБ (1 793 430 200 байт) |
+| sha256 архива | `8573b37a0aa21a63c1070169cd698c79b33f14f244700911125090447b6b73ee` |
+| sha256 образа | `ce77396bb0a55076ce7281fd1ca7f2e6c2185da296921b8998a30d00c72dba18` |
+| Пакет обновления | `GammaOSCore-RG52Mini-20261116-2218-ota.zip` — для тех, кто уже на v1.3–v1.20 |
+| Ядро | Linux 5.10.226, [mamaich/kernel_rk3562_rg52mini](https://github.com/mamaich/kernel_rk3562_rg52mini); без изменений после v1.20 |
+| Основа | GammaOS Next Core (вариант на базе Android TV), Android 14; изменения апстрима GammaOS Next по 26.10.2026, кроме правок под два встроенных экрана и драйвера Adreno |
+| Загрузчик | [mamaich/u-boot-rk3562-rg52mini](https://github.com/mamaich/u-boot-rk3562-rg52mini), тег `rg52mini-1.6`; без изменений после v1.20 |
+| Раздел vendor | от Android 13 (SyachOS), с вырезанным лишним и подменённым драйвером графики; без изменений после v1.20 |
+
+Общая карта с GammaOS Next и dArkOS обновляется тем же пакетом, см.
+[RG52mini-dualboot](https://github.com/mamaich/RG52mini-dualboot/releases).
 
 ## Что нового
 
