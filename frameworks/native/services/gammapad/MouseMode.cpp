@@ -292,13 +292,33 @@ bool MouseMode::readCursorPosition() {
     return false;
 }
 
+// Код кнопки аккорда. Пустое значение - аккорд выключен: так его выключает
+// «Toggle with button combo» в настройках. GetIntProperty на пустой строке
+// отдаёт значение по умолчанию, и выключенный переключатель молча включал
+// заводской аккорд SELECT+R1. Свойства нет вовсе - заводской аккорд, как раньше.
+static int readComboCode(const char* name, int def) {
+    if (__system_property_find(name) == nullptr) return def;
+    if (android::base::GetProperty(name, "").empty()) return -1;
+    return android::base::GetIntProperty(name, def);
+}
+
 void MouseMode::loadConfig() {
     using android::base::GetIntProperty;
 
-    mComboBtn1Code = GetIntProperty("persist.gammaos.gamepad.mouse_combo1",
-                                     DEFAULT_COMBO_BTN1);
-    mComboBtn2Code = GetIntProperty("persist.gammaos.gamepad.mouse_combo2",
-                                     DEFAULT_COMBO_BTN2);
+    const int combo1 = readComboCode("persist.gammaos.gamepad.mouse_combo1", DEFAULT_COMBO_BTN1);
+    const int combo2 = readComboCode("persist.gammaos.gamepad.mouse_combo2", DEFAULT_COMBO_BTN2);
+    if (combo1 != mComboBtn1Code || combo2 != mComboBtn2Code) {
+        // Комбинацию сменили в настройках. Состояние аккорда относится к
+        // прежним кнопкам, и их отпускание сюда уже не придёт: начатое
+        // действие мыши снимаем прежними кодами, остальное забываем.
+        for (int i = 0; i < 2; ++i) {
+            if (mChordActed[i]) chordAction(i, false);
+            mChordDown[i] = mChordPending[i] = mChordFwd[i] = mChordActed[i] = false;
+        }
+        mChordUsed = false;
+    }
+    mComboBtn1Code = combo1;
+    mComboBtn2Code = combo2;
     mChordMs = GetIntProperty("persist.gammaos.gamepad.mouse_chord_ms",
                                DEFAULT_CHORD_MS);
 
@@ -446,10 +466,12 @@ void MouseMode::setActive(bool active) {
         rel.type = EV_KEY;
         rel.value = 0;
 
-        rel.code = mComboBtn1Code;
-        mFlushEvents.push_back(rel);
-        rel.code = mComboBtn2Code;
-        mFlushEvents.push_back(rel);
+        // Аккорд может быть выключен (код -1) - тогда отпускать нечего.
+        for (int code : {mComboBtn1Code, mComboBtn2Code}) {
+            if (code <= 0) continue;
+            rel.code = static_cast<unsigned short>(code);
+            mFlushEvents.push_back(rel);
+        }
 
         // SYN after the releases
         struct input_event syn = {};

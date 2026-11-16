@@ -234,8 +234,7 @@
         <Preference
             android:key="gamepad_mouse_buttons"
             android:title="@string/gamepad_mouse_buttons_title"
-            android:summary="@string/gamepad_mouse_buttons_summary"
-            android:dependency="gamepad_mouse_enable" />
+            android:summary="@string/gamepad_mouse_buttons_summary" />
 
         <androidx.preference.SeekBarPreference
             android:key="gamepad_mouse_stick_speed"

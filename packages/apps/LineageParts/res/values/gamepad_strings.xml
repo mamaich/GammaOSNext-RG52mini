@@ -235,6 +235,12 @@
     <string name="gamepad_mouse_btn_boost">Speed boost</string>
     <string name="gamepad_mouse_combo_btn1">First combo button</string>
     <string name="gamepad_mouse_combo_btn2">Second combo button</string>
+    <string name="gamepad_mouse_btn_none">None</string>
+    <string name="gamepad_mouse_combo_off">Off</string>
+    <string name="gamepad_mouse_combo_default">Default (%1$s + %2$s)</string>
+    <string name="gamepad_mouse_enable_summary_combo">Press %1$s and %2$s together to turn mouse mode on or off</string>
+    <string name="gamepad_mouse_buttons_current">Left click: %1$s, right click: %2$s, back: %3$s</string>
+    <string name="gamepad_mouse_buttons_default">Default (%1$s, %2$s, back: %3$s)</string>
     <string name="gamepad_mouse_mode_on">Mouse mode ON</string>
     <string name="gamepad_mouse_mode_off">Mouse mode OFF</string>
     <string name="gamepad_mouse_qs_tile_label">Mouse Mode</string>

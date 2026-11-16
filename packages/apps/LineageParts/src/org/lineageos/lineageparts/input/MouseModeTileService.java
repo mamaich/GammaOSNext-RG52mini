@@ -39,11 +39,10 @@ public class MouseModeTileService extends TileService {
             SystemProperties.set(PROP_GAMEPAD_ENABLE, "1");
         }
 
-        boolean mouseConfigured = !SystemProperties.get(PROP_MOUSE_COMBO1, "").isEmpty();
-        if (!mouseConfigured) {
-            SystemProperties.set(PROP_MOUSE_COMBO1, "314"); // BTN_SELECT
-            SystemProperties.set(PROP_MOUSE_COMBO2, "311"); // BTN_TR
-        }
+        // Комбинацию не трогаем. Раньше пустую (выключен «Toggle with button
+        // combo») плитка заменяла на SELECT+R1 и тем молча включала аккорд,
+        // который пользователь выключил или сменил. Режиму мыши аккорд не
+        // нужен: gammapad включает его по свойству ниже.
 
         // Toggle mouse mode via property — daemon polls and reacts
         boolean currentlyActive = SystemProperties.getInt(PROP_MOUSE_ACTIVE, 0) != 0;

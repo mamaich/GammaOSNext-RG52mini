@@ -215,7 +215,7 @@
 
     <!-- Mouse mode -->
     <string name="gamepad_mouse_category">Режим мыши</string>
-    <string name="gamepad_mouse_enable_title">Включить режим мыши</string>
+    <string name="gamepad_mouse_enable_title">Переключать комбинацией кнопок</string>
     <string name="gamepad_mouse_enable_summary">Использовать геймпад как виртуальный курсор мыши. Переключение удержанием комбинации.</string>
     <string name="gamepad_mouse_combo_title">Комбинация переключения</string>
     <string name="gamepad_mouse_combo_summary">Комбинация кнопок для входа/выхода из режима мыши</string>
@@ -233,6 +233,12 @@
     <string name="gamepad_mouse_btn_boost">Ускорение</string>
     <string name="gamepad_mouse_combo_btn1">Первая кнопка комбинации</string>
     <string name="gamepad_mouse_combo_btn2">Вторая кнопка комбинации</string>
+    <string name="gamepad_mouse_btn_none">Нет</string>
+    <string name="gamepad_mouse_combo_off">Выключена</string>
+    <string name="gamepad_mouse_combo_default">По умолчанию (%1$s + %2$s)</string>
+    <string name="gamepad_mouse_enable_summary_combo">Нажмите %1$s и %2$s одновременно, чтобы включить или выключить режим мыши</string>
+    <string name="gamepad_mouse_buttons_current">Левый клик: %1$s, правый клик: %2$s, назад: %3$s</string>
+    <string name="gamepad_mouse_buttons_default">По умолчанию (%1$s, %2$s, назад: %3$s)</string>
     <string name="gamepad_mouse_mode_on">Режим мыши ВКЛ</string>
     <string name="gamepad_mouse_mode_off">Режим мыши ВЫКЛ</string>
     <string name="gamepad_mouse_qs_tile_label">Режим мыши</string>

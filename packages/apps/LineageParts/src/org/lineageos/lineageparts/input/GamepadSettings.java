@@ -230,6 +230,27 @@ public class GamepadSettings extends SettingsPreferenceFragment
         BTN_NAMES.put(0x13e, "R3");
     }
 
+    // RG52 Mini: кнопки, которые можно назначить режиму мыши, - только те, что
+    // есть на корпусе и доходят до gammapad кнопками. L2/R2 здесь аналоговые
+    // (цифровых кодов нет), Guide драйвер отдаёт как HOME, а внешние геймпады
+    // через gammapad не идут (persist.rg52.gamepad.builtin_only).
+    private static final int[] MOUSE_PICK_CODES = {
+        0x130, 0x131, 0x133, 0x134, 0x136, 0x137, 0x13a, 0x13b, 0x13d, 0x13e
+    };
+    // Раскладка по умолчанию - та же, что в device/rg52mini/rg52mini.mk; менять
+    // вместе. Пункт «Default» возвращает её отсюда: значение persist в /data
+    // перекрывает build.prop, и прочитать заводское после правки уже нельзя.
+    private static final int RG52_MOUSE_COMBO1 = 0x13d;  // L3
+    private static final int RG52_MOUSE_COMBO2 = 0x13e;  // R3
+    // Действия мыши в диалоге «Button mapping»: левый клик, правый, «назад».
+    // Ускорения (mouse_btn_boost) здесь нет: MouseMode его не применяет.
+    private static final String[] MOUSE_BTN_PROPS = {
+        "persist.gammaos.gamepad.mouse_btn_click",
+        "persist.gammaos.gamepad.mouse_btn_rclick",
+        "persist.gammaos.gamepad.mouse_btn_back",
+    };
+    private static final int[] MOUSE_BTN_DEFAULTS = { 0x13d, 0x13e, 0 };  // L3, R3, нет
+
     // Имена осей - по раскладке пресета, см. GamepadAxisLayout: при 0x0b13 Z/RZ - правый
     // стик, а не LT/RT, как здесь было написано для любого пресета.
 
@@ -492,6 +513,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
             mMouseEnablePref.setChecked(
                     !SystemProperties.get(PROP_MOUSE_COMBO1, "").isEmpty());
             mMouseEnablePref.setOnPreferenceChangeListener(this);
+            updateMouseEnableSummary();
         }
         if (mMouseHoldTimePref != null) {
             mMouseHoldTimePref.setMin(500);
@@ -1746,8 +1768,9 @@ public class GamepadSettings extends SettingsPreferenceFragment
                         String c1 = SystemProperties.get(PROP_MOUSE_COMBO1_PREV, "");
                         String c2 = SystemProperties.get(PROP_MOUSE_COMBO2_PREV, "");
                         if (c1.isEmpty()) {
-                            c1 = "314"; // BTN_SELECT
-                            c2 = "311"; // BTN_TR
+                            // Запомненной нет - раскладка RG52 Mini (L3 + R3).
+                            c1 = String.valueOf(RG52_MOUSE_COMBO1);
+                            c2 = String.valueOf(RG52_MOUSE_COMBO2);
                         }
                         SystemProperties.set(PROP_MOUSE_COMBO1, c1);
                         SystemProperties.set(PROP_MOUSE_COMBO2, c2);
@@ -1766,6 +1789,8 @@ public class GamepadSettings extends SettingsPreferenceFragment
                     SystemProperties.set(PROP_MOUSE_COMBO2, "");
                 }
                 bumpConfigVersion();
+                updateMouseComboSummary(findPreference(KEY_MOUSE_COMBO));
+                updateMouseEnableSummary();
                 return true;
             case KEY_MOUSE_HOLD_TIME:
                 SystemProperties.set(PROP_MOUSE_HOLD_MS,
@@ -2100,9 +2125,11 @@ public class GamepadSettings extends SettingsPreferenceFragment
      *  - роли осей и переназначение кнопок и осей больше не скрыты: с t21
      *    курки и HOME/BACK исправлены в драйвере, своих remap_btn/remap_axis у
      *    RG52 нет, а роли считаются в раскладке пресета;
-     *  - комбинация, кнопки и скорость крестовины в режиме мыши - заданы под
-     *    корпус (аккорд L3+R3, щелчки на стиках, крестовина остаётся
-     *    крестовиной);
+     *  - скорость крестовины в режиме мыши - крестовина остаётся крестовиной
+     *    (mouse_dpad_speed=0). Комбинация и кнопки мыши с v1.21 снова видны:
+     *    по умолчанию у них раскладка из rg52mini.mk (аккорд L3+R3, щелчки на
+     *    стиках), выбор ограничен кнопками корпуса, и в диалогах есть возврат
+     *    к умолчанию;
      *  - время удержания, скорость стика и Mouse boost - MouseMode их не
      *    применяет: включение аккордом, курсор идёт по своей кривой;
      *  - PWM vibration и Direct FF device: запасные пути вибрации для
@@ -2115,7 +2142,7 @@ public class GamepadSettings extends SettingsPreferenceFragment
         String[] hidden = {
             KEY_ENABLE, KEY_MERGE, KEY_HIDE_SOURCE, KEY_DEVICES_CATEGORY,
             "gamepad_identity_category",
-            KEY_MOUSE_COMBO, KEY_MOUSE_HOLD_TIME, KEY_MOUSE_BUTTONS,
+            KEY_MOUSE_HOLD_TIME,
             KEY_MOUSE_STICK_SPEED, KEY_MOUSE_DPAD_SPEED, KEY_MOUSE_BOOST,
             KEY_PWM_ENABLE, KEY_FF_DEVICE
         };
@@ -2136,58 +2163,94 @@ public class GamepadSettings extends SettingsPreferenceFragment
 
     // --- Mouse mode helpers ---
 
+    private String mouseBtnName(int code) {
+        if (code <= 0) return getString(R.string.gamepad_mouse_btn_none);
+        return BTN_NAMES.getOrDefault(code, "0x" + Integer.toHexString(code));
+    }
+
+    private static int parseBtnCode(String s, int def) {
+        try {
+            return Integer.decode(s.trim());
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
     private void updateMouseComboSummary(Preference pref) {
-        int btn1 = SystemProperties.getInt(PROP_MOUSE_COMBO1, 0x13a);
-        int btn2 = SystemProperties.getInt(PROP_MOUSE_COMBO2, 0x137);
-        String name1 = BTN_NAMES.getOrDefault(btn1, "0x" + Integer.toHexString(btn1));
-        String name2 = BTN_NAMES.getOrDefault(btn2, "0x" + Integer.toHexString(btn2));
-        pref.setSummary(getString(R.string.gamepad_mouse_combo_current, name1, name2));
+        if (pref == null) return;
+        String c1 = SystemProperties.get(PROP_MOUSE_COMBO1, "");
+        if (c1.isEmpty()) {
+            pref.setSummary(R.string.gamepad_mouse_combo_off);
+            return;
+        }
+        int btn1 = parseBtnCode(c1, RG52_MOUSE_COMBO1);
+        int btn2 = parseBtnCode(SystemProperties.get(PROP_MOUSE_COMBO2, ""), RG52_MOUSE_COMBO2);
+        pref.setSummary(getString(R.string.gamepad_mouse_combo_current,
+                mouseBtnName(btn1), mouseBtnName(btn2)));
+    }
+
+    /**
+     * Подпись «Toggle with button combo» называет текущую комбинацию, а не
+     * всегда L3 + R3. При выключенном аккорде - ту, что вернётся при включении.
+     */
+    private void updateMouseEnableSummary() {
+        if (mMouseEnablePref == null) return;
+        String c1 = SystemProperties.get(PROP_MOUSE_COMBO1, "");
+        String c2 = SystemProperties.get(PROP_MOUSE_COMBO2, "");
+        if (c1.isEmpty()) {
+            c1 = SystemProperties.get(PROP_MOUSE_COMBO1_PREV, "");
+            c2 = SystemProperties.get(PROP_MOUSE_COMBO2_PREV, "");
+        }
+        mMouseEnablePref.setSummary(getString(R.string.gamepad_mouse_enable_summary_combo,
+                mouseBtnName(parseBtnCode(c1, RG52_MOUSE_COMBO1)),
+                mouseBtnName(parseBtnCode(c2, RG52_MOUSE_COMBO2))));
+    }
+
+    private int mouseBtnCode(int role) {
+        return SystemProperties.getInt(MOUSE_BTN_PROPS[role], MOUSE_BTN_DEFAULTS[role]);
     }
 
     private void updateMouseButtonsSummary(Preference pref) {
-        int click = SystemProperties.getInt(PROP_MOUSE_BTN_CLICK, 0x130);
-        int back = SystemProperties.getInt(PROP_MOUSE_BTN_BACK, 0x131);
-        int rclick = SystemProperties.getInt(PROP_MOUSE_BTN_RCLICK, 0x134);
-        int boost = SystemProperties.getInt(PROP_MOUSE_BTN_BOOST, 0x133);
-        String clickN = BTN_NAMES.getOrDefault(click, "0x" + Integer.toHexString(click));
-        String backN = BTN_NAMES.getOrDefault(back, "0x" + Integer.toHexString(back));
-        String rclickN = BTN_NAMES.getOrDefault(rclick, "0x" + Integer.toHexString(rclick));
-        String boostN = BTN_NAMES.getOrDefault(boost, "0x" + Integer.toHexString(boost));
-        pref.setSummary("Click=" + clickN + ", Back=" + backN
-                + ", RClick=" + rclickN + ", Boost=" + boostN);
+        if (pref == null) return;
+        pref.setSummary(getString(R.string.gamepad_mouse_buttons_current,
+                mouseBtnName(mouseBtnCode(0)), mouseBtnName(mouseBtnCode(1)),
+                mouseBtnName(mouseBtnCode(2))));
     }
 
     private void showMouseComboDialog() {
         Context context = getContext();
         if (context == null) return;
 
-        // Button selection list
-        List<Integer> btnCodes = new ArrayList<>(BTN_NAMES.keySet());
-        java.util.Collections.sort(btnCodes);
-        String[] labels = new String[btnCodes.size()];
-        for (int i = 0; i < btnCodes.size(); i++) {
-            labels[i] = BTN_NAMES.get(btnCodes.get(i));
+        // Первым пунктом - раскладка по умолчанию, дальше кнопки корпуса.
+        String[] labels = new String[MOUSE_PICK_CODES.length + 1];
+        labels[0] = getString(R.string.gamepad_mouse_combo_default,
+                mouseBtnName(RG52_MOUSE_COMBO1), mouseBtnName(RG52_MOUSE_COMBO2));
+        for (int i = 0; i < MOUSE_PICK_CODES.length; i++) {
+            labels[i + 1] = mouseBtnName(MOUSE_PICK_CODES[i]);
         }
-
-        int currentBtn1 = SystemProperties.getInt(PROP_MOUSE_COMBO1, 0x13a);
 
         new AlertDialog.Builder(context)
                 .setTitle(R.string.gamepad_mouse_combo_btn1)
                 .setItems(labels, (d, which) -> {
-                    int btn1 = btnCodes.get(which);
-                    // Now pick second button
+                    if (which == 0) {
+                        setMouseCombo(RG52_MOUSE_COMBO1, RG52_MOUSE_COMBO2);
+                        return;
+                    }
+                    int btn1 = MOUSE_PICK_CODES[which - 1];
+                    // Вторая - любая, кроме первой: из одной кнопки аккорд не
+                    // сложится, и режим мыши ею было бы не включить.
+                    List<Integer> rest = new ArrayList<>();
+                    for (int c : MOUSE_PICK_CODES) {
+                        if (c != btn1) rest.add(c);
+                    }
+                    String[] labels2 = new String[rest.size()];
+                    for (int i = 0; i < rest.size(); i++) {
+                        labels2[i] = mouseBtnName(rest.get(i));
+                    }
                     new AlertDialog.Builder(context)
                             .setTitle(R.string.gamepad_mouse_combo_btn2)
-                            .setItems(labels, (d2, which2) -> {
-                                int btn2 = btnCodes.get(which2);
-                                SystemProperties.set(PROP_MOUSE_COMBO1,
-                                        String.valueOf(btn1));
-                                SystemProperties.set(PROP_MOUSE_COMBO2,
-                                        String.valueOf(btn2));
-                                bumpConfigVersion();
-                                Preference comboPref = findPreference(KEY_MOUSE_COMBO);
-                                if (comboPref != null) updateMouseComboSummary(comboPref);
-                            })
+                            .setItems(labels2, (d2, which2) ->
+                                    setMouseCombo(btn1, rest.get(which2)))
                             .setNegativeButton(android.R.string.cancel, null)
                             .show();
                 })
@@ -2195,62 +2258,85 @@ public class GamepadSettings extends SettingsPreferenceFragment
                 .show();
     }
 
+    private void setMouseCombo(int btn1, int btn2) {
+        SystemProperties.set(PROP_MOUSE_COMBO1, String.valueOf(btn1));
+        SystemProperties.set(PROP_MOUSE_COMBO2, String.valueOf(btn2));
+        // Режим мыши gammapad перечитывает и при лёгкой перезагрузке настроек:
+        // отпускать и заново захватывать геймпад ради этого незачем.
+        bumpConfigVersionLight();
+        updateMouseComboSummary(findPreference(KEY_MOUSE_COMBO));
+        updateMouseEnableSummary();
+    }
+
     private void showMouseButtonsDialog() {
         Context context = getContext();
         if (context == null) return;
 
-        // Show dialog to configure each mouse button action
         String[] roles = {
             getString(R.string.gamepad_mouse_btn_click),
-            getString(R.string.gamepad_mouse_btn_back),
             getString(R.string.gamepad_mouse_btn_rclick),
-            getString(R.string.gamepad_mouse_btn_boost),
+            getString(R.string.gamepad_mouse_btn_back),
         };
-        String[] props = {
-            PROP_MOUSE_BTN_CLICK, PROP_MOUSE_BTN_BACK,
-            PROP_MOUSE_BTN_RCLICK, PROP_MOUSE_BTN_BOOST
-        };
-        int[] defaults = { 0x130, 0x131, 0x134, 0x133 }; // A, B, Y, X
-
-        // Build current values summary
-        String[] items = new String[roles.length];
+        String[] items = new String[roles.length + 1];
         for (int i = 0; i < roles.length; i++) {
-            int code = SystemProperties.getInt(props[i], defaults[i]);
-            String name = BTN_NAMES.getOrDefault(code, "0x" + Integer.toHexString(code));
-            items[i] = roles[i] + ": " + name;
+            items[i] = roles[i] + ": " + mouseBtnName(mouseBtnCode(i));
         }
+        items[roles.length] = getString(R.string.gamepad_mouse_buttons_default,
+                mouseBtnName(MOUSE_BTN_DEFAULTS[0]), mouseBtnName(MOUSE_BTN_DEFAULTS[1]),
+                mouseBtnName(MOUSE_BTN_DEFAULTS[2]));
 
         new AlertDialog.Builder(context)
                 .setTitle(R.string.gamepad_mouse_buttons_title)
                 .setItems(items, (d, which) -> {
-                    showMouseButtonPicker(props[which], defaults[which], roles[which]);
+                    if (which == roles.length) {
+                        for (int i = 0; i < MOUSE_BTN_PROPS.length; i++) {
+                            SystemProperties.set(MOUSE_BTN_PROPS[i],
+                                    String.valueOf(MOUSE_BTN_DEFAULTS[i]));
+                        }
+                        onMouseButtonsChanged();
+                        return;
+                    }
+                    showMouseButtonPicker(which, roles[which]);
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
     }
 
-    private void showMouseButtonPicker(String prop, int defaultCode, String roleName) {
+    private void showMouseButtonPicker(int role, String roleName) {
         Context context = getContext();
         if (context == null) return;
 
-        List<Integer> btnCodes = new ArrayList<>(BTN_NAMES.keySet());
-        java.util.Collections.sort(btnCodes);
-        String[] labels = new String[btnCodes.size()];
-        for (int i = 0; i < btnCodes.size(); i++) {
-            labels[i] = BTN_NAMES.get(btnCodes.get(i));
+        // Первым - «None»: действие ни на какой кнопке. Кнопки, занятые другим
+        // действием мыши, в список не попадают: gammapad выполняет для кнопки
+        // одно действие, и второе молча перестало бы работать.
+        List<Integer> codes = new ArrayList<>();
+        codes.add(0);
+        for (int c : MOUSE_PICK_CODES) {
+            boolean taken = false;
+            for (int r = 0; r < MOUSE_BTN_PROPS.length; r++) {
+                if (r != role && mouseBtnCode(r) == c) taken = true;
+            }
+            if (!taken) codes.add(c);
+        }
+        String[] labels = new String[codes.size()];
+        for (int i = 0; i < codes.size(); i++) {
+            labels[i] = mouseBtnName(codes.get(i));
         }
 
         new AlertDialog.Builder(context)
                 .setTitle(roleName)
                 .setItems(labels, (d, which) -> {
-                    int code = btnCodes.get(which);
-                    SystemProperties.set(prop, String.valueOf(code));
-                    bumpConfigVersion();
-                    Preference btnPref = findPreference(KEY_MOUSE_BUTTONS);
-                    if (btnPref != null) updateMouseButtonsSummary(btnPref);
+                    SystemProperties.set(MOUSE_BTN_PROPS[role],
+                            String.valueOf(codes.get(which)));
+                    onMouseButtonsChanged();
                 })
                 .setNegativeButton(android.R.string.cancel, null)
                 .show();
+    }
+
+    private void onMouseButtonsChanged() {
+        bumpConfigVersionLight();
+        updateMouseButtonsSummary(findPreference(KEY_MOUSE_BUTTONS));
     }
 
     // --- Combo mapping helpers ---
