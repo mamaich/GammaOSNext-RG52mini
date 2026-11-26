@@ -1,8 +1,25 @@
-# Выпуск v1.22 (заготовка)
+# Выпуск v1.22
 
 GammaOS Next (LineageOS 21 / Android 14) для карманной консоли **AISLPC RG52 Mini**
 на Rockchip RK3562. Здесь перечислено то, что изменилось после
-[v1.21](release-v1.21.md).
+[v1.21](release-v1.21.md). PPSSPP, Flycast и Aurora Store новых версий, и
+теперь приложения из прошивки обновляются и после обновления по воздуху. В
+режиме nano сохраняется яркость, вовремя выключается усилитель динамика и
+работает статистика использования приложений.
+
+| | |
+|---|---|
+| Образ | `GammaOSCore-RG52Mini-20261126-1941.img.xz`, 1,69 ГиБ (1 819 180 140 байт) |
+| sha256 архива | `c51335bc5e4de3829d3e14b255a7c0efc204e6f0c0021ad0e2548c35bc52d52d` |
+| sha256 образа | `618084efd0007341e7886044ae9b1e1b48a57437cf67e87a3549d6622fff5a0f` |
+| Пакет обновления | `GammaOSCore-RG52Mini-20261126-1941-ota.zip` — для тех, кто уже на v1.3–v1.21 |
+| Ядро | Linux 5.10.226, [mamaich/kernel_rk3562_rg52mini](https://github.com/mamaich/kernel_rk3562_rg52mini); без изменений после v1.21 |
+| Основа | GammaOS Next Core (вариант на базе Android TV), Android 14; изменения апстрима GammaOS Next по 26.10.2026 и часть правок от 26.11.2026 (ниже), кроме правок под два встроенных экрана и драйвера Adreno |
+| Загрузчик | [mamaich/u-boot-rk3562-rg52mini](https://github.com/mamaich/u-boot-rk3562-rg52mini), тег `rg52mini-1.6`; без изменений после v1.21 |
+| Раздел vendor | от Android 13 (SyachOS), с вырезанным лишним и подменённым драйвером графики; после v1.21 пересобрана только готовая политика SELinux, под новый system |
+
+Общая карта с GammaOS Next и dArkOS обновляется тем же пакетом, см.
+[RG52mini-dualboot](https://github.com/mamaich/RG52mini-dualboot/releases).
 
 ## Что нового
 

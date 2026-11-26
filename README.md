@@ -47,6 +47,7 @@ Flycast, DraStic, mupen64plus, Daijishō, с v1.13 — эмулятор 3DS azah
 
 | Выпуск | Дата | Коротко |
 |---|---|---|
+| [v1.22](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.22) — [подробности](doc/rg52mini/release-v1.22.md) | 26.11.2026 | новые PPSSPP, Flycast и Aurora Store и их обновление после OTA; яркость, усилитель и статистика использования в nano; темы ES-DE при отстающих часах |
 | [v1.21](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.21) — [подробности](doc/rg52mini/release-v1.21.md) | 17.11.2026 | выбор кнопок режима мыши в настройках геймпада; выключенная комбинация мыши больше не срабатывает на SELECT+R1 |
 | [v1.20](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.20) — [подробности](doc/rg52mini/release-v1.20.md) | 13.11.2026 | сон после двух часов без нажатий; защита от блокировки паролем; исправления мерцания, EKA2L1 и настроек после обновления из nano |
 | [v1.19](https://github.com/mamaich/GammaOSNext-RG52mini/releases/tag/v1.19) — [подробности](doc/rg52mini/release-v1.19.md) | 12.11.2026 | обновление не начинается на почти разряженной консоли; режим мыши не мешает играм DS и 3DS; правки gammapad; меньше нагрузки на процессор в режиме nano |
