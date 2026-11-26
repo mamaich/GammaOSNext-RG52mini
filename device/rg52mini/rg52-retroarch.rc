@@ -1,6 +1,6 @@
-# RetroArch из образа - на системы, установленные раньше (setup.sh ставит его только на
-# первой загрузке), см. rg52-retroarch.sh. На новой установке скрипт видит тот же APK и
-# только ставит отметку.
+# RetroArch, PPSSPP, Flycast и Aurora Store из образа - на системы, установленные раньше
+# (setup.sh ставит их только на первой загрузке), см. rg52-retroarch.sh. На новой установке
+# скрипт видит те же APK и только ставит отметки.
 service rg52_retroarch /system/bin/rg52-retroarch.sh
     user root
     group root system

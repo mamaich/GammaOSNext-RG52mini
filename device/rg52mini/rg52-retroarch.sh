@@ -1,13 +1,17 @@
 #!/system/bin/sh
-# RetroArch из образа и его настройки - на системы, установленные раньше.
+# RetroArch (и другие приложения из образа) и его настройки - на системы, установленные раньше.
 #
-# 1. APK. setup.sh ставит RetroArch из /system/etc/RetroArch_aarch64.apk один раз, на первой
-#    загрузке, поэтому новый APK в образе (v1.16: 1.22.1 -> 1.22.2) до систем, обновлённых по
-#    воздуху, сам не доходил. На загрузке: если установленный APK - не тот, что в образе, и с
-#    этим APK образа ещё не пробовали (persist.rg52.retroarch_apk - размер APK образа, с которым
-#    попытка уже была), он ставится поверх: pm install -r. Данные (ядра, настройки) остаются.
-#    Без -d: RetroArch, который пользователь сам обновил до более новой версии, не трогается
-#    (INSTALL_FAILED_VERSION_DOWNGRADE). Удалённый пользователем RetroArch не возвращается.
+# 1. APK. setup.sh ставит приложения из apps.list один раз, на первой загрузке, поэтому новый
+#    APK в образе (v1.16: RetroArch 1.22.1 -> 1.22.2; v1.22: PPSSPP 1.20.4, Flycast 2.7, Aurora
+#    Store 4.8.4) до систем, обновлённых по воздуху, сам не доходил. На загрузке, для каждого
+#    пакета из UPDATE_PKGS: если установленный APK - не тот, что в образе, и с этим APK образа
+#    ещё не пробовали (свойство-отметка persist.rg52.<имя>_apk - размер APK образа, с которым
+#    попытка уже была), он ставится поверх: pm install -r. Данные приложения остаются. Путь к
+#    APK берётся из apps.list: в именах APK стоит версия.
+#    Без -d: приложение, которое пользователь сам обновил до более новой версии, не трогается
+#    (INSTALL_FAILED_VERSION_DOWNGRADE). Поставленное из другого источника, с другой подписью
+#    (INSTALL_FAILED_UPDATE_INCOMPATIBLE), тоже: отметка ставится, чтобы не пробовать на каждой
+#    загрузке. Удалённое пользователем приложение не возвращается.
 #
 # 2. Профили геймпадов (каждую загрузку). Наши профили из /system/etc/rg52-retroarch-autoconfig
 #    кладутся в каталог профилей RetroArch, если их там нет или они другие: ShanWan PS3/PC
@@ -26,49 +30,64 @@
 # Вывод - в logcat (тег rg52-retroarch), по-английски.
 
 TAG=rg52-retroarch
-APK=/system/etc/RetroArch_aarch64.apk
+APPS_LIST=/system/etc/gammaos/apps.list
+# пакет:свойство-отметка
+UPDATE_PKGS="com.retroarch.aarch64:persist.rg52.retroarch_apk
+org.ppsspp.ppsspp:persist.rg52.ppsspp_apk
+com.flycast.emulator:persist.rg52.flycast_apk
+com.aurora.store:persist.rg52.aurora_apk"
 PKG=com.retroarch.aarch64
 CFG=/data/media/0/Android/data/$PKG/files/retroarch.cfg
 PROF_SRC=${RG52_RA_PROFILES:-/system/etc/rg52-retroarch-autoconfig}
 PROF_DST=/data/user/0/$PKG/autoconfig/android
 
 say() { log -t $TAG "$*" 2>/dev/null; echo "$*"; }
-version() { dumpsys package $PKG | sed -n 's/^ *versionName=//p' | head -n1; }
+version() { dumpsys package "$1" | sed -n 's/^ *versionName=//p' | head -n1; }
+apk_of() { awk -F'|' -v p="$1" '$2 == p { print $3; exit }' $APPS_LIST 2>/dev/null; }
 
+SETTLED=
+# update_apk <пакет> <свойство-отметка>
 update_apk() {
-    [ -f $APK ] || return 0
-    want=$(stat -c %s $APK)
-    [ "$(getprop persist.rg52.retroarch_apk)" = "$want" ] && return 0
+    pkg=$1
+    mark=$2
+    apk=$(apk_of "$pkg")
+    [ -n "$apk" ] && [ -f "$apk" ] || return 0
+    want=$(stat -c %s "$apk")
+    [ "$(getprop "$mark")" = "$want" ] && return 0
 
-    path=$(pm path $PKG 2>/dev/null | sed -n 's/^package://p' | head -n1)
+    path=$(pm path "$pkg" 2>/dev/null | sed -n 's/^package://p' | head -n1)
     if [ -z "$path" ]; then
-        say "$PKG is not installed, nothing to update"
-        setprop persist.rg52.retroarch_apk "$want"
+        say "$pkg is not installed, nothing to update"
+        setprop "$mark" "$want"
         return 0
     fi
     if [ "$(stat -c %s "$path" 2>/dev/null)" = "$want" ]; then
-        setprop persist.rg52.retroarch_apk "$want"
+        setprop "$mark" "$want"
         return 0
     fi
 
     # Пусть загрузка уляжется: копирование 180 МБ не должно совпасть с запуском оболочки.
-    sleep 60
-    if pidof $PKG >/dev/null; then
-        say "RetroArch is running, will retry on next boot"
+    # Один раз за проход, а не перед каждым пакетом.
+    if [ -z "$SETTLED" ]; then
+        sleep 60
+        SETTLED=1
+    fi
+    if pidof "$pkg" >/dev/null; then
+        say "$pkg is running, will retry on next boot"
         return 0
     fi
-    say "updating $PKG $(version) from $APK ($want bytes)"
-    out=$(pm install -r $APK 2>&1)
+    say "updating $pkg $(version "$pkg") from $apk ($want bytes)"
+    out=$(pm install -r "$apk" 2>&1)
     say "pm install: $out"
     case "$out" in
-        *Success*|*VERSION_DOWNGRADE*)
-            say "$PKG is now $(version)"
-            setprop persist.rg52.retroarch_apk "$want" ;;
+        *Success*|*VERSION_DOWNGRADE*|*UPDATE_INCOMPATIBLE*)
+            say "$pkg is now $(version "$pkg")"
+            setprop "$mark" "$want" ;;
         *)
             say "will retry on next boot" ;;
     esac
-    # Как в setup.sh: после копирования в кэше страниц ~180 МБ грязных данных - на 1 ГБ
-    # памяти их лучше сбросить сразу.
+    # Как в setup.sh: после копирования в кэше страниц десятки и сотни МБ грязных данных -
+    # на 1 ГБ памяти их лучше сбросить сразу.
     sync
     echo 1 > /proc/sys/vm/drop_caches
 }
@@ -130,6 +149,8 @@ EOF
     setprop persist.rg52.retroarch_players 1
 }
 
-update_apk
+for e in $UPDATE_PKGS; do
+    update_apk "${e%%:*}" "${e#*:}"
+done
 install_profiles
 align_players
