@@ -151,7 +151,7 @@ PRODUCT_COPY_FILES += \
     gammaos/nano_cache.sh:system/bin/nano_cache.sh \
     gammaos/gammaos-swap.sh:system/bin/gammaos-swap.sh \
     gammaos/launcher/MiXplorer_v6.64.3-API29_B23090720.apk:system/etc/MiXplorer_v6.64.3-API29_B23090720.apk \
-    gammaos/launcher/AuroraStore_4.6.2.apk:system/etc/AuroraStore_4.6.2.apk \
+    gammaos/launcher/AuroraStore_4.8.4.apk:system/etc/AuroraStore_4.8.4.apk \
     gammaos/launcher/aurorastore.tar.zst:system/etc/aurorastore.tar.zst \
     gammaos/daijisho/splits/base.apk:system/etc/daijisho/base.apk \
     gammaos/daijisho/splits/split_config.en.apk:system/etc/daijisho/split_config.en.apk \
@@ -162,7 +162,7 @@ PRODUCT_COPY_FILES += \
     gammaos/emulators/mupen64plusae.tar.zst:system/etc/mupen64plusae.tar.zst \
     gammaos/emulators/mupen64plusae_3.0.335.apk:system/etc/mupen64plusae_3.0.335.apk \
     gammaos/emulators/ppsspp.tar.zst:system/etc/ppsspp.tar.zst \
-    gammaos/emulators/ppsspp_1.20.3.apk:system/etc/ppsspp_1.20.3.apk \
+    gammaos/emulators/ppsspp_1.20.4.apk:system/etc/ppsspp_1.20.4.apk \
     gammaos/emulators/flycast.tar.zst:system/etc/flycast.tar.zst \
     gammaos/emulators/flycast-release.apk:system/etc/flycast-release.apk
 
